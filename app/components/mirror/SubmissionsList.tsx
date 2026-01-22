@@ -1,6 +1,6 @@
 
-import { useState, useEffect } from 'react';
-import { Loader2, History, Globe, User, Clock, HardDrive, Code2, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Loader2, History, Globe, User, Clock, HardDrive, RefreshCw } from 'lucide-react';
 import { Submission } from './types';
 
 interface SubmissionsListProps {
@@ -26,7 +26,7 @@ export default function SubmissionsList({ submissions, loading, onViewCode, cont
     const [globalSubmissions, setGlobalSubmissions] = useState<GlobalSubmission[]>([]);
     const [globalLoading, setGlobalLoading] = useState(false);
 
-    const fetchGlobal = async () => {
+    const fetchGlobal = useCallback(async () => {
         if (!contestId) return;
         setGlobalLoading(true);
         try {
@@ -40,13 +40,13 @@ export default function SubmissionsList({ submissions, loading, onViewCode, cont
         } finally {
             setGlobalLoading(false);
         }
-    };
+    }, [contestId, problemIndex]);
 
     useEffect(() => {
         if (mode === 'global' && globalSubmissions.length === 0) {
             fetchGlobal();
         }
-    }, [mode, contestId, problemIndex]);
+    }, [mode, globalSubmissions.length, fetchGlobal]);
 
     return (
         <div className="space-y-4">
@@ -105,7 +105,7 @@ export default function SubmissionsList({ submissions, loading, onViewCode, cont
                                     </div>
                                     <div className="flex items-center gap-4 text-xs text-[#808080]">
                                         <span className="flex items-center gap-1"><Clock size={12} /> {sub.timeMs ? `${sub.timeMs}ms` : '-'}</span>
-                                        <span className="flex items-center gap-1"><HardDrive size={12} /> {sub.memoryKb ? `${Math.round(sub.memoryKb / 1024)}KB` : '-'}</span>
+                                        <span className="flex items-center gap-1"><HardDrive size={12} /> {sub.memoryKb ? `${sub.memoryKb}KB` : '-'}</span>
                                         <span>{sub.testsPassed}/{sub.totalTests} passed</span>
                                         <span className="ml-auto">
                                             {new Date(sub.submittedAt).toLocaleString()}

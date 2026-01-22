@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Download, RefreshCw, ExternalLink, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+// Icons kept for potential future UI states
 
 interface ExtensionGateProps {
     children: React.ReactNode;
@@ -15,7 +15,7 @@ export default function ExtensionGate({ children }: ExtensionGateProps) {
     // Check for extension
     const checkExtension = () => {
         // Look for the marker element injected by content script
-        const marker = document.getElementById('icpchue-extension-installed');
+        const marker = document.getElementById('verdict-extension-installed');
         if (marker) {
             return true;
         }
@@ -31,7 +31,7 @@ export default function ExtensionGate({ children }: ExtensionGateProps) {
             }, 3000);
 
             const handler = (event: MessageEvent) => {
-                if (event.data?.type === 'ICPCHUE_LOGIN_STATUS') {
+                if (event.data?.type === 'VERDICT_LOGIN_STATUS') {
                     clearTimeout(timeout);
                     window.removeEventListener('message', handler);
                     resolve({
@@ -42,12 +42,12 @@ export default function ExtensionGate({ children }: ExtensionGateProps) {
             };
 
             window.addEventListener('message', handler);
-            window.postMessage({ type: 'ICPCHUE_CHECK_LOGIN' }, '*');
+            window.postMessage({ type: 'VERDICT_CHECK_LOGIN' }, '*');
         });
     };
 
     // Main status check
-    const performCheck = async () => {
+    const performCheck = useCallback(async () => {
         setStatus('checking');
 
         // Wait a bit for content script to inject
@@ -70,11 +70,15 @@ export default function ExtensionGate({ children }: ExtensionGateProps) {
 
         setHandle(loginStatus.handle || null);
         setStatus('ready');
-    };
+    }, []);
 
     // Initial check and re-check on focus (user might install extension and come back)
     useEffect(() => {
-        performCheck();
+        // Initial check on mount
+        const doCheck = async () => {
+            await performCheck();
+        };
+        doCheck();
 
         // Re-check when window gains focus
         const handleFocus = () => {
@@ -85,16 +89,16 @@ export default function ExtensionGate({ children }: ExtensionGateProps) {
 
         window.addEventListener('focus', handleFocus);
         return () => window.removeEventListener('focus', handleFocus);
-    }, [checkCount]);
+    }, [checkCount, performCheck, status]);
 
     // Listen for extension ready event
     useEffect(() => {
         const handler = () => {
             performCheck();
         };
-        window.addEventListener('icpchue-extension-ready', handler);
-        return () => window.removeEventListener('icpchue-extension-ready', handler);
-    }, []);
+        window.addEventListener('verdict-extension-ready', handler);
+        return () => window.removeEventListener('verdict-extension-ready', handler);
+    }, [performCheck]);
 
     // Render children immediately (non-blocking)
     // The ExtensionOnboardingModal in the page will handle the recommendation

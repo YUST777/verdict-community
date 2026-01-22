@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/simple-rate-limit';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { query } from '@/lib/db';
@@ -10,9 +10,9 @@ const JWT_EXPIRES_IN = '24h';
 
 export async function POST(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-    const limitResult = await rateLimit(`register:${ip}`, 3, 3600); // 3 attempts per hour
+    const isAllowed = checkRateLimit(`register:${ip}`, 3, 3600); // 3 attempts per hour
 
-    if (!limitResult.success) {
+    if (!isAllowed) {
         return NextResponse.json({ error: 'Too many registration attempts. Please wait.' }, { status: 429 });
     }
 
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
         }, { status: 201 });
 
     } catch (error: unknown) {
-        const err = error as any;
+        const err = error as { code?: string };
         if (err?.code === '23505') { // Unique violation
             return NextResponse.json({ error: 'Account already exists. Please login.' }, { status: 409 });
         }

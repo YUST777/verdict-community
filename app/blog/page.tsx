@@ -2,7 +2,6 @@
 
 import { Navbar, Footer } from '../components/landing';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 const posts = [

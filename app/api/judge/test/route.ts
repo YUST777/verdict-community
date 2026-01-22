@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Judge0Token, Judge0SubmissionResult } from '@/lib/types';
+import { z } from 'zod';
 
 // Self-hosted Judge0 Configuration
 const JUDGE0_API_URL = process.env.JUDGE0_API_URL;
 const JUDGE0_AUTH_TOKEN = process.env.JUDGE0_AUTH_TOKEN;
+
+// Server-side validation schema (defense-in-depth)
+const RequestSchema = z.object({
+    sourceCode: z.string().min(1).max(500000), // 500KB max source code
+    language: z.string().max(20).optional().default('cpp'),
+    testCases: z.array(z.object({
+        input: z.string().max(100000),  // 100KB max per test input
+        output: z.string().max(100000)  // 100KB max per test output
+    })).min(1).max(50), // 1-50 test cases
+    timeLimit: z.number().min(100).max(10000).optional().default(2000),
+    memoryLimit: z.number().min(16).max(1024).optional().default(256)
+});
 
 const JUDGE0_LANGUAGE_MAP: Record<string, number> = {
     'cpp': 54,        // C++ (GCC 9.2.0)
@@ -19,13 +32,15 @@ const JUDGE0_LANGUAGE_MAP: Record<string, number> = {
     'rust': 73,       // Rust (1.40.0)
 };
 
-interface TestRequest {
-    sourceCode: string;
-    language?: string;
-    testCases: { input: string; output: string }[];
-    timeLimit?: number; // ms
-    memoryLimit?: number; // MB
-}
+// TestRequest interface is defined by RequestSchema above via Zod
+// Keeping for documentation purposes
+// interface TestRequest {
+//     sourceCode: string;
+//     language?: string;
+//     testCases: { input: string; output: string }[];
+//     timeLimit?: number; // ms
+//     memoryLimit?: number; // MB
+// }
 
 // Helper Comparison Function (Codeforces Style)
 function compareOutputs(expected: string, actual: string): boolean {
@@ -71,12 +86,18 @@ function compareOutputs(expected: string, actual: string): boolean {
 
 export async function POST(req: NextRequest) {
     try {
-        const { sourceCode, language = 'cpp', testCases, timeLimit = 2000, memoryLimit = 256 }: TestRequest = await req.json();
+        // Parse and validate request body
+        const rawBody = await req.json();
+        const parseResult = RequestSchema.safeParse(rawBody);
 
-        // Validate input
-        if (!sourceCode || !testCases || testCases.length === 0) {
-            return NextResponse.json({ error: 'Missing source code or test cases' }, { status: 400 });
+        if (!parseResult.success) {
+            return NextResponse.json({
+                error: 'Invalid request',
+                details: parseResult.error.issues.map(i => i.message).join(', ')
+            }, { status: 400 });
         }
+
+        const { sourceCode, language, testCases, timeLimit, memoryLimit } = parseResult.data;
 
         const judgeLanguageId = JUDGE0_LANGUAGE_MAP[language] || 54; // Default to C++
 

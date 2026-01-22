@@ -174,8 +174,11 @@ export default function WhiteboardPage() {
 
 // --- Hooks ---
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WhiteboardData = any; // Excalidraw's internal data structure
+
 function useWhiteboardPersistence(storageKey: string, legacyKey: string, isPrimary: boolean) {
-    const [initialData] = useState<any>(() => {
+    const [initialData] = useState<WhiteboardData | null>(() => {
         if (typeof window === 'undefined') return null;
         try {
             const saved = localStorage.getItem(storageKey);
@@ -203,7 +206,7 @@ function useWhiteboardPersistence(storageKey: string, legacyKey: string, isPrima
         }
     }, [isPrimary, storageKey, legacyKey]);
 
-    const saveTimeoutRef = useRef<any>(null);
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const triggerSave = useCallback((elements: readonly any[], appState: any) => {

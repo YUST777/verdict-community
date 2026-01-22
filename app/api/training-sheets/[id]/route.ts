@@ -24,7 +24,7 @@ export async function GET(
         const solvedCountsResult = await query(solvedCountsQuery, [sheetId]);
         const solvedCountsMap = new Map<string, number>();
 
-        solvedCountsResult.rows.forEach((row: any) => {
+        solvedCountsResult.rows.forEach((row: { problem_id: string; solved_count: string }) => {
             solvedCountsMap.set(row.problem_id, parseInt(row.solved_count));
         });
 

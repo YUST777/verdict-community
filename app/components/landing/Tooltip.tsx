@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, memo } from 'react';
 
 interface TooltipProps {
     content: string;
@@ -8,7 +8,7 @@ interface TooltipProps {
     position?: 'top' | 'bottom' | 'left' | 'right';
 }
 
-export default function Tooltip({ content, children, position = 'top' }: TooltipProps) {
+function Tooltip({ content, children, position = 'top' }: TooltipProps) {
     const [isVisible, setIsVisible] = useState(false);
 
     const positionClasses = {
@@ -33,7 +33,8 @@ export default function Tooltip({ content, children, position = 'top' }: Tooltip
         >
             {children}
 
-            {isVisible && (
+            {/* rendering-conditional-render: use ternary, not && */}
+            {isVisible ? (
                 <div
                     className={`absolute z-[100] pointer-events-none ${positionClasses[position]}`}
                 >
@@ -49,7 +50,10 @@ export default function Tooltip({ content, children, position = 'top' }: Tooltip
                         <div className={`absolute w-0 h-0 border-[6px] ${arrowClasses[position]}`} />
                     </div>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }
+
+// rerender-memo: wrap with memo to prevent unnecessary re-renders
+export default memo(Tooltip);

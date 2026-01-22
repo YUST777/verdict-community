@@ -27,7 +27,8 @@ export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [_error, _setError] = useState<string | null>(null); // Reserved for future use
     const [errors, setErrors] = useState<Partial<LoginFormData>>({});
     const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -77,12 +78,13 @@ export default function Login() {
         // With server-side callback flow, we don't need to manually exchange token here for OAuth.
         // The callback route sets the cookie. AuthProvider reads it.
         // We keep this empty or remove it.
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            // No-op.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, _session) => {
+            // No-op - OAuth callback handled server-side
         });
 
         return () => subscription.unsubscribe();
-    }, [isAuthenticated, authLoading, router]);
+    }, [isAuthenticated, authLoading, router, supabase.auth]);
 
     // Validate a single field
     const validateField = (field: keyof LoginFormData, value: string) => {
@@ -181,7 +183,7 @@ export default function Login() {
                     {/* Logo */}
                     <Link href="/" className="inline-flex items-center gap-2 mb-10">
                         <Image src="/icons/logo.webp" alt="Verdict" width={28} height={28} />
-                        <span className="text-lg font-semibold text-white">Verdict<span className="text-emerald-400">.run</span></span>
+                        <span className="text-sm font-medium text-white/60">v1.0.1</span>
                     </Link>
 
                     {/* Header */}

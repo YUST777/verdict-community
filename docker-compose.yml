@@ -1,5 +1,5 @@
 # Verdict.run - Docker Compose
-# Shares Judge0 infrastructure with icpchue.xyz
+# Shares Judge0 infrastructure with verdict.xyz
 # Runs on port 81 (use Cloudflare Origin Rules to forward port 443 -> 81)
 # Run: docker compose up -d
 
@@ -69,7 +69,7 @@ services:
     #   - backend (Removed: backend service deleted)
     networks:
       - verdict-network
-      - icpchue-network
+      - verdict-network
     restart: always
     logging: *default-logging
     deploy:
@@ -92,9 +92,9 @@ services:
 networks:
   verdict-network:
     driver: bridge
-  icpchue-network:
+  verdict-network:
     external: true
-    name: icpchue_icpchue-network
+    name: verdict_verdict-network
 
 # ===========================================
 # VOLUMES

@@ -112,8 +112,7 @@ export default function AnalyticsView({ stats, cfStats, loading, analyzeComplexi
                                     </div>
                                     <div>
                                         <h3 className="text-sm font-semibold text-white">Runtime</h3>
-                                        {/* @ts-ignore */}
-                                        <p className="text-xs text-[#666]">{stats!.totalSubmissions} submissions analyzed</p>
+                                        <p className="text-xs text-[#666]">{stats?.totalSubmissions ?? 0} submissions analyzed</p>
                                     </div>
                                 </div>
                                 <button onClick={analyzeComplexity} disabled={complexityLoading} className="flex items-center gap-2 px-3 py-1.5 bg-[#10B981]/10 hover:bg-[#10B981]/20 border border-[#10B981]/20 rounded-lg text-xs font-medium text-[#10B981] transition-all hover:scale-105 disabled:opacity-50">

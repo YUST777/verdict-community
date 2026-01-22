@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function Navbar() {
+function Navbar() {
     const [open, setOpen] = useState(false);
     const { isAuthenticated, loading } = useAuth();
     const [stars, setStars] = useState<number | null>(null);
@@ -34,7 +34,7 @@ export default function Navbar() {
                     <div className="flex items-center justify-between px-5 py-3 md:px-8 md:py-4">
 
                         {/* Logo Section */}
-                        <Link href="/" className="flex items-center gap-4 shrink-0 group cursor-pointer">
+                        <Link href="/" className="flex items-center gap-2 shrink-0 group cursor-pointer">
                             <div className="relative w-8 h-8 flex items-center justify-center">
                                 <Image
                                     src="/icons/logo.webp"
@@ -45,8 +45,8 @@ export default function Navbar() {
                                 />
                             </div>
                             <div className="flex items-center h-10">
-                                <span className="text-white font-black text-xl leading-none tracking-tight group-hover:text-emerald-400 transition-colors">
-                                    Verdict<span className="text-emerald-400">.run</span>
+                                <span className="text-white/60 text-sm font-medium">
+                                    v1.0.1
                                 </span>
                             </div>
                         </Link>
@@ -177,3 +177,6 @@ export default function Navbar() {
         </header>
     );
 }
+
+// rerender-memo: wrap with memo to prevent unnecessary re-renders
+export default memo(Navbar);

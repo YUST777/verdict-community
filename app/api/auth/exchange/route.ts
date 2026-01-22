@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { query } from '@/lib/db';
 import { createBlindIndex, encrypt } from '@/lib/encryption';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+// crypto import removed - not currently used
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY;
 const JWT_EXPIRES_IN = '24h';

@@ -22,6 +22,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "eslint.config.mjs",
+    // Node.js scripts using CommonJS
+    "mirror/**",
+    "scripts/**",
   ]),
 ]);
 

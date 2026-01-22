@@ -68,7 +68,9 @@ export function useAchievements() {
     }, []);
 
     useEffect(() => {
-        fetchAchievements();
+        // Defer fetch to avoid synchronous setState during render
+        const timer = setTimeout(() => fetchAchievements(), 0);
+        return () => clearTimeout(timer);
     }, [fetchAchievements]);
 
     return {

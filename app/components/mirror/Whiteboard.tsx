@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { Minimize2, ExternalLink, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types';
 
 // Dynamically import Excalidraw to avoid SSR issues
 const Excalidraw = dynamic(
@@ -143,7 +144,7 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
                     {/* Excalidraw Container */}
                     <div className="flex-1 min-h-0">
                         <Excalidraw
-                            excalidrawAPI={(api: any) => setExcalidrawAPI(api)}
+                            excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
                             initialData={savedData}
                             onChange={handleChange}
                             theme="dark"

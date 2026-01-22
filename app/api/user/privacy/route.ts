@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         const { showOnCfLeaderboard, showOnSheetsLeaderboard, showPublicProfile } = body;
 
         const updates: string[] = [];
-        const values: any[] = [];
+        const values: (boolean | number)[] = [];
         let paramIndex = 1;
 
         if (typeof showOnCfLeaderboard === 'boolean') {

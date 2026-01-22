@@ -1,32 +1,23 @@
-import { redis } from './redis';
+/**
+ * Simple cache utility - passthrough implementation
+ * This file is kept for API compatibility.
+ */
 
+/**
+ * Get data or call callback if not cached.
+ * This is a passthrough - always calls callback (no caching)
+ */
 export async function getOrSetCache<T>(
-    key: string,
+    _key: string,
     callback: () => Promise<T>,
-    ttlSeconds: number = 60
+    _ttlSeconds: number = 60
 ): Promise<T> {
-    const cached = await redis.get(key);
-
-    if (cached) {
-        try {
-            return JSON.parse(cached) as T;
-        } catch (e) {
-            console.error('Cache parse error:', e);
-        }
-    }
-
-    const data = await callback();
-
-    if (data) {
-        await redis.setex(key, ttlSeconds, JSON.stringify(data));
-    }
-
-    return data;
+    return callback();
 }
 
-export async function invalidateCache(pattern: string) {
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-        await redis.del(...keys);
-    }
+/**
+ * Invalidate cache by pattern - no-op since caching is disabled
+ */
+export async function invalidateCache(_pattern: string): Promise<void> {
+    // No-op - Redis caching removed
 }

@@ -1,9 +1,17 @@
+import { z } from 'zod';
 
 export interface Example {
     input: string;
     output: string;
     expectedOutput?: string;
+    isCustom?: boolean; // True if added by user
 }
+
+// Zod schema for custom test case validation
+export const customTestCaseSchema = z.object({
+    input: z.string().min(1, 'Input is required').max(50000, 'Input too long (max 50KB)'),
+    output: z.string().max(50000, 'Expected output too long (max 50KB)').optional().default(''),
+});
 
 export interface Problem {
     id: string;
@@ -86,4 +94,20 @@ export interface CFProblemData {
     outputSpec: string;
     testCases: { input: string; output: string }[];
     note: string;
+}
+
+// Codeforces Submission Status (for live tracking)
+export interface CFSubmissionStatus {
+    status: 'idle' | 'submitting' | 'waiting' | 'testing' | 'done' | 'error';
+    verdict?: string;
+    testNumber?: number;
+    time?: number; // ms
+    memory?: number; // KB
+    submissionId?: number;
+    error?: string;
+    isDuplicate?: boolean;
+    compilationError?: string;
+    failedTestCase?: number; // The test case number that failed (1-indexed for display)
+    needsCaptcha?: boolean; // True if user needs to manually solve captcha
+    captchaUrl?: string; // URL to open for captcha solving
 }

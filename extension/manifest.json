@@ -1,15 +1,14 @@
 {
     "manifest_version": 3,
     "name": "Verdict Helper",
-    "description": "One-click submission to Codeforces from Verdict.run",
-    "version": "1.0.2",
+    "description": "One-click submission to Codeforces from Verdict.run - the modern competitive programming interface.",
+    "version": "1.0.3",
     "icons": {
         "16": "icons/icon16.png",
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
     },
     "permissions": [
-        "storage",
         "cookies",
         "scripting",
         "tabs"
@@ -22,9 +21,7 @@
         {
             "matches": [
                 "*://verdict.run/*",
-                "*://*.verdict.run/*",
-                "http://localhost:3000/*",
-                "http://127.0.0.1:3000/*"
+                "*://*.verdict.run/*"
             ],
             "js": [
                 "content_script.js"
@@ -38,9 +35,11 @@
     },
     "action": {
         "default_popup": "popup.html",
+        "default_title": "Verdict Helper - Codeforces Submission",
         "default_icon": {
             "16": "icons/icon16.png",
-            "48": "icons/icon48.png"
+            "48": "icons/icon48.png",
+            "128": "icons/icon128.png"
         }
     },
     "web_accessible_resources": [
@@ -50,8 +49,10 @@
                 "logo.webp"
             ],
             "matches": [
-                "<all_urls>"
+                "*://verdict.run/*",
+                "*://*.verdict.run/*"
             ]
         }
-    ]
+    ],
+    "minimum_chrome_version": "116"
 }

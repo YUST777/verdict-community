@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { scraperQueue } from '@/lib/queue';
 import { encrypt, createBlindIndex } from '@/lib/encryption';
 import { sanitizeInput } from '@/lib/validation';
-
-import { rateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/simple-rate-limit';
 
 export async function POST(req: NextRequest) {
-    // 1. Rate Limiting (Global Redis)
+    // 1. Rate Limiting (In-Memory)
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-    const limitResult = await rateLimit(`submit_app:${ip}`, 3, 600); // 3 attempts per 10 mins
+    const isAllowed = checkRateLimit(`submit_app:${ip}`, 3, 600); // 3 attempts per 10 mins
 
-    if (!limitResult.success) {
+    if (!isAllowed) {
         return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
     }
 
@@ -84,22 +82,11 @@ export async function POST(req: NextRequest) {
 
         const applicationId = result.rows[0].id;
 
-        // Trigger Scraper via BullMQ
+        // Mark scraping status for trainer applications (queue processing removed)
         if (applicationType === 'trainer') {
-            const jobData = {
-                applicationId,
-                leetcodeProfile,
-                codeforcesProfile,
-                applicationType
-            };
-
-            // Scalable Job Queue (Persistent, Retries)
-            try {
-                await scraperQueue.add('scrape-job', jobData);
-            } catch (err) {
-                console.error('Failed to add scraper job to queue:', err);
-                // Non-blocking failure
-            }
+            // Mark as pending for manual review (BullMQ queue removed)
+            query("UPDATE applications SET scraping_status = 'pending' WHERE id = $1", [applicationId])
+                .catch(e => console.error("Error setting pending status", e));
         } else {
             // Mark as not applicable
             query("UPDATE applications SET scraping_status = 'not_applicable' WHERE id = $1", [applicationId])
@@ -115,9 +102,9 @@ export async function POST(req: NextRequest) {
     } catch (error: unknown) {
         console.error('Submit Application API Error:', error);
 
-        const err = error as any; // Temporary cast for accessing properties safely after unknown check
-        if ((error as any).code === '23505') {
-            const detail = (error as any).detail || '';
+        const err = error as { code?: string; detail?: string };
+        if (err.code === '23505') {
+            const detail = err.detail || '';
             let field = 'البيانات';
             if (detail.includes('email')) field = 'البريد الإلكتروني';
             else if (detail.includes('national_id')) field = 'الرقم القومي';

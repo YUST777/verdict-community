@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
             FROM training_submissions ts
             WHERE ts.user_id = $1
         `;
-        const params: any[] = [user.id];
+        const params: (string | number)[] = [user.id];
         let paramCount = 1;
 
         if (sheetId) {
@@ -65,7 +65,20 @@ export async function GET(req: NextRequest) {
         const result = await query(queryText, params);
 
         // Enrich with problem titles
-        const submissions = result.rows.map((row: any) => {
+        interface SubmissionRow {
+            id: number;
+            sheet_id: string;
+            problem_id: string;
+            verdict: string;
+            time_ms: number;
+            memory_kb: number;
+            test_cases_passed: number;
+            total_test_cases: number;
+            submitted_at: string;
+            attempt_number: number;
+            language: string;
+        }
+        const submissions = result.rows.map((row: SubmissionRow) => {
             const problem = getProblem(row.sheet_id, row.problem_id);
             const sheet = getSheet(row.sheet_id);
             return {

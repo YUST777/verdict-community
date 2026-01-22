@@ -1,7 +1,7 @@
 import os
 from PIL import Image
 
-directory = '/home/ubuntu/icpchue/next-app/public/devlog'
+directory = '/home/ubuntu/verdict/next-app/public/devlog'
 
 print(f"Scanning {directory}...")
 

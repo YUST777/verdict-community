@@ -9,7 +9,7 @@ export default function TermsOfService() {
                 <div className="max-w-4xl mx-auto px-6 py-4">
                     <Link href="/" className="inline-flex items-center gap-2">
                         <Image src="/icons/logo.webp" alt="Verdict" width={24} height={24} />
-                        <span className="text-base font-semibold">Verdict<span className="text-emerald-400">.run</span></span>
+                        <span className="text-sm font-medium text-white/60">v1.0.1</span>
                     </Link>
                 </div>
             </header>

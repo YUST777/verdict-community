@@ -1,7 +1,7 @@
 # Security Policy for ICPC HUE
 # https://verdict.run
 
-Contact: mailto:icpchue@hours.edu
+Contact: mailto:verdict@hours.edu
 Expires: 2027-01-01T00:00:00.000Z
 Preferred-Languages: en, ar
 Canonical: https://verdict.run/.well-known/security.txt

@@ -7,11 +7,24 @@
     console.log('🧩 Verdict Helper content script loaded');
 
     // Inject a marker so the website knows the extension is installed
-    const marker = document.createElement('div');
-    marker.id = 'icpchue-extension-installed';
-    marker.style.display = 'none';
-    marker.dataset.version = '1.0.0';
-    document.documentElement.appendChild(marker);
+    // Inject a marker so the website knows the extension is installed
+    // Append to body to avoid hydration mismatches on html tag
+    if (document.body) {
+        const marker = document.createElement('div');
+        marker.id = 'verdict-extension-installed';
+        marker.style.display = 'none';
+        marker.dataset.version = '1.0.3';
+        document.body.appendChild(marker);
+    } else {
+        // Fallback if body not ready (run_at document_start)
+        document.addEventListener('DOMContentLoaded', () => {
+            const marker = document.createElement('div');
+            marker.id = 'verdict-extension-installed';
+            marker.style.display = 'none';
+            marker.dataset.version = '1.0.3';
+            document.body.appendChild(marker);
+        });
+    }
 
     // Listen for messages from the website
     window.addEventListener('message', async (event) => {
@@ -23,34 +36,34 @@
 
         // Handle different message types
         switch (type) {
-            case 'ICPCHUE_PING':
+            case 'VERDICT_PING':
                 // Website is checking if extension is installed
                 window.postMessage({
-                    type: 'ICPCHUE_PONG',
-                    version: '1.0.0'
+                    type: 'VERDICT_PONG',
+                    version: '1.0.3'
                 }, '*');
                 break;
 
-            case 'ICPCHUE_CHECK_LOGIN':
+            case 'VERDICT_CHECK_LOGIN':
                 // Check Codeforces login status
                 try {
                     const response = await chrome.runtime.sendMessage({
                         action: 'checkLoginStatus'
                     });
                     window.postMessage({
-                        type: 'ICPCHUE_LOGIN_STATUS',
+                        type: 'VERDICT_LOGIN_STATUS',
                         ...response
                     }, '*');
                 } catch (error) {
                     window.postMessage({
-                        type: 'ICPCHUE_LOGIN_STATUS',
+                        type: 'VERDICT_LOGIN_STATUS',
                         loggedIn: false,
                         error: error.message
                     }, '*');
                 }
                 break;
 
-            case 'ICPCHUE_SUBMIT':
+            case 'VERDICT_SUBMIT':
                 // Submit code to Codeforces
                 console.log('📤 Received submission request:', JSON.stringify(payload, null, 2));
 
@@ -61,19 +74,19 @@
                     });
 
                     window.postMessage({
-                        type: 'ICPCHUE_SUBMISSION_RESULT',
+                        type: 'VERDICT_SUBMISSION_RESULT',
                         ...response
                     }, '*');
                 } catch (error) {
                     window.postMessage({
-                        type: 'ICPCHUE_SUBMISSION_RESULT',
+                        type: 'VERDICT_SUBMISSION_RESULT',
                         success: false,
                         error: error.message
                     }, '*');
                 }
                 break;
 
-            case 'ICPCHUE_CHECK_SUBMISSION':
+            case 'VERDICT_CHECK_SUBMISSION':
                 // Check submission status
                 try {
                     const response = await chrome.runtime.sendMessage({
@@ -82,14 +95,32 @@
                     });
 
                     window.postMessage({
-                        type: 'ICPCHUE_SUBMISSION_STATUS_RESULT',
+                        type: 'VERDICT_SUBMISSION_STATUS_RESULT',
                         ...response
                     }, '*');
                 } catch (error) {
                     window.postMessage({
-                        type: 'ICPCHUE_SUBMISSION_STATUS_RESULT',
+                        type: 'VERDICT_SUBMISSION_STATUS_RESULT',
                         success: false,
                         error: error.message
+                    }, '*');
+                }
+                break;
+
+            case 'VERDICT_GET_HANDLE':
+                // Get Codeforces handle from extension
+                try {
+                    const response = await chrome.runtime.sendMessage({
+                        action: 'checkLoginStatus'
+                    });
+                    window.postMessage({
+                        type: 'VERDICT_HANDLE_RESPONSE',
+                        handle: response.handle || null
+                    }, '*');
+                } catch {
+                    window.postMessage({
+                        type: 'VERDICT_HANDLE_RESPONSE',
+                        handle: null
                     }, '*');
                 }
                 break;
@@ -101,8 +132,8 @@
     });
 
     // Dispatch a custom event to notify the page that extension is ready
-    window.dispatchEvent(new CustomEvent('icpchue-extension-ready', {
-        detail: { version: '1.0.0' }
+    window.dispatchEvent(new CustomEvent('verdict-extension-ready', {
+        detail: { version: '1.0.3' }
     }));
 
 })();

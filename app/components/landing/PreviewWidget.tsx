@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Signal, Battery, ChevronLeft, ChevronRight, Clock, HardDrive, FileText, Code2 } from 'lucide-react';
+import { ArrowRight, Signal, Battery, ChevronLeft, ChevronRight, Clock, HardDrive, FileText, Code2, Check, Lightbulb, Trophy } from 'lucide-react';
 import Image from 'next/image';
 import Tooltip from './Tooltip';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type SubmissionState = 'idle' | 'submitting' | 'judging' | 'accepted';
 type TestState = 'idle' | 'compiling' | 'running' | 'error' | 'success';
 
-export default function PreviewWidget() {
+function PreviewWidget() {
     const [activeTab, setActiveTab] = useState('description');
+    const [activeMobileTab, setActiveMobileTab] = useState('problem'); // Mobile Tabs
     const [showExtension, setShowExtension] = useState(false);
     const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
     const [browserTab, setBrowserTab] = useState('problem'); // 'problem' | 'submit' | 'result'
@@ -67,19 +69,22 @@ export default function PreviewWidget() {
 
     return (
         <section className="relative z-10 py-12 md:py-20 px-4 md:px-6 md:-mt-32">
+            {/* Background Glow - Intensified */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-[600px] bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20 blur-[100px] rounded-full pointer-events-none" />
+
             <div className="max-w-6xl mx-auto">
                 {/* Section Header - Only shown on desktop where the preview widget is visible */}
                 <div className="hidden md:block text-center mb-8 md:mb-12">
-                    <h2 className="text-2xl md:text-4xl font-black mb-3 md:mb-4">
+                    <h2 className="text-2xl md:text-4xl font-black mb-3 md:mb-4 relative z-10">
                         Experience the <span className="text-emerald-400">Interface</span>
                     </h2>
-                    <p className="text-white/50 max-w-xl mx-auto text-sm md:text-base px-4">
+                    <p className="text-white/50 max-w-xl mx-auto text-sm md:text-base px-4 relative z-10">
                         A beautiful, distraction-free coding environment with everything you need
                     </p>
                 </div>
 
                 {/* Mini Preview Widget - Hidden on mobile, shown on desktop */}
-                <div className="hidden md:block relative rounded-2xl overflow-hidden border border-white/10 bg-[#0d0d0d] shadow-2xl shadow-black/50">
+                <div className="hidden md:block relative rounded-2xl overflow-hidden border border-white/20 bg-[#0d0d0d] shadow-2xl shadow-emerald-900/20 backdrop-blur-sm">
                     {/* Browser Chrome */}
                     <div className="bg-[#1a1a1a] border-b border-white/5">
                         {/* Window Controls + Tabs Row */}
@@ -87,20 +92,18 @@ export default function PreviewWidget() {
                             <Tooltip content="Window Controls" position="bottom">
                                 <div className="flex gap-1.5 mb-3">
                                     <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                                    <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                                    <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
                                     <div className="w-3 h-3 rounded-full bg-green-500/80" />
                                 </div>
                             </Tooltip>
                             {/* Browser Tab */}
                             <Tooltip content="Active Verdict Tab" position="bottom">
                                 <div className={`flex items-center gap-2 px-4 py-1.5 bg-[#0d0d0d] rounded-t-lg border-t border-x border-white/10 transition-colors ${browserTab !== 'problem' ? 'border-emerald-500/30' : ''}`}>
-                                    <div className={`w-4 h-4 rounded flex items-center justify-center ${browserTab === 'result' && submissionState === 'accepted' ? 'bg-emerald-500/20' : 'bg-emerald-500/20'}`}>
-                                        {submissionState === 'accepted' ? (
-                                            <span className="text-emerald-400 text-[10px]">✓</span>
-                                        ) : submissionState === 'submitting' || submissionState === 'judging' ? (
-                                            <div className="w-2.5 h-2.5 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-4 h-4 relative">
+                                        {submissionState === 'submitting' || submissionState === 'judging' ? (
+                                            <div className="absolute inset-0 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
                                         ) : (
-                                            <Image src="/icons/logo.webp" alt="Icon" width={12} height={12} className="w-3 h-3 object-contain" />
+                                            <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
                                         )}
                                     </div>
                                     <span className={`text-xs transition-colors ${submissionState === 'accepted' ? 'text-emerald-400' : 'text-white/70'}`}>
@@ -163,62 +166,72 @@ export default function PreviewWidget() {
 
                             {/* Extension Icon */}
                             <div className="relative">
-                                <Tooltip content="Verdict Extension" position="left">
+                                <Tooltip content="Verdict.run Extension" position="left">
                                     <button
                                         onClick={() => setShowExtension(!showExtension)}
                                         className={`p-1.5 rounded transition-colors ${showExtension ? 'text-emerald-400 bg-emerald-500/10' : 'text-emerald-400/60 hover:text-emerald-400 hover:bg-white/5'}`}
                                     >
-                                        <Image src="/icons/logo.webp" alt="Extension" width={20} height={20} className="w-5 h-5 object-contain" />
+                                        <div className="w-5 h-5 relative">
+                                            <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                        </div>
                                     </button>
                                 </Tooltip>
 
                                 {/* Mini Extension Popup */}
-                                {showExtension && (
-                                    <div className="absolute top-full right-0 mt-2 w-80 bg-[#121212] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
-                                        <div className="flex items-center gap-3 p-4 border-b border-white/10">
-                                            <div className="w-10 h-10 flex items-center justify-center bg-[#121212] border border-white/10 rounded-xl relative overflow-hidden">
-                                                <Image src="/icons/logo.webp" alt="Logo" width={24} height={24} className="object-contain" />
+                                <AnimatePresence>
+                                    {showExtension && (
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                            transition={{ duration: 0.2, ease: "easeOut" }}
+                                            className="absolute top-full right-0 mt-2 w-80 bg-[#121212] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50 origin-top-right backdrop-blur-xl"
+                                        >
+                                            <div className="flex items-center gap-3 p-4 border-b border-white/10">
+                                                <div className="w-10 h-10 relative">
+                                                    <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-semibold text-white">Verdict.run Helper</div>
+                                                    <div className="text-[11px] text-white/50">Codeforces Submission Bridge</div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div className="text-sm font-semibold text-white">Verdict Helper</div>
-                                                <div className="text-[11px] text-white/50">Codeforces Submission Bridge</div>
-                                            </div>
-                                        </div>
 
-                                        <div className="m-4 p-4 bg-white/5 rounded-xl border border-white/5">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-[13px] text-white/60">Extension Status</span>
-                                                <span className="flex items-center gap-1.5 text-[13px] font-medium">
-                                                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#4ade80]" />
-                                                    Active
-                                                </span>
+                                            <div className="m-4 p-4 bg-white/5 rounded-xl border border-white/5">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-[13px] text-white/60">Extension Status</span>
+                                                    <span className="flex items-center gap-1.5 text-[13px] font-medium">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#4ade80]" />
+                                                        Active
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[13px] text-white/60">Codeforces Login</span>
+                                                    <span className="flex items-center gap-1.5 text-[13px] font-medium">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#4ade80]" />
+                                                        Logged In
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[13px] text-white/60">Codeforces Login</span>
-                                                <span className="flex items-center gap-1.5 text-[13px] font-medium">
-                                                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#4ade80]" />
-                                                    Logged In
-                                                </span>
+
+                                            <div className="px-4 space-y-2">
+                                                <button className="w-full py-3 px-4 bg-white/10 hover:bg-white/15 text-white text-[13px] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-90"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21v-5h5" /></svg>
+                                                    Refresh Status
+                                                </button>
+                                                <button className="w-full py-3 px-4 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-black text-[13px] font-semibold rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/30 flex items-center justify-center gap-2">
+                                                    Open Codeforces
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-90"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                                </button>
                                             </div>
-                                        </div>
 
-                                        <div className="px-4 space-y-2">
-                                            <button className="w-full py-3 px-4 bg-white/10 hover:bg-white/15 text-white text-[13px] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-90"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21v-5h5" /></svg>
-                                                Refresh Status
-                                            </button>
-                                            <button className="w-full py-3 px-4 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-black text-[13px] font-semibold rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/30 flex items-center justify-center gap-2">
-                                                Open Codeforces
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-90"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-                                            </button>
-                                        </div>
-
-                                        <div className="mt-4 py-3 text-center flex items-center justify-center gap-1">
-                                            <span className="text-[11px] text-white/40">Verdict Helper by</span>
-                                            <span className="text-[11px] text-emerald-400 font-medium">Verdict.run</span>
-                                        </div>
-                                    </div>
-                                )}
+                                            <div className="mt-4 py-3 text-center flex items-center justify-center gap-1">
+                                                <span className="text-[11px] text-white/40">Verdict.run Helper by</span>
+                                                <span className="text-[11px] text-emerald-400 font-medium">Verdict.run</span>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
                         </div>
                     </div>
@@ -231,10 +244,10 @@ export default function PreviewWidget() {
                         </div>
                         <div className="flex items-center gap-3 text-xs text-white/40">
                             <Tooltip content="Time Limit" position="top">
-                                <span>⏱ 1s</span>
+                                <span><Clock className="w-2.5 h-2.5 inline mr-1" /> 1s</span>
                             </Tooltip>
                             <Tooltip content="Memory Limit" position="top">
-                                <span>💾 256MB</span>
+                                <span><HardDrive className="w-2.5 h-2.5 inline mr-1" /> 256MB</span>
                             </Tooltip>
                         </div>
                     </div>
@@ -327,7 +340,7 @@ export default function PreviewWidget() {
                                             <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-[10px] text-white/30 font-mono">#{sub.id}</span>
-                                                    <span className={`text-xs font-medium ${sub.verdict === 'Accepted' ? 'text-emerald-400' : sub.verdict === 'Wrong Answer' ? 'text-red-400' : 'text-yellow-400'}`}>
+                                                    <span className={`text-xs font-medium ${sub.verdict === 'Accepted' ? 'text-emerald-400' : sub.verdict === 'Wrong Answer' ? 'text-red-400' : 'text-orange-400'}`}>
                                                         {sub.verdict}
                                                     </span>
                                                 </div>
@@ -391,7 +404,7 @@ export default function PreviewWidget() {
                                             <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                                                 <div className="text-white/40 mb-1">Your Best</div>
                                                 <div className="text-2xl font-bold text-white">46ms</div>
-                                                <div className="text-[10px] text-emerald-400 mt-1">Top 5% 🏆</div>
+                                                <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">Top 5% <Trophy size={10} /></div>
                                             </div>
                                         </div>
                                     </div>
@@ -403,12 +416,12 @@ export default function PreviewWidget() {
                                         <div className="text-xs text-white/60 leading-relaxed">
                                             <p className="mb-3">The key observation is that adjacent cells can be decremented together...</p>
                                         </div>
-                                        <div className="bg-black/50 rounded-lg p-4 font-mono text-xs">
-                                            <div className="text-purple-400">#include <span className="text-emerald-400">&lt;bits/stdc++.h&gt;</span></div>
-                                            <div className="text-purple-400">using namespace <span className="text-white">std;</span></div>
-                                            <div className="mt-2"><span className="text-blue-400">int</span> <span className="text-yellow-400">main</span>() {'{'}</div>
-                                            <div className="text-white/40 ml-4">// Solution code here...</div>
-                                            <div>{'}'}</div>
+                                        <div className="bg-emerald-500/5 rounded-lg p-4 font-mono text-[13px]">
+                                            <div className="text-[#C586C0]">#include <span className="text-[#ce9178]">&lt;bits/stdc++.h&gt;</span></div>
+                                            <div className="text-[#C586C0]">using namespace <span className="text-[#9CDCFE]">std</span><span className="text-white">;</span></div>
+                                            <div className="mt-2"><span className="text-[#569CD6]">int</span> <span className="text-[#DCDCAA] ml-1">main</span>() {'{'}</div>
+                                            <div className="text-white/40 ml-4 font-medium italic">{/* Solution code here... */}</div>
+                                            <div className="text-white">{'}'}</div>
                                         </div>
                                     </div>
                                 )}
@@ -422,7 +435,7 @@ export default function PreviewWidget() {
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-white/60">Code</span>
                                     <Tooltip content="Language Selector" position="bottom">
-                                        <select className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white/80 outline-none focus:border-emerald-500/50">
+                                        <select className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white/80 outline-none focus:border-emerald-500/50 [&>option]:bg-[#0a0a0a] [&>option]:text-white">
                                             <option>GNU C++20 (64)</option>
                                             <option>GNU C++17</option>
                                             <option>GNU C++14</option>
@@ -444,7 +457,7 @@ export default function PreviewWidget() {
                                     <Tooltip content="Test Locally First" position="bottom">
                                         <button
                                             onClick={handleRunTests}
-                                            disabled={testState === 'compiling' || testState === 'running'}
+                                            disabled={testState === 'compiling' || testState === 'running' || submissionState !== 'idle'}
                                             className="px-3 py-1.5 text-[10px] font-medium bg-white/5 text-white/70 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 flex items-center gap-1"
                                         >
                                             {testState === 'compiling' && (
@@ -456,7 +469,7 @@ export default function PreviewWidget() {
                                     <Tooltip content="Submit via Extension" position="bottom">
                                         <button
                                             onClick={handleSubmit}
-                                            disabled={submissionState !== 'idle'}
+                                            disabled={submissionState !== 'idle' || testState === 'compiling' || testState === 'running'}
                                             className="px-3 py-1.5 text-[10px] font-medium bg-emerald-500 text-black rounded-lg hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                                         >
                                             {submissionState === 'submitting' && (
@@ -469,22 +482,65 @@ export default function PreviewWidget() {
                             </div>
 
                             {/* Code Area */}
-                            <div className="flex-1 bg-[#0a0a0a] p-4 font-mono text-xs overflow-auto">
-                                <div className="flex">
-                                    <div className="text-white/20 pr-4 select-none text-right" style={{ minWidth: '2rem' }}>
-                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <div key={n}>{n}</div>)}
+                            <div className="flex-1 bg-[#0a0a0a] font-mono text-[13px] overflow-auto custom-scrollbar">
+                                <div className="flex min-h-full">
+                                    {/* Monaco Gutter */}
+                                    <div className="w-12 flex-shrink-0 bg-[#0a0a0a] border-r border-white/5 py-4 flex flex-col items-end pr-3 text-white/20 select-none">
+                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                                            <div key={n} className={`h-6 flex items-center ${n === 8 ? 'text-white/60' : ''}`}>
+                                                {n}
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="flex-1">
-                                        <div><span className="text-purple-400">#include</span> <span className="text-emerald-400">&lt;bits/stdc++.h&gt;</span></div>
-                                        <div><span className="text-purple-400">using namespace</span> std;</div>
-                                        <div></div>
-                                        <div><span className="text-blue-400">int</span> <span className="text-yellow-400">main</span>() {'{'}</div>
-                                        <div>    ios_base::<span className="text-yellow-400">sync_with_stdio</span>(<span className="text-orange-400">0</span>);</div>
-                                        <div>    cin.<span className="text-yellow-400">tie</span>(<span className="text-orange-400">0</span>);</div>
-                                        <div></div>
-                                        <div>    <span className="text-purple-400">return</span> <span className="text-orange-400">0</span>;</div>
-                                        <div>{'}'}</div>
-                                        <div className="text-white/20">|</div>
+
+                                    {/* Monaco Code View */}
+                                    <div className="flex-1 py-4 relative">
+                                        {/* Active Line Highlight (Line 8) */}
+                                        <div className="absolute top-[calc(1rem+7*1.5rem)] left-0 w-full h-6 bg-white/[0.03] border-y border-white/[0.05] pointer-events-none" />
+
+                                        <div className="relative z-10">
+                                            <div className="h-6 flex items-center px-4">
+                                                <span className="text-[#C586C0]">#include</span>
+                                                <span className="text-[#ce9178] ml-2">&lt;bits/stdc++.h&gt;</span>
+                                            </div>
+                                            <div className="h-6 flex items-center px-4">
+                                                <span className="text-[#C586C0]">using namespace</span>
+                                                <span className="text-[#9CDCFE] ml-2">std</span>
+                                                <span className="text-white">;</span>
+                                            </div>
+                                            <div className="h-6 flex items-center px-4"></div>
+                                            <div className="h-6 flex items-center px-4">
+                                                <span className="text-[#569CD6]">int</span>
+                                                <span className="text-[#DCDCAA] ml-2">main</span>
+                                                <span className="text-white">() {'{'}</span>
+                                            </div>
+                                            <div className="h-6 flex items-center px-8">
+                                                <span className="text-[#9CDCFE]">ios_base</span>
+                                                <span className="text-white">::</span>
+                                                <span className="text-[#DCDCAA]">sync_with_stdio</span>
+                                                <span className="text-white">(</span>
+                                                <span className="text-[#B5CEA8]">0</span>
+                                                <span className="text-white">);</span>
+                                            </div>
+                                            <div className="h-6 flex items-center px-8">
+                                                <span className="text-[#9CDCFE]">cin</span>
+                                                <span className="text-white">.</span>
+                                                <span className="text-[#DCDCAA]">tie</span>
+                                                <span className="text-white">(</span>
+                                                <span className="text-[#B5CEA8]">0</span>
+                                                <span className="text-white">);</span>
+                                            </div>
+                                            <div className="h-6 flex items-center px-4"></div>
+                                            <div className="h-6 flex items-center px-8">
+                                                <span className="text-[#C586C0]">return</span>
+                                                <span className="text-[#B5CEA8] ml-2">0</span>
+                                                <span className="text-white">;</span>
+                                            </div>
+                                            <div className="h-6 flex items-center px-4 text-white">{'}'}</div>
+                                            <div className="h-6 flex items-center px-4">
+                                                <div className="w-[1.5px] h-4 bg-emerald-400 animate-pulse ml-0.5" />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -497,7 +553,7 @@ export default function PreviewWidget() {
                                     </Tooltip>
                                     <Tooltip content="View Results" position="top">
                                         <button className={`text-xs ${submissionState === 'accepted' ? 'text-emerald-400 font-medium' : 'text-white/40'}`}>
-                                            Test Result {submissionState === 'accepted' && '✓'}
+                                            Test Result {submissionState === 'accepted' && <Check size={10} className="inline ml-1" strokeWidth={3} />}
                                         </button>
                                     </Tooltip>
                                 </div>
@@ -563,7 +619,7 @@ export default function PreviewWidget() {
                                                 {testError}
                                             </div>
                                             <p className="text-[10px] text-white/40 mt-2">
-                                                💡 Tip: Add your solution logic to the code before running tests.
+                                                <Lightbulb className="w-3 h-3 inline mr-1 text-emerald-400" /> Tip: Add your solution logic to the code before running tests.
                                             </p>
                                         </div>
                                     )}
@@ -625,8 +681,8 @@ export default function PreviewWidget() {
                                     <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" /> 1s</span>
                                     <span className="flex items-center gap-0.5"><HardDrive className="w-2.5 h-2.5" /> 256MB</span>
                                 </div>
-                                <div className="w-5 h-5 bg-emerald-500/10 rounded flex items-center justify-center">
-                                    <Image src="/icons/logo.webp" alt="Logo" width={12} height={12} />
+                                <div className="w-5 h-5 relative">
+                                    <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
                                 </div>
                             </div>
                         </div>
@@ -643,30 +699,43 @@ export default function PreviewWidget() {
 
                         {/* Sub-Tabs Scrollable */}
                         <div className="flex items-center gap-4 px-4 py-2 bg-[#0f0f0f] border-b border-white/5 overflow-hidden whitespace-nowrap">
-                            <span className="text-[10px] font-bold text-white border-b border-emerald-500 pb-0.5">Description</span>
-                            <span className="text-[10px] font-bold text-white/30">Submissions</span>
-                            <span className="text-[10px] font-bold text-white/30">Analytics</span>
-                            <span className="text-[10px] font-bold text-white/30">Solution</span>
+                            {['Description', 'Submissions', 'Analytics', 'Solution'].map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveMobileTab(tab.toLowerCase())}
+                                    className={`text-[10px] font-bold ${activeMobileTab === tab.toLowerCase() ? 'text-white border-b border-emerald-500' : 'text-white/30'} pb-0.5 transition-colors`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
                         </div>
 
                         {/* Content Area */}
                         <div className="flex-1 p-5 overflow-auto bg-[#0a0a0a]">
-                            <h3 className="text-white font-bold text-base mb-3">Problem Statement</h3>
-                            <p className="text-[11px] text-white/50 leading-relaxed mb-4">
-                                Theatre Square in the capital city of Berland has a rectangular shape with the size n × m meters...
-                            </p>
+                            {activeMobileTab === 'description' ? (
+                                <>
+                                    <h3 className="text-white font-bold text-base mb-3">Problem Statement</h3>
+                                    <p className="text-[11px] text-white/50 leading-relaxed mb-4">
+                                        Theatre Square in the capital city of Berland has a rectangular shape with the size n × m meters...
+                                    </p>
 
-                            {/* Input/Output Style */}
-                            <div className="space-y-3">
-                                <div className="bg-white/5 rounded-lg p-3 border border-white/5">
-                                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Input</div>
-                                    <div className="text-[10px] text-white/70">The input contains three positive integer numbers...</div>
+                                    {/* Input/Output Style */}
+                                    <div className="space-y-3">
+                                        <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                                            <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Input</div>
+                                            <div className="text-[10px] text-white/70">The input contains three positive integer numbers...</div>
+                                        </div>
+                                        <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                                            <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Output</div>
+                                            <div className="text-[10px] text-white/70">Write the needed number of flagstones.</div>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-white/30">
+                                    <p className="text-xs">Content placeholder for {activeMobileTab}</p>
                                 </div>
-                                <div className="bg-white/5 rounded-lg p-3 border border-white/5">
-                                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Output</div>
-                                    <div className="text-[10px] text-white/70">Write the needed number of flagstones.</div>
-                                </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Dynamic Floating Action Button */}
@@ -692,12 +761,17 @@ export default function PreviewWidget() {
                             target="_blank"
                             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl border border-white/10 transition-all hover:scale-105"
                         >
-                            <Image src="/icons/logo.webp" alt="Chrome" width={20} height={20} className="w-5 h-5" />
+                            <div className="w-5 h-5 relative">
+                                <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                            </div>
                             Download Extension
                         </Link>
                     </div>
                 </div>
             </div>
-        </section>
+        </section >
     );
 }
+
+// rerender-memo: wrap with memo to prevent unnecessary re-renders
+export default memo(PreviewWidget);

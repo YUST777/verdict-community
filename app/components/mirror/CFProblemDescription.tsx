@@ -11,9 +11,9 @@ import { Clock, HardDrive } from 'lucide-react';
 export const CFProblemDescription = React.memo(function CFProblemDescription({ data }: { data: CFProblemData | null }) {
     // Trigger MathJax typeset whenever re-render occurs (which means data changed due to memo)
     useEffect(() => {
-        const MathJax = (window as any).MathJax;
-        if (data && typeof window !== 'undefined' && MathJax && MathJax.typesetPromise) {
-            MathJax.typesetPromise();
+        const w = window as Window & { MathJax?: { typesetPromise?: () => Promise<void> } };
+        if (data && typeof window !== 'undefined' && w.MathJax?.typesetPromise) {
+            w.MathJax.typesetPromise();
         }
     }); // No dependency array: run on every commit (mount + update)
 
@@ -27,9 +27,9 @@ export const CFProblemDescription = React.memo(function CFProblemDescription({ d
                 strategy="afterInteractive"
                 onLoad={() => {
                     // Initial typeset when script loads
-                    const MathJax = (window as any).MathJax;
-                    if (data && MathJax && MathJax.typesetPromise) {
-                        MathJax.typesetPromise();
+                    const w = window as Window & { MathJax?: { typesetPromise?: () => Promise<void> } };
+                    if (data && w.MathJax?.typesetPromise) {
+                        w.MathJax.typesetPromise();
                     }
                 }}
             />

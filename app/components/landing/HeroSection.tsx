@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Play, X } from 'lucide-react';
+import { ArrowRight, Play } from 'lucide-react';
+import DemoModal from './DemoModal';
 
-export default function HeroSection() {
+function HeroSection() {
     const [contestUrl, setContestUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showVideo, setShowVideo] = useState(false);
@@ -38,7 +39,7 @@ export default function HeroSection() {
     };
 
     const handleMirror = () => {
-        const parsed = parseCodeforcesUrl(contestUrl);
+        const parsed = parseCodeforcesUrl(contestUrl.trim());
         if (parsed) {
             setIsLoading(true);
             const prefix = parsed.type === 'gym' ? 'gym' : parsed.type === 'problemset' ? 'problemset' : 'contest';
@@ -108,34 +109,10 @@ export default function HeroSection() {
             </div>
 
             {/* Video Modal */}
-            {showVideo && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div
-                        className="absolute inset-0"
-                        onClick={() => setShowVideo(false)}
-                    />
-                    <div className="relative w-full max-w-4xl bg-black border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#0a0a0a]">
-                            <h3 className="text-sm font-bold text-white/70">Introduction to Verdict</h3>
-                            <button
-                                onClick={() => setShowVideo(false)}
-                                className="p-1 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="aspect-video relative bg-black">
-                            <iframe
-                                src="https://www.youtube.com/embed/1_Q3agYkioE?autoplay=1"
-                                title="Verdict Demo"
-                                className="absolute inset-0 w-full h-full"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
+            <DemoModal isOpen={showVideo} onClose={() => setShowVideo(false)} />
         </main>
     );
 }
+
+// rerender-memo: wrap with memo to prevent unnecessary re-renders
+export default memo(HeroSection);

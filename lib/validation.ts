@@ -56,8 +56,7 @@ export const extractUsername = (url: string | null | undefined, platform: 'leetc
                 return parts[parts.length - 1] || null;
             }
         }
-    } catch (e) {
-        // console.error(`Error extracting username from ${url}:`, e);
+    } catch {
         return null;
     }
     return null;

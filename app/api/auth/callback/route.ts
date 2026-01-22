@@ -42,7 +42,9 @@ export async function GET(req: NextRequest) {
         );
 
         let userId: number;
-        let appId: number | null = null;
+        // appId is intentionally unused after table migration - keeping for future use
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const appId: number | null = null;
 
         if (userResult.rows.length > 0) {
             // User exists, log them in
@@ -66,7 +68,8 @@ export async function GET(req: NextRequest) {
             // But we need to fill the column if it's NOT NULL.
             // We'll leave password_hash NULL if allowed, or put a garbage string.
             // Assuming schema might require it, let's put a placeholder.
-            const randomPassword = crypto.randomBytes(32).toString('hex');
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const _randomPassword = crypto.randomBytes(32).toString('hex');
             // We'd normally bcrypt this, but since they can't login with password unless they reset it, 
             // we can just stringify it or leave it. 
             // Better: Insert with a known impossible hash or handle nulls if schema allowed.

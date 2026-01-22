@@ -37,7 +37,7 @@ export async function verifyAuth(req: NextRequest): Promise<AuthUser | null> {
             id: decoded.id || decoded.userId || 0
         };
     } catch (error) {
-        console.error('VERIFY ERROR:', (error as any).message);
+        console.error('VERIFY ERROR:', error instanceof Error ? error.message : 'Unknown error');
         console.error('Active Secret (First 5):', JWT_SECRET?.substring(0, 5));
         console.error('Token (First 10):', token.substring(0, 10));
         // Token expired or invalid

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { Plus, X, Zap, Globe, Code2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Hoist static data outside component (rendering-hoist-jsx rule)
 const features = [
     {
         id: 'workspace',
@@ -25,11 +26,16 @@ const features = [
     }
 ];
 
-export default function PoweredBy() {
+function PoweredBy() {
     const [activeFeature, setActiveFeature] = useState<string | null>('workspace');
 
+    // rerender-functional-setstate: use useCallback for stable reference
+    const toggleFeature = useCallback((featureId: string) => {
+        setActiveFeature(prev => prev === featureId ? null : featureId);
+    }, []);
+
     return (
-        <section className="relative z-10 py-16 md:py-32 border-t border-white/5 bg-black overflow-hidden">
+        <section className="relative z-10 py-16 md:py-32 bg-[#0a0a0a] overflow-hidden">
             <div className="max-w-[1200px] mx-auto px-4 md:px-6 relative z-10">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 md:gap-16 lg:gap-24 items-start">
 
@@ -52,7 +58,7 @@ export default function PoweredBy() {
                                 viewport={{ once: true }}
                                 className="text-base md:text-lg text-white/50 leading-relaxed"
                             >
-                                Eliminate friction and focus on the algorithm. Verdict combines instant mirroring, a powerful cloud IDE, and seamless syncing into a single, reliable platform for competitive programmers.
+                                Eliminate friction and focus on the algorithm. Verdict.run combines instant mirroring, a powerful cloud IDE, and seamless syncing into a single, reliable platform for competitive programmers.
                             </motion.p>
                         </div>
 
@@ -65,11 +71,11 @@ export default function PoweredBy() {
                                     transition={{ duration: 0.5, delay: 0.3 + (index * 0.1) }}
                                     viewport={{ once: true }}
                                     className={`group border-b border-white/5 pb-4 cursor-pointer transition-all duration-300 ${activeFeature === feature.id ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}
-                                    onClick={() => setActiveFeature(feature.id === activeFeature ? null : feature.id)}
+                                    onClick={() => toggleFeature(feature.id)}
                                 >
                                     <div className="flex items-center justify-between py-2">
                                         <h4 className="text-xl font-bold text-white tracking-tight">{feature.title}</h4>
-                                        <button className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all duration-300 ${activeFeature === feature.id ? 'bg-white text-black border-white' : 'bg-transparent text-white/50 border-white/20'}`}>
+                                        <button className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all duration-300 ${activeFeature === feature.id ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-transparent text-white/50 border-white/20'}`}>
                                             {activeFeature === feature.id ? <X size={14} /> : <Plus size={14} />}
                                         </button>
                                     </div>
@@ -158,3 +164,6 @@ export default function PoweredBy() {
         </section>
     );
 }
+
+// rerender-memo: wrap with memo to prevent unnecessary re-renders
+export default memo(PoweredBy);

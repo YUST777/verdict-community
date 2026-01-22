@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         }
     } catch (e) {
         // Table might not exist yet or connection error
-        console.warn('[Mirror] Cache read failed (skipping):', (e as any).message);
+        console.warn('[Mirror] Cache read failed (skipping):', e instanceof Error ? e.message : 'Unknown error');
     }
 
     // Build the correct URL based on type
@@ -65,7 +65,8 @@ export async function GET(req: NextRequest) {
 
     // Call the host mirror service (runs puppeteer outside Docker)
     // The service runs on the host at port 3099
-    const mirrorServiceUrl = process.env.MIRROR_SERVICE_URL || 'http://host.docker.internal:3099';
+    // In production, set MIRROR_SERVICE_URL env variable
+    const mirrorServiceUrl = process.env.MIRROR_SERVICE_URL || 'http://mirror.verdict.run';
 
     try {
         const response = await fetch(`${mirrorServiceUrl}/fetch?url=${encodeURIComponent(targetUrl)}`, {
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
                 [contestId, problemId, data]
             );
             } catch (dbErr) {
-            console.error('[Mirror] Failed to cache:', (dbErr as any).message);
+            console.error('[Mirror] Failed to cache:', dbErr instanceof Error ? dbErr.message : 'Unknown error');
         }
 
         // Async Log View
@@ -103,9 +104,10 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(data);
 
-    } catch (error: any) {
-        console.error('Mirror fetch failed:', error.message);
-        return NextResponse.json({ error: 'Failed to fetch from Codeforces Mirror', detail: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Mirror fetch failed:', message);
+        return NextResponse.json({ error: 'Failed to fetch from Codeforces Mirror', detail: message }, { status: 500 });
     }
 }
 
@@ -118,6 +120,6 @@ async function logView(req: NextRequest, contestId: string, problemId: string) {
         );
     } catch (e) {
         // Silently fail logging to avoid impacting user experience
-        console.error('[Mirror] Logging failed:', (e as any).message);
+        console.error('[Mirror] Logging failed:', e instanceof Error ? e.message : 'Unknown error');
     }
 }

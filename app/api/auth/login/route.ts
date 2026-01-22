@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/simple-rate-limit';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { query } from '@/lib/db';
@@ -10,9 +10,9 @@ const JWT_EXPIRES_IN = '24h';
 
 export async function POST(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-    const limitResult = await rateLimit(`login:${ip}`, 5, 60); // 5 attempts per minute
+    const isAllowed = checkRateLimit(`login:${ip}`, 5, 60); // 5 attempts per minute
 
-    if (!limitResult.success) {
+    if (!isAllowed) {
         return NextResponse.json({ error: 'Too many login attempts. Please wait.' }, { status: 429 });
     }
 

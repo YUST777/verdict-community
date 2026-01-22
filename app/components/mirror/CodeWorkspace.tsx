@@ -1,12 +1,11 @@
 import {
-    CloudUpload,
     Loader2,
     Play,
     ChevronDown
 } from 'lucide-react';
 import { Editor, OnMount } from '@monaco-editor/react';
 import { useEffect, useRef, useState } from 'react';
-import { SubmissionResult, Example } from './types';
+import { SubmissionResult, Example, CFSubmissionStatus } from './types';
 import TestRunnerPanel from './TestRunnerPanel';
 
 interface CodeWorkspaceProps {
@@ -22,10 +21,19 @@ interface CodeWorkspaceProps {
     setTestPanelHeight: (height: number) => void;
     testCases: Example[];
     result: SubmissionResult | null;
-    hasSubmitted: boolean;
+    cfStatus: CFSubmissionStatus | null; // Codeforces submission status
     mobileView: 'problem' | 'code';
     language: string;
     setLanguage: (lang: string) => void;
+    contestId?: string;
+    problemId?: string;
+    testPanelActiveTab?: 'testcase' | 'result' | 'codeforces';
+    setTestPanelActiveTab?: (tab: 'testcase' | 'result' | 'codeforces') => void;
+    // Custom test cases
+    onAddTestCase?: (testCase: Example) => void;
+    onDeleteTestCase?: (index: number) => void;
+    onUpdateTestCase?: (index: number, testCase: Example) => void;
+    sampleTestCasesCount?: number;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -61,17 +69,29 @@ export default function CodeWorkspace({
     setIsTestPanelVisible,
     testCases,
     result,
-    hasSubmitted,
+    cfStatus,
     mobileView,
     language,
-    setLanguage
+    setLanguage,
+    contestId,
+    problemId,
+    testPanelActiveTab,
+    setTestPanelActiveTab,
+    onAddTestCase,
+    onDeleteTestCase,
+    onUpdateTestCase,
+    sampleTestCasesCount
 }: Omit<CodeWorkspaceProps, 'testPanelHeight' | 'setTestPanelHeight'>) {
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [isResizingVertical, setIsResizingVertical] = useState(false);
-    const [testPanelTab, setTestPanelTab] = useState<'testcase' | 'result'>('testcase');
+    const [internalTab, setInternalTab] = useState<'testcase' | 'result' | 'codeforces'>('testcase');
     const [selectedTestCase, setSelectedTestCase] = useState(0);
     const [isLangOpen, setIsLangOpen] = useState(false);
+
+    // Use external tab control if provided, otherwise internal
+    const testPanelTab = testPanelActiveTab ?? internalTab;
+    const setTestPanelTab = setTestPanelActiveTab ?? setInternalTab;
 
     const handleLanguageChange = (langId: string) => {
         // Check if code has been modified from the template
@@ -97,7 +117,7 @@ export default function CodeWorkspace({
 
     // Load saved height on mount
     useEffect(() => {
-        const savedHeight = localStorage.getItem('icpchue-layout-test-height');
+        const savedHeight = localStorage.getItem('verdict-layout-test-height');
         if (savedHeight && editorContainerRef.current) {
             const height = parseFloat(savedHeight);
             if (!isNaN(height) && height >= 15 && height <= 85) {
@@ -180,10 +200,9 @@ export default function CodeWorkspace({
     // Auto-switch to result tab when result arrives
     useEffect(() => {
         if (result && isTestPanelVisible) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setTestPanelTab('result');
         }
-    }, [result, isTestPanelVisible]);
+    }, [result, isTestPanelVisible, setTestPanelTab]);
 
     const handleVerticalResizeStart = (e: React.MouseEvent | React.TouchEvent) => {
         if (e.cancelable) e.preventDefault();
@@ -225,7 +244,7 @@ export default function CodeWorkspace({
             document.body.style.userSelect = '';
 
             // Save preference
-            localStorage.setItem('icpchue-layout-test-height', lastHeight.current.toString());
+            localStorage.setItem('verdict-layout-test-height', lastHeight.current.toString());
 
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
@@ -257,18 +276,18 @@ export default function CodeWorkspace({
                 '--test-panel-h': '35%'
             } as React.CSSProperties}
         >
-            {/* ... Editor Header same as before ... */}
-            <div className="flex items-center justify-between px-4 py-2 bg-[#1a1a1a] border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 relative">
-                        <span className="text-sm font-medium text-white">Code</span>
+            {/* Editor Header */}
+            <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-[#1a1a1a] border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                    <div className="flex items-center gap-1.5 sm:gap-2 relative">
+                        <span className="text-xs sm:text-sm font-medium text-white hidden xs:inline">Code</span>
                         <div className="relative">
                             <button
                                 onClick={() => setIsLangOpen(!isLangOpen)}
-                                className="flex items-center gap-2 text-xs px-2 py-0.5 bg-white/10 rounded text-[#A0A0A0] hover:text-white transition-colors border border-transparent hover:border-white/10"
+                                className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs px-2 sm:px-2 py-1.5 sm:py-0.5 bg-white/10 rounded text-[#A0A0A0] active:text-white transition-colors border border-transparent active:border-white/10 touch-manipulation min-h-[32px]"
                             >
-                                {SUPPORTED_LANGUAGES.find(l => l.id === language)?.name || 'C++'}
-                                <ChevronDown size={12} />
+                                <span className="max-w-[60px] sm:max-w-none truncate">{SUPPORTED_LANGUAGES.find(l => l.id === language)?.name || 'C++'}</span>
+                                <ChevronDown size={10} className="sm:w-3 sm:h-3 shrink-0" />
                             </button>
                             {isLangOpen && (
                                 <>
@@ -290,7 +309,7 @@ export default function CodeWorkspace({
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <button
                         onClick={() => {
                             if (onRunTests) {
@@ -300,29 +319,41 @@ export default function CodeWorkspace({
                             }
                         }}
                         disabled={submitting}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-2 ${isTestPanelVisible
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-medium border transition-colors flex items-center justify-center gap-1.5 sm:gap-2 touch-manipulation min-h-[32px] ${isTestPanelVisible
                             ? 'bg-white/10 text-white border-white/20'
-                            : 'text-[#888] border-transparent hover:text-white hover:bg-white/5'
+                            : 'text-[#888] border-transparent active:text-white active:bg-white/5'
                             } ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title="Test your code locally with sample test cases"
                     >
-                        {submitting ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                        {submitting ? 'Running...' : 'Run Tests'}
+                        {submitting ? (
+                            <Loader2 size={12} className="sm:w-[14px] sm:h-[14px] animate-spin" />
+                        ) : (
+                            <Play size={12} className="sm:w-[14px] sm:h-[14px]" />
+                        )}
+                        <span className="hidden xs:inline">{submitting ? 'Testing...' : 'Test Locally'}</span>
+                        <span className="xs:hidden">{submitting ? '...' : 'Test'}</span>
                     </button>
 
                     <button
                         onClick={onSubmit}
                         disabled={submitting || !code.trim()}
-                        className="px-4 py-1.5 bg-gradient-to-r from-[#10B981] to-[#059669] hover:from-[#34D399] hover:to-[#10B981] disabled:from-[#333] disabled:to-[#333] disabled:text-[#666] text-white font-bold rounded-lg transition-all flex items-center gap-2 text-xs"
+                        className="px-3 sm:px-4 py-1.5 bg-gradient-to-r from-[#10B981] to-[#059669] active:from-[#34D399] active:to-[#10B981] disabled:from-[#333] disabled:to-[#333] disabled:text-[#666] text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs touch-manipulation min-h-[32px]"
                     >
                         {submitting ? (
                             <>
-                                <Loader2 size={16} className="animate-spin" />
-                                Running...
+                                <Loader2 size={12} className="sm:w-4 sm:h-4 animate-spin" />
+                                <span className="hidden xs:inline">Running...</span>
+                                <span className="xs:hidden">...</span>
                             </>
                         ) : (
                             <>
-                                <CloudUpload size={16} />
-                                Submit
+                                <img 
+                                    src="https://codeforces.org/s/0/favicon-32x32.png" 
+                                    alt="CF" 
+                                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 brightness-0 invert object-contain"
+                                    style={{ imageRendering: 'crisp-edges' }}
+                                />
+                                <span>Submit</span>
                             </>
                         )}
                     </button>
@@ -388,9 +419,15 @@ export default function CodeWorkspace({
                     setSelectedTestCase={setSelectedTestCase}
                     testCases={testCases}
                     result={result}
-                    hasSubmitted={hasSubmitted}
+                    cfStatus={cfStatus}
                     onClose={() => setIsTestPanelVisible(false)}
                     onResizeStart={handleVerticalResizeStart}
+                    contestId={contestId}
+                    problemId={problemId}
+                    onAddTestCase={onAddTestCase}
+                    onDeleteTestCase={onDeleteTestCase}
+                    onUpdateTestCase={onUpdateTestCase}
+                    sampleTestCasesCount={sampleTestCasesCount}
                 />
             )}
         </div>

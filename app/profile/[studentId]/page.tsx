@@ -82,7 +82,7 @@ export default function PublicProfilePage() {
             <div className="min-h-screen bg-[#0B0B0C] flex flex-col items-center justify-center text-white px-6">
                 <Lock className="w-16 h-16 text-gray-500 mb-4" />
                 <h1 className="text-2xl font-bold mb-2">{error || 'Profile Not Found'}</h1>
-                <p className="text-gray-400 mb-6">This profile may be private or doesn't exist.</p>
+                <p className="text-gray-400 mb-6">This profile may be private or doesn&apos;t exist.</p>
                 <Link href="/" className="px-6 py-2 bg-[#10B981] text-black font-bold rounded-lg hover:bg-[#059669]">Go Home</Link>
             </div>
         );

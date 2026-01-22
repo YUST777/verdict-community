@@ -24,10 +24,10 @@ export async function POST(request: NextRequest) {
         }
 
         const token = authHeader.substring(7);
-        let decoded: any;
+        let decoded: { id?: number; userId?: number };
 
         try {
-            decoded = jwt.verify(token, JWT_SECRET as string);
+            decoded = jwt.verify(token, JWT_SECRET as string) as { id?: number; userId?: number };
         } catch {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }

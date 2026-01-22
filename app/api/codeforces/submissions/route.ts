@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/simple-rate-limit';
 
+interface CFSubmissionEntry {
+    id: number;
+    creationTimeSeconds: number;
+    author?: { members?: { handle: string }[] };
+    verdict?: string;
+    timeConsumedMillis?: number;
+    memoryConsumedBytes?: number;
+    programmingLanguage?: string;
+    problem: { index: string };
+}
+
 // Simple in-memory cache
 // Map: "contestId" -> { timestamp, submissions[] }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const cache: Record<string, { timestamp: number; submissions: any[] }> = {};
+const cache: Record<string, { timestamp: number; submissions: CFSubmissionEntry[] }> = {};
 const CACHE_DURATION = 1000 * 30; // 30 seconds cache (Live Feed)
 
 export async function GET(request: Request) {
@@ -27,7 +37,7 @@ export async function GET(request: Request) {
     const now = Date.now();
     const cacheKey = contestId;
 
-    let submissions: any[] = [];
+    let submissions: CFSubmissionEntry[] = [];
 
     // Check Cache
     if (cache[cacheKey] && (now - cache[cacheKey].timestamp < CACHE_DURATION)) {
@@ -62,12 +72,12 @@ export async function GET(request: Request) {
 
     // Filter by Problem Index if requested (Case Insensitive)
     if (problemIndex) {
-        submissions = submissions.filter((sub: any) =>
+        submissions = submissions.filter((sub) =>
             sub.problem.index.toLowerCase() === problemIndex.toLowerCase()
         );
     }
 
-    const cleanSubmissions = submissions.map((sub: any) => ({
+    const cleanSubmissions = submissions.map((sub) => ({
         id: sub.id,
         creationTimeSeconds: sub.creationTimeSeconds,
         author: sub.author?.members?.[0]?.handle || 'Unknown',

@@ -4,12 +4,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Mail, ArrowRight, CheckCircle, AlertCircle, Loader2, CreditCard, Shield } from 'lucide-react';
+import { Mail, ArrowRight, CheckCircle, AlertCircle, Loader2, Shield } from 'lucide-react';
 import Providers from '@/components/Providers';
 import { motion } from 'framer-motion';
 
 function ForgotPasswordContent() {
-    const router = useRouter();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _router = useRouter(); // Available for future navigation needs
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [message, setMessage] = useState('');
@@ -54,7 +55,7 @@ function ForgotPasswordContent() {
                 setStatus('error');
                 setMessage(data.error || 'Failed to send reset link');
             }
-        } catch (err) {
+        } catch {
             setStatus('error');
             setMessage('Network error. Please try again later.');
         }

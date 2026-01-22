@@ -31,7 +31,7 @@ export function getPool(): pg.Pool {
     return pool;
 }
 
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: (string | number | boolean | null | object)[]) {
     const pool = getPool();
     return pool.query(text, params);
 }

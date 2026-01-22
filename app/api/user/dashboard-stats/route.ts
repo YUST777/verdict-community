@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         let decoded: JWTPayload;
         try {
             decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
-        } catch (err) {
+        } catch {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
 
@@ -44,7 +44,12 @@ export async function GET(request: NextRequest) {
             [userId]
         );
 
-        const submissions = result.rows.map((row: any) => ({
+        interface SubmissionRow {
+            sheet_id: string;
+            problem_id: string;
+            submitted_at: string;
+        }
+        const submissions = result.rows.map((row: SubmissionRow) => ({
             sheet_name: row.sheet_id === 'sheet-1' ? 'Sheet 1' : row.sheet_id,
             problem_name: row.problem_id,
             submitted_at: row.submitted_at
@@ -56,7 +61,7 @@ export async function GET(request: NextRequest) {
         const totalSolved = submissions.length;
 
         // 2. Streak Calculation
-        const uniqueDates = Array.from(new Set(submissions.map((s: any) => {
+        const uniqueDates = Array.from(new Set(submissions.map((s) => {
             const date = new Date(s.submitted_at);
             return date.toISOString().split('T')[0]; // YYYY-MM-DD
         }))).sort().reverse() as string[]; // Newest first
@@ -97,7 +102,7 @@ export async function GET(request: NextRequest) {
 
         // 3. Consistency Data (for heatmap)
         const consistencyMap: Record<string, number> = {};
-        submissions.forEach((s: any) => {
+        submissions.forEach((s) => {
             const date = new Date(s.submitted_at).toISOString().split('T')[0];
             consistencyMap[date] = (consistencyMap[date] || 0) + 1;
         });

@@ -49,7 +49,8 @@ export default function Register() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState<Partial<RegisterFormData>>({});
-    const [touched, setTouched] = useState<Partial<Record<keyof RegisterFormData, boolean>>>({});
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [_touched, _setTouched] = useState<Partial<Record<keyof RegisterFormData, boolean>>>({});
 
     const supabase = createClient();
     const [submitError, setSubmitError] = useState('');
@@ -172,7 +173,7 @@ export default function Register() {
                     {/* Logo */}
                     <Link href="/" className="inline-flex items-center gap-2 mb-10">
                         <Image src="/icons/logo.webp" alt="Verdict" width={28} height={28} />
-                        <span className="text-lg font-semibold text-white">Verdict<span className="text-emerald-400">.run</span></span>
+                        <span className="text-sm font-medium text-white/60">v1.0.1</span>
                     </Link>
 
                     {/* Header */}

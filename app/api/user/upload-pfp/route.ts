@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
             console.error('Database update failed:', dbError);
             try {
                 fs.unlinkSync(webpPath);
-            } catch (e) { /* ignore cleanup errors */ }
+            } catch { /* ignore cleanup errors */ }
             return NextResponse.json({ error: 'Failed to save profile picture' }, { status: 500 });
         }
 

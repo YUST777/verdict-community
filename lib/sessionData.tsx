@@ -1,6 +1,5 @@
-import { Terminal, Info, AlertTriangle, FileText, X, Check, Loader2, ArrowRight } from 'lucide-react';
+import { Terminal, Info, AlertTriangle, FileText, X, Check } from 'lucide-react';
 import React from 'react';
-import Link from 'next/link';
 
 // --- content components ---
 
@@ -179,16 +178,16 @@ export function Session5Content() {
                         <h4 className="text-sm font-bold text-white mb-3">Examples of Instructions:</h4>
                         <div className="space-y-3 font-mono text-sm">
                             <div className="bg-black/50 p-3 rounded border border-white/5">
-                                <p className="text-gray-400 mb-1">// Assignment</p>
+                                <p className="text-gray-400 mb-1">{/* Assignment */}{'// Assignment'}</p>
                                 <pre className="text-green-400">int x = 5;</pre>
                                 <pre className="text-green-400">x = x + 1;</pre>
                             </div>
                             <div className="bg-black/50 p-3 rounded border border-white/5">
-                                <p className="text-gray-400 mb-1">// Comparison</p>
+                                <p className="text-gray-400 mb-1">{/* Comparison */}{'// Comparison'}</p>
                                 <pre className="text-green-400">if (x {'>'} 10)</pre>
                             </div>
                             <div className="bg-black/50 p-3 rounded border border-white/5">
-                                <p className="text-gray-400 mb-1">// Output</p>
+                                <p className="text-gray-400 mb-1">{/* Output */}{'// Output'}</p>
                                 <pre className="text-green-400">cout {'<<'} x;</pre>
                             </div>
                         </div>

@@ -626,6 +626,30 @@ a:active {
   }
 }
 
+/* Mobile optimizations for mirror page */
+@media (max-width: 768px) {
+  /* Better touch targets */
+  button, a {
+    -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Prevent text selection on buttons */
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Smooth scrolling */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better input handling on mobile */
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
 /* Ultra compact showcase section for mobile */
 @media (max-width: 768px) {
 

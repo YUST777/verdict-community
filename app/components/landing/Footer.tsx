@@ -1,10 +1,11 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Github, Twitter } from 'lucide-react';
+import { Github, Twitter, Send } from 'lucide-react';
 
-export default function Footer() {
+function Footer() {
     return (
         <footer className="relative z-10 border-t border-white/5 bg-black py-8 md:py-12 overflow-hidden">
             <div className="max-w-[1400px] mx-auto px-4 md:px-6">
@@ -21,14 +22,17 @@ export default function Footer() {
                                 height={28}
                                 className="w-7 h-7 object-contain"
                             />
-                            <span className="text-lg font-bold tracking-tight text-white">Verdict</span>
+                            <span className="text-lg font-bold tracking-tight text-white">Verdict.run</span>
                         </Link>
                         <div className="flex items-center gap-3">
-                            <Link href="https://github.com/YUST777/verdict-community" target="_blank" className="p-2 rounded-full bg-white/5 text-white/60">
+                            <Link href="https://github.com/YUST777/verdict-community" target="_blank" className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-white/60">
                                 <Github className="w-4 h-4" />
                             </Link>
-                            <Link href="https://x.com/VerdictRun" target="_blank" className="p-2 rounded-full bg-white/5 text-white/60">
+                            <Link href="https://x.com/VerdictRun" target="_blank" className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-white/60">
                                 <Twitter className="w-4 h-4" />
+                            </Link>
+                            <Link href="https://t.me/verdict_run_chat" target="_blank" className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-white/60">
+                                <Send className="w-4 h-4" />
                             </Link>
                         </div>
                     </div>
@@ -55,10 +59,7 @@ export default function Footer() {
                     {/* Copyright */}
                     <div className="flex items-center justify-between text-[10px] text-white/30 pt-4 border-t border-white/5">
                         <span>© 2026 Verdict.run</span>
-                        <span className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            All systems normal
-                        </span>
+
                     </div>
                 </div>
 
@@ -75,17 +76,20 @@ export default function Footer() {
                                     height={32}
                                     className="w-8 h-8 object-contain"
                                 />
-                                <span className="text-xl font-bold tracking-tight text-white">Verdict</span>
+                                <span className="text-xl font-bold tracking-tight text-white">Verdict.run</span>
                             </Link>
                             <p className="text-white/50 text-base leading-relaxed max-w-sm">
                                 The modern standard for competitive programming. Mirror problems, code instantly, and solve without limits.
                             </p>
                             <div className="flex items-center gap-4 mt-2">
-                                <Link href="https://github.com/YUST777/verdict-community" target="_blank" className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all">
+                                <Link href="https://github.com/YUST777/verdict-community" target="_blank" className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all">
                                     <Github className="w-5 h-5" />
                                 </Link>
-                                <Link href="https://x.com/VerdictRun" target="_blank" className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all">
+                                <Link href="https://x.com/VerdictRun" target="_blank" className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all">
                                     <Twitter className="w-5 h-5" />
+                                </Link>
+                                <Link href="https://t.me/verdict_run_chat" target="_blank" className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all">
+                                    <Send className="w-5 h-5" />
                                 </Link>
                             </div>
                         </div>
@@ -117,10 +121,7 @@ export default function Footer() {
                             © 2026 Verdict.run Inc. All rights reserved.
                         </p>
                         <div className="flex items-center gap-6 text-sm text-white/30">
-                            <span className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                All systems normal
-                            </span>
+
                         </div>
                     </div>
                 </div>
@@ -135,3 +136,6 @@ export default function Footer() {
         </footer>
     );
 }
+
+// rerender-memo: wrap with memo to prevent unnecessary re-renders
+export default memo(Footer);

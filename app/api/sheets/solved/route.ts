@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         );
 
         // Return just the array of problem IDs
-        const solvedProblemIds = result.rows.map((row: any) => row.problem_id);
+        const solvedProblemIds = result.rows.map((row: { problem_id: string }) => row.problem_id);
 
         return NextResponse.json({
             success: true,

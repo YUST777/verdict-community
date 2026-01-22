@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         );
 
         // Format to match what dashboard expects
-        const submissions = result.rows.map((row: any) => ({
+        const submissions = result.rows.map((row: { sheet_id: string; problem_id: string; submitted_at: string }) => ({
             sheet_name: row.sheet_id === 'sheet-1' ? 'Sheet 1' : row.sheet_id,
             problem_name: row.problem_id,
             submitted_at: row.submitted_at

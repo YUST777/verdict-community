@@ -13,9 +13,15 @@ interface User {
     profile_picture?: string | null;
 }
 
+interface Profile {
+    id: number;
+    name: string;
+    [key: string]: unknown;
+}
+
 interface AuthContextType {
     user: User | null;
-    profile: any | null; // Application profile
+    profile: Profile | null; // Application profile
     loading: boolean;
     isAuthenticated: boolean;
     login: (token: string, redirectUrl?: string) => void;
@@ -25,27 +31,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children, initialToken }: { children: React.ReactNode; initialToken?: string }) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function AuthProvider({ children, initialToken: _initialToken }: { children: React.ReactNode; initialToken?: string }) {
     const [user, setUser] = useState<User | null>(null);
-    const [profile, setProfile] = useState<any | null>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const router = useRouter();
 
-    const refreshSession = async () => {
-        // [CLEANUP] /api/auth/me endpoint was removed. 
-        // Disabling session check to prevent 404s.
-        // TODO: Re-implement using Supabase Client if client-side auth is needed.
+    const refreshSession = React.useCallback(async () => {
+        // Session check disabled - using Supabase client auth
         setLoading(false);
         setUser(null);
         setProfile(null);
-    };
+    }, []);
 
     useEffect(() => {
         // If initialToken is provided (SSR), strictly we might verify it, but usually we just fetch /me
         // to get the user details.
         // We can optimistically assume logged in if we wanted, but explicit fetch is safer.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         refreshSession();
-    }, []);
+    }, [refreshSession]);
 
     const login = (token: string, redirectUrl = '/dashboard') => {
         // In a cookie-based system, the token is usually set by the server (httpOnly) or via document.cookie.

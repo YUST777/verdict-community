@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, AlertTriangle, Chrome, Puzzle } from 'lucide-react';
+import { Download, AlertTriangle, Puzzle } from 'lucide-react';
 import Link from 'next/link';
 import { Navbar, Footer } from '../components/landing';
 
@@ -45,7 +45,7 @@ export default function ExtensionPage() {
                             <div>
                                 <h3 className="font-bold text-yellow-500">Pending Chrome Web Store Review</h3>
                                 <p className="text-[#888] text-sm mt-1">
-                                    Google is currently reviewing our extension. In the meantime, you can install it manually in developer mode. It's safe, open-source, and takes less than a minute!
+                                    Google is currently reviewing our extension. In the meantime, you can install it manually in developer mode. It&apos;s safe, open-source, and takes less than a minute!
                                 </p>
                             </div>
                         </div>
@@ -98,7 +98,7 @@ export default function ExtensionPage() {
                                 Load Unpacked
                             </div>
                             <p className="text-[#888]">
-                                Click <b>Load unpacked</b> and select the folder you just extracted. That's it!
+                                Click <b>Load unpacked</b> and select the folder you just extracted. That&apos;s it!
                             </p>
                         </div>
                     </div>

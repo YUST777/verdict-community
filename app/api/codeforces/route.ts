@@ -34,8 +34,8 @@ export async function GET(req: NextRequest) {
             },
         });
 
-    } catch (error: any) {
+    } catch (error) {
         console.error('Scraping Error:', error);
-        return NextResponse.json({ error: 'Failed to fetch problem', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to fetch problem', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
     }
 }

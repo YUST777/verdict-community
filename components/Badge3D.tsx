@@ -13,7 +13,8 @@ interface ModelProps {
     unlocked?: boolean;
 }
 
-function Model({ path, scale = 1, unlocked = true }: ModelProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function Model({ path, scale = 1, unlocked: _unlocked = true }: ModelProps) {
     const { scene } = useGLTF(path);
     // Clone scene to avoid mutating the shared cache
     const clone = useMemo(() => scene.clone(), [scene]);

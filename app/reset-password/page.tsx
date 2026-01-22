@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -16,8 +16,11 @@ function ResetPasswordContent() {
 
     const [formData, setFormData] = useState({ password: '', confirmPassword: '' });
     const [showPassword, setShowPassword] = useState(false);
-    const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [message, setMessage] = useState('');
+
+    // Initialize status based on params validity
+    const isValidParams = !!(token && email);
+    const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(isValidParams ? 'idle' : 'error');
+    const [message, setMessage] = useState(isValidParams ? '' : 'Invalid or missing reset link parameters.');
 
     const getPasswordStrength = (pwd: string) => {
         if (!pwd) return { strength: 0, label: '', color: '' };
@@ -38,14 +41,6 @@ function ResetPasswordContent() {
     };
 
     const passwordStrength = getPasswordStrength(formData.password);
-
-    useEffect(() => {
-        if (!token || !email) {
-            // Only update status if it's not already error to prevent loops/excessive updates
-            setStatus((prev) => (prev !== 'error' ? 'error' : prev));
-            setMessage((prev) => (prev !== 'Invalid or missing reset link parameters.' ? 'Invalid or missing reset link parameters.' : prev));
-        }
-    }, [token, email]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -70,7 +65,7 @@ function ResetPasswordContent() {
                 setStatus('error');
                 setMessage(data.error || 'Failed to reset password');
             }
-        } catch (err) {
+        } catch {
             setStatus('error');
             setMessage('Network error. Please try again later.');
         }
