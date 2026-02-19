@@ -1,0 +1,113 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { query } from '@/lib/db';
+import { createBlindIndex, encrypt } from '@/lib/encryption';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY;
+const JWT_EXPIRES_IN = '24h';
+
+export async function GET(req: NextRequest) {
+    const requestUrl = new URL(req.url);
+    const code = requestUrl.searchParams.get('code');
+    const returnUrl = requestUrl.searchParams.get('returnUrl');
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+
+    if (!code) {
+        return NextResponse.redirect(new URL('/login?error=no_code', baseUrl));
+    }
+
+    try {
+        const supabase = await createClient();
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error || !data.user || !data.user.email) {
+            console.error('[Auth-Callback] Supabase Error:', error);
+            return NextResponse.redirect(new URL('/login?error=auth_failed', baseUrl));
+        }
+
+        const email = data.user.email;
+        const normalizedEmail = email.trim().toLowerCase();
+        const blindIndex = createBlindIndex(normalizedEmail);
+
+        // Check if user exists in our local DB
+        const userResult = await query(
+            'SELECT id, email FROM users WHERE email_blind_index = $1',
+            [blindIndex]
+        );
+
+        let userId: number;
+
+        if (userResult.rows.length > 0) {
+            // User exists, log them in
+            const user = userResult.rows[0];
+            userId = user.id;
+
+            // Update last login
+            await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [userId]);
+
+        } else {
+            // Register new user
+            const encryptedEmail = encrypt(normalizedEmail);
+
+            const newUserResult = await query(
+                `INSERT INTO users (email, email_blind_index, password_hash, created_at)
+                 VALUES ($1, $2, $3, NOW())
+                 RETURNING id`,
+                [encryptedEmail, blindIndex, 'oauth_user']
+            );
+
+            if (newUserResult.rows.length === 0) {
+                throw new Error('Failed to create user');
+            }
+            userId = newUserResult.rows[0].id;
+        }
+
+        // Generate JWT
+        if (!JWT_SECRET) {
+            console.error('JWT_SECRET missing');
+            return NextResponse.redirect(new URL('/login?error=server_config', baseUrl));
+        }
+
+        const token = jwt.sign(
+            { id: userId, email: normalizedEmail },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRES_IN }
+        );
+
+        // Redirect to return URL or dashboard
+        let redirectPath = '/dashboard';
+
+        if (returnUrl) {
+            try {
+                const returnUrlObj = new URL(returnUrl);
+                const baseUrlObj = new URL(baseUrl);
+                if (returnUrlObj.hostname === baseUrlObj.hostname ||
+                    returnUrlObj.hostname === 'localhost' ||
+                    returnUrlObj.hostname.endsWith('.verdict.run')) {
+                    redirectPath = returnUrlObj.pathname + returnUrlObj.search;
+                }
+            } catch {
+                // Invalid URL
+            }
+        }
+
+        const response = NextResponse.redirect(new URL(redirectPath, baseUrl));
+
+        // Set cookie
+        response.cookies.set('authToken', token, {
+            path: '/',
+            maxAge: 60 * 60 * 24 * 30, // 30 days
+            sameSite: 'lax',
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production',
+            domain: process.env.NODE_ENV === 'production' ? '.verdict.run' : undefined
+        });
+
+        return response;
+
+    } catch (err) {
+        console.error('Callback Error:', err);
+        return NextResponse.redirect(new URL('/login?error=processing_failed', baseUrl));
+    }
+}
