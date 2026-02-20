@@ -5,7 +5,7 @@ import { Judge0Token, Judge0SubmissionResult } from '@/lib/types';
 // Self-hosted Judge0 Configuration
 // If running in Docker via nextjs, use the container name/IP if on same network, or host.docker.internal
 // For local dev, localhost is fine.
-const JUDGE0_API_URL = process.env.JUDGE0_API_URL || 'http://localhost:2358';
+const JUDGE0_API_URL = process.env.JUDGE0_URL || process.env.JUDGE0_API_URL || 'http://localhost:2358';
 const JUDGE0_AUTH_TOKEN = process.env.JUDGE0_AUTH_TOKEN;
 
 export const JUDGE0_LANGUAGE_MAP: Record<string, number> = {
@@ -80,7 +80,7 @@ export function compareOutputs(expected: string, actual: string): boolean {
             const biExp = BigInt(tExp);
             const biAct = BigInt(tAct);
             if (biExp === biAct) continue;
-            
+
             // If both are valid BigInts but different, they are definitely different
             // Do NOT fall back to float comparison, or we lose precision for large integers
             return false;
@@ -160,7 +160,10 @@ export async function executeBatchOnJudge0(
             cache: 'no-store',
             headers: {
                 'Content-Type': 'application/json',
-                ...(JUDGE0_AUTH_TOKEN && { 'X-Judge0-Token': JUDGE0_AUTH_TOKEN })
+                ...(JUDGE0_AUTH_TOKEN && {
+                    'X-Judge0-Token': JUDGE0_AUTH_TOKEN,
+                    'X-Auth-Token': JUDGE0_AUTH_TOKEN
+                })
             },
             body: JSON.stringify(batchPayload),
         });
@@ -194,7 +197,10 @@ export async function executeBatchOnJudge0(
                 {
                     headers: {
                         'Content-Type': 'application/json',
-                        ...(JUDGE0_AUTH_TOKEN && { 'X-Judge0-Token': JUDGE0_AUTH_TOKEN })
+                        ...(JUDGE0_AUTH_TOKEN && {
+                            'X-Judge0-Token': JUDGE0_AUTH_TOKEN,
+                            'X-Auth-Token': JUDGE0_AUTH_TOKEN
+                        })
                     }
                 }
             );

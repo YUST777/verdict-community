@@ -3,9 +3,10 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowUp, Paperclip, Square, X, Library } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, Library, Loader2, Wand2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { AIContextCircle } from "@/components/ui/ai-context-usage";
 
 // ─── Textarea ───────────────────────────────────────────────────────────────
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -215,11 +216,24 @@ export interface PromptInputBoxProps {
     placeholder?: string;
     className?: string;
     onOpenResources?: () => void;
+    onTeachMe?: () => void;
+    isTutorLoading?: boolean;
+    isTutorActive?: boolean;
+    hasUsedTutor?: boolean;
+    value?: string;
+    onChange?: (value: string) => void;
 }
 
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>((props, ref) => {
-    const { onSend = () => { }, isLoading = false, placeholder = "Ask anything...", className, onOpenResources } = props;
-    const [input, setInput] = React.useState("");
+    const { onSend = () => { }, isLoading = false, placeholder = "Ask anything...", className, onOpenResources, onTeachMe, isTutorLoading, isTutorActive, hasUsedTutor, value, onChange } = props;
+    const [internalInput, setInternalInput] = React.useState("");
+
+    // Use controlled value if provided, else internal state
+    const input = value !== undefined ? value : internalInput;
+    const handleInputChange = (newVal: string) => {
+        if (value === undefined) setInternalInput(newVal);
+        onChange?.(newVal);
+    };
     const [files, setFiles] = React.useState<File[]>([]);
     const [filePreviews, setFilePreviews] = React.useState<{ [key: string]: string }>({});
     const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
@@ -256,7 +270,9 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
     const handleSubmit = () => {
         if (!input.trim() && files.length === 0) return;
         onSend(input, files);
-        setInput(""); setFiles([]); setFilePreviews({});
+        if (value === undefined) setInternalInput("");
+        onChange?.("");
+        setFiles([]); setFilePreviews({});
     };
 
     const hasContent = input.trim() !== "" || files.length > 0;
@@ -264,7 +280,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
     return (
         <>
             <PromptInput
-                value={input} onValueChange={setInput} isLoading={isLoading} onSubmit={handleSubmit}
+                value={input} onValueChange={handleInputChange} isLoading={isLoading} onSubmit={handleSubmit}
                 className={cn("w-full", className)}
                 disabled={isLoading}
                 ref={(ref as React.RefObject<HTMLDivElement>) || promptBoxRef}
@@ -324,34 +340,54 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
 
                         {/* Resources button */}
                         {onOpenResources && (
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.02, backgroundColor: 'rgba(16, 185, 129, 0.15)' }}
+                                whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={onOpenResources}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-all bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
                             >
                                 <Library className="w-3.5 h-3.5" />
                                 <span>Resources</span>
-                            </button>
+                            </motion.button>
+                        )}
+
+                        {/* Teach Me button */}
+                        {onTeachMe && !hasUsedTutor && (
+                            <motion.button
+                                whileHover={{ scale: 1.02, backgroundColor: 'rgba(16, 185, 129, 0.15)' }}
+                                whileTap={{ scale: 0.98 }}
+                                type="button"
+                                onClick={onTeachMe}
+                                disabled={isTutorLoading || isTutorActive || isLoading}
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isTutorLoading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                                <span>Teach Me</span>
+                            </motion.button>
                         )}
                     </div>
 
-                    {/* Right — send */}
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <PButton
-                                variant={hasContent ? "default" : "ghost"}
-                                size="icon"
-                                className="h-7 w-7 transition-all duration-200"
-                                onClick={handleSubmit}
-                                disabled={isLoading && !hasContent}
-                            >
-                                {isLoading
-                                    ? <Square className="h-3.5 w-3.5 fill-current animate-pulse" />
-                                    : <ArrowUp className="h-3.5 w-3.5" />}
-                            </PButton>
-                        </TooltipTrigger>
-                        <TooltipContent>Send</TooltipContent>
-                    </Tooltip>
+                    {/* Right — context circle + send */}
+                    <div className="flex items-center gap-1">
+                        <AIContextCircle />
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <PButton
+                                    variant={hasContent ? "default" : "ghost"}
+                                    size="icon"
+                                    className="h-7 w-7 transition-all duration-200"
+                                    onClick={handleSubmit}
+                                    disabled={isLoading && !hasContent}
+                                >
+                                    {isLoading
+                                        ? <Square className="h-3.5 w-3.5 fill-current animate-pulse" />
+                                        : <ArrowUp className="h-3.5 w-3.5" />}
+                                </PButton>
+                            </TooltipTrigger>
+                            <TooltipContent>Send</TooltipContent>
+                        </Tooltip>
+                    </div>
                 </div>
             </PromptInput>
 

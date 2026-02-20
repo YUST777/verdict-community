@@ -9,12 +9,6 @@ interface Concept {
     type: 'video' | 'article';
 }
 
-interface TutorStep {
-    type: 'explain' | 'type';
-    text?: string;
-    code?: string;
-}
-
 interface UseTutorSessionProps {
     problemId?: string;
     language: string;
@@ -26,6 +20,27 @@ interface UseTutorSessionProps {
     addMessage: (message: { id: string; role: 'assistant'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string } }) => void;
     updateMessage: (id: string, content: string) => void;
 }
+
+// ─── Simple mode banned constructs ──────────────────────────────────────
+const SIMPLE_MODE_RULES = `STRICT RULES — You are generating code for a BEGINNER. Follow these rules exactly:
+- Use ONLY: plain arrays (int arr[N]), basic for/while loops, if/else, basic functions
+- Use cin/cout or scanf/printf for I/O
+- Do NOT use: #include <vector>, #include <set>, #include <map>, #include <algorithm>, #include <queue>, #include <stack>, #include <deque>, #include <iomanip>, #include <tuple>, #include <unordered_map>, #include <unordered_set>
+- Do NOT use: vector, set, map, pair, tuple, priority_queue, deque, stack, queue, multiset, multimap
+- Do NOT use: sort(), min_element(), max_element(), lower_bound(), upper_bound(), accumulate(), any STL algorithm
+- Do NOT use: auto keyword, range-based for loops, lambda expressions, templates
+- You CAN use: #include <iostream>, #include <cstdio>, #include <cstring>, #include <cmath>, #include <cstdlib>, #include <string>
+- You CAN use: basic string operations, simple math functions (abs, sqrt, pow)
+- Write code a first-semester CS student would understand
+- Prefer O(n²) brute force over clever O(n log n) if it works within constraints
+
+CRITICAL: The "solution" must contain ZERO comments. No // comments, no /* */ comments, no # comments. Not a single comment anywhere. Pure code only.`;
+
+const SMART_MODE_RULES = `Write the most optimal solution with best time/space complexity.
+Use advanced algorithms, STL containers, and optimizations as needed.
+Prefer O(n log n) or better. Use vector, set, map, priority_queue etc. freely.
+
+CRITICAL: The "solution" must contain ZERO comments. No // comments, no /* */ comments, no # comments. Not a single comment anywhere. Pure code only.`;
 
 export function useTutorSession({
     problemId,
@@ -42,91 +57,50 @@ export function useTutorSession({
     const [isLoading, setIsLoading] = useState(false);
     const [concepts, setConcepts] = useState<Concept[]>([]);
     const [variants, setVariants] = useState<any[]>([]);
-    const [mainSteps, setMainSteps] = useState<TutorStep[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
     const tutorActiveRef = useRef(false);
     const { settings } = useLLM();
 
-    const playSequence = useCallback(async (steps: TutorStep[], fullSolution: string) => {
-        let currentRevealedLength = 0;
-        let accumulatedExplain = '';
-        const msgId = `${Date.now()}-${Math.random()}`;
-
-        // Initialize code
-        if (onAiCodeUpdate) onAiCodeUpdate(`// Switching to Level...`);
-        await new Promise(r => setTimeout(r, 500));
-        if (onAiCodeUpdate) onAiCodeUpdate('');
-
-        // Pre-create the single message if there are explain steps
-        const hasExplains = steps.some(s => s.type === 'explain');
-        if (hasExplains) {
-            addMessage({
-                id: msgId,
-                role: 'assistant',
-                content: '<think>\nInitializing step-by-step playback...\n</think>',
-                timestamp: new Date()
-            });
-        }
-
-        // Execute steps sequentially
-        for (const step of steps) {
+    // ─── Stream text word-by-word into a message ────────────────────────
+    const streamTextToMessage = useCallback(async (
+        msgId: string,
+        prefix: string,
+        text: string,
+        delayMs: number = 25
+    ) => {
+        const words = text.split(' ');
+        let revealed = '';
+        for (let i = 0; i < words.length; i++) {
             if (!tutorActiveRef.current) break;
-
-            if (step.type === 'explain' && step.text) {
-                accumulatedExplain += (accumulatedExplain ? '\n\n' : '') + step.text;
-                // Update the single message with the accumulated thought process
-                updateMessage(msgId, `<think>\n${accumulatedExplain}\n</think>\n\nTyping code...`);
-                // Wait briefly for reading
-                await new Promise(r => setTimeout(r, 800));
-            } else if (step.type === 'type' && step.code) {
-                if (onAiCodeUpdate) {
-                    // Reveal strategy: animate from current length to target length
-                    const segmentLength = step.code.length;
-                    const targetLength = Math.min(currentRevealedLength + segmentLength, fullSolution.length);
-                    const chunkSize = 5;
-
-                    while (currentRevealedLength < targetLength) {
-                        if (!tutorActiveRef.current) break;
-
-                        currentRevealedLength = Math.min(currentRevealedLength + chunkSize, targetLength);
-                        onAiCodeUpdate(fullSolution.substring(0, currentRevealedLength));
-
-                        await new Promise(r => setTimeout(r, 20)); // Faster 20ms
-                    }
-                }
-            }
+            revealed += (i > 0 ? ' ' : '') + words[i];
+            updateMessage(msgId, prefix + revealed);
+            await new Promise(r => setTimeout(r, delayMs));
         }
+    }, [updateMessage]);
 
-        // Finalize
-        if (onAiCodeUpdate && fullSolution && tutorActiveRef.current) {
-            onAiCodeUpdate(fullSolution);
+    // ─── Stream code character-by-character into the editor ──────────
+    const streamCodeToEditor = useCallback(async (code: string) => {
+        if (!onAiCodeUpdate) return;
+        const chunkSize = 3;
+        for (let i = 0; i <= code.length; i += chunkSize) {
+            if (!tutorActiveRef.current) break;
+            onAiCodeUpdate(code.substring(0, Math.min(i + chunkSize, code.length)));
+            await new Promise(r => setTimeout(r, 12));
         }
+        // Ensure full code is set
+        if (tutorActiveRef.current) onAiCodeUpdate(code);
+    }, [onAiCodeUpdate]);
 
-        // Finalize the message text
-        if (hasExplains && tutorActiveRef.current) {
-            updateMessage(msgId, `<think>\n${accumulatedExplain}\n</think>\n\nFinished typing solution.`);
-        }
-    }, [onAiCodeUpdate, addMessage, updateMessage]);
-
+    // ─── Main tutor flow ────────────────────────────────────────────
     const startTutor = useCallback(async () => {
-        // Prevent multiple simultaneous calls
-        if (tutorActiveRef.current) {
-            console.log('[Tutor] Already active, ignoring call');
-            return;
-        }
+        if (tutorActiveRef.current || isLoading) return;
 
-        if (isLoading) {
-            console.log('[Tutor] Already loading, ignoring call');
-            return;
-        }
-
-        // Validate test cases
+        // Validate
         if (!testCases || testCases.length === 0) {
-            console.error('[Tutor] No test cases available');
             addMessage({
                 id: Date.now().toString(),
                 role: 'assistant',
-                content: 'Unable to start tutor: No test cases available for this problem. Test cases are required to verify solutions.',
+                content: 'No test cases available for this problem. I need test cases to verify the solution.',
                 timestamp: new Date()
             });
             return;
@@ -136,73 +110,67 @@ export function useTutorSession({
             addMessage({
                 id: Date.now().toString(),
                 role: 'assistant',
-                content: 'Please configure Bring Your Own LLM settings first by clicking the configuration button.',
+                content: 'Please configure your LLM in Settings first (click the ⚙️ icon).',
                 timestamp: new Date()
             });
             return;
         }
 
-        // Parse IDs
-        let cId = 'TUTOR';
-        let pId = 'TUTOR';
-        if (problemId) {
-            const parts = problemId.split('-');
-            if (parts.length >= 2) {
-                cId = parts[0];
-                pId = parts.slice(1).join('-');
-            }
-        }
-
-        // Reset state
+        // Reset
         setConcepts([]);
         setVariants([]);
         setSelectedLevel(2);
-        setMainSteps([]);
         setIsTutorActive(true);
         tutorActiveRef.current = true;
         setIsLoading(true);
         if (onSwitchToAiTab) onSwitchToAiTab();
 
-        // 1. Add "Thinking" message
-        const thinkingMsgId = Date.now().toString();
+        // Detect solution style
+        const solutionStyle = (typeof window !== 'undefined' ? localStorage.getItem('verdict_solution_style') : 'simple') || 'simple';
+        const isSimple = solutionStyle !== 'smart';
+        const styleRules = isSimple ? SIMPLE_MODE_RULES : SMART_MODE_RULES;
+
+        // ── Phase 1: Show "Reading problem..." ──────────────────────
+        const thinkMsgId = `tutor-${Date.now()}`;
         addMessage({
-            id: thinkingMsgId,
+            id: thinkMsgId,
             role: 'assistant',
-            content: 'Verdict Verification Protocol Initiated... prioritizing O(N) solution.',
+            content: '<think>\nReading the problem...\n</think>',
             timestamp: new Date()
         });
 
-        // Set initial ghost typing placeholder
         if (onAiCodeUpdate) {
-            onAiCodeUpdate(`// Verdict is analyzing problem constraints...\n// Generating optimal solution...`);
+            onAiCodeUpdate(`// Analyzing problem...\n// Generating ${isSimple ? 'simple' : 'optimal'} solution...`);
         }
 
         try {
-            // 2. Call API directly to BYOK LLM
-            const systemTutorPrompt = `You are an expert competitive programming tutor.
-You MUST respond with ONLY valid JSON and no markdown wrapping.
-The JSON must have the following structure:
-{
-  "success": true,
-  "verdict": "ACCEPTED",
-  "concepts": [ { "title": "Example Concept", "url": "#", "type": "article" } ],
-  "variants": [
-      {
-          "level": 2,
-          "title": "Optimal",
-          "timeComplexity": "O(N)",
-          "comment": "Optimal approach",
-          "code": "full code string"
-      }
-  ],
-  "steps": [
-      { "type": "explain", "text": "let's start..." },
-      { "type": "type", "code": "full code string" }
-  ],
-  "solution": "full code string"
-}`;
+            // ── Phase 2: Call LLM ──────────────────────────────────
+            updateMessage(thinkMsgId, '<think>\nReading the problem...\nIdentifying constraints and edge cases...\n</think>');
+            await new Promise(r => setTimeout(r, 400));
 
-            const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\/+/g, "$1"), {
+            const systemPrompt = `You are a competitive programming tutor helping a ${isSimple ? 'beginner' : 'skilled programmer'}.
+
+${styleRules}
+
+You MUST respond with ONLY valid JSON (no markdown, no backticks wrapping). Structure:
+{
+  "thinking": "Your step-by-step reasoning about the problem (2-4 sentences)",
+  "approach": "Brief explanation of the approach (1-2 sentences)",
+  "solution": "The complete, compilable source code as a single string WITH ABSOLUTELY ZERO COMMENTS",
+  "explanation": "A clear, beginner-friendly explanation of how the solution works (3-6 sentences). Explain the key logic, what the variables represent, and the overall flow. Use markdown formatting.",
+  "concepts": [{"title": "Concept Name", "url": "https://...", "type": "article"}]
+}
+
+The "solution" field must contain the FULL compilable code (with includes, main function, I/O).
+The "solution" must have ZERO comments — no //, no /* */, no #comments. Pure code only.
+The code must be written in ${language}.
+The "explanation" is separate from the code — put ALL explanations there, NOT as code comments.`;
+
+            const userPrompt = `Problem:\n${problemDescription}\n\nWrite a ${isSimple ? 'simple, beginner-friendly' : 'optimal'} solution in ${language}. Return ONLY valid JSON. Remember: ZERO comments in the solution code.`;
+
+            updateMessage(thinkMsgId, '<think>\nReading the problem...\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>');
+
+            const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\//g, "$1"), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -212,153 +180,152 @@ The JSON must have the following structure:
                     model: settings.model,
                     response_format: { type: "json_object" },
                     messages: [
-                        { role: 'system', content: systemTutorPrompt },
-                        { role: 'user', content: `Problem Description:\n${problemDescription}\n\nLanguage: ${language}\n\nProvide the solution as JSON. The full code string must be syntactically correct and run successfully. Write it natively in ${language}. Use the exact response format JSON requested.` }
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
                     ]
                 })
             });
 
             if (!response.ok) {
-                let errorDetails = 'Unknown error';
-                try {
-                    const errorJson = await response.json();
-                    errorDetails = JSON.stringify(errorJson);
-                } catch (e) {
-                    errorDetails = await response.text();
-                }
-                console.error('[Tutor Error] Status:', response.status, 'Details:', errorDetails);
-                throw new Error(`Failed to start tutor session (${response.status}): ${errorDetails}`);
+                const errText = await response.text().catch(() => 'Unknown error');
+                throw new Error(`LLM request failed (${response.status}): ${errText}`);
             }
 
             const chatObj = await response.json();
-            const contentText = chatObj.choices?.[0]?.message?.content || "{}";
-            const data = JSON.parse(contentText) as { success?: boolean; error?: string; verdict?: string; concepts?: unknown[]; variants?: unknown[]; steps?: unknown[]; solution?: string };
-            data.success = true;
+            let rawContent = chatObj.choices?.[0]?.message?.content || '{}';
 
-            if (!data.success) {
-                updateMessage(thinkingMsgId, `I encountered an error: ${data.error || 'Unknown error'}`);
-                setIsTutorActive(false);
-                tutorActiveRef.current = false;
-                setIsLoading(false);
-                return;
+            // Robust JSON extraction — LLMs often wrap JSON in backticks or add extra text
+            // Strip markdown code fences
+            rawContent = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+            // Try to extract JSON object if there's surrounding text
+            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+            if (jsonMatch) rawContent = jsonMatch[0];
+
+            let data: { thinking?: string; approach?: string; solution?: string; explanation?: string; concepts?: Concept[] };
+            try {
+                data = JSON.parse(rawContent);
+            } catch (parseErr) {
+                console.error('[Tutor] JSON parse error:', parseErr, 'Raw:', rawContent.substring(0, 200));
+                throw new Error('Failed to parse AI response. The AI returned invalid JSON. Please try again.');
             }
 
-            // 3. Test the generated solution with internal Judge0 endpoint
+            if (!data.solution) {
+                throw new Error('LLM did not return a solution');
+            }
+
+            // Strip any remaining comments from the solution
+            let cleanSolution = data.solution
+                .replace(/\/\/.*$/gm, '')       // remove // comments
+                .replace(/\/\*[\s\S]*?\*\//g, '') // remove /* */ comments
+                .replace(/^\s*\n/gm, '');          // remove resulting empty lines
+
+            // ── Phase 3: Stream thinking ────────────────────────────
+            const thinkingText = data.thinking || 'Analyzing the problem and formulating a solution.';
+            const approachText = data.approach || '';
+            const explanationText = data.explanation || '';
+
+            // Stream the thinking into the collapsible drawer
+            await streamTextToMessage(
+                thinkMsgId,
+                '<think>\n',
+                thinkingText + (approachText ? '\n\n**Approach:** ' + approachText : '') + '\n</think>\n\nWriting solution...',
+                20
+            );
+
+            // ── Phase 4: Stream code into editor ────────────────────
+            await new Promise(r => setTimeout(r, 300));
+            updateMessage(thinkMsgId,
+                `<think>\n${thinkingText}${approachText ? '\n\n**Approach:** ' + approachText : ''}\n\nWriting code...\n</think>`
+            );
+
+            await streamCodeToEditor(cleanSolution);
+
+            // ── Phase 5: Test with Judge0 ───────────────────────────
+            const thinkBase = `${thinkingText}${approachText ? '\n\n**Approach:** ' + approachText : ''}`;
+
+            updateMessage(thinkMsgId,
+                `<think>\n${thinkBase}\n\nCode written successfully\n\nTesting solution against ${testCases.length} test case${testCases.length > 1 ? 's' : ''}...\n</think>`
+            );
+
             let judgePassed = true;
-            let judgeVerdict = data.verdict || 'ACCEPTED';
-            let judgeErrorDetails = '';
+            let judgeVerdict = 'Accepted';
+            let judgeDetails = '';
+            let judgeResultLine = '';
 
-            if (data.solution) {
-                try {
-                    updateMessage(thinkingMsgId, `Testing generated solution against ${testCases.length} constraints using Judge0...`);
-
-                    const judgeResponse = await fetch('/api/judge/test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sourceCode: data.solution,
-                            language: language,
-                            testCases: testCases.map((tc: any) => ({
-                                input: tc.input,
-                                output: tc.output || tc.expectedOutput || ''
-                            })),
-                            timeLimit: 2000,
-                            memoryLimit: 256
-                        })
-                    });
-
-                    if (judgeResponse.ok) {
-                        const judgeData = await judgeResponse.json();
-                        judgePassed = judgeData.passed;
-                        judgeVerdict = judgeData.verdict;
-                        if (!judgePassed) {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const failedCases = judgeData.results?.filter((r: any) => !r.passed) || [];
-                            if (failedCases.length > 0) {
-                                judgeErrorDetails = `\nFailed Case ${failedCases[0].testCase}: ${failedCases[0].verdict}`;
-                            } else {
-                                judgeErrorDetails = '\nFailed on provided test cases.';
-                            }
-                        }
-                    } else {
-                        judgePassed = false;
-                        judgeVerdict = 'JUDGE_ERROR';
-                        judgeErrorDetails = '\nUnable to execute against Judge0 api.';
-                    }
-                } catch (err) {
-                    console.error('[Tutor Judge Error]', err);
-                    judgePassed = false;
-                    judgeVerdict = 'JUDGE_CRASH';
-                }
-            }
-
-            // Save state
-            if (data.concepts) setConcepts(data.concepts as any);
-            if (data.variants) setVariants(data.variants as any);
-            if (data.steps) setMainSteps(data.steps as any);
-
-            // 4. Success or Failure Display
-            if (judgePassed) {
-                updateMessage(thinkingMsgId, `Solution Verified by Judge0 (Verdict: **${judgeVerdict}**). Starting playback...`);
-            } else {
-                updateMessage(thinkingMsgId, `Warning: AI Solution Verification Failed by Judge0 (Verdict: **${judgeVerdict}**).${judgeErrorDetails}\nI'll show you the code anyway so we can fix it together.`);
-            }
-
-            // Play the solution with steps
-            if (data.steps && data.solution) {
-                await playSequence(data.steps as any, data.solution);
-            } else {
-                console.error('[Tutor] Missing steps or solution in response');
-                addMessage({
-                    id: Date.now().toString(),
-                    role: 'assistant',
-                    content: 'Solution generated but missing details.',
-                    timestamp: new Date()
+            try {
+                const judgeResponse = await fetch('/api/judge/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sourceCode: cleanSolution,
+                        language,
+                        testCases: testCases.map(tc => ({
+                            input: tc.input,
+                            output: tc.output || ''
+                        })),
+                        timeLimit: 2000,
+                        memoryLimit: 256
+                    })
                 });
+
+                if (judgeResponse.ok) {
+                    const judgeData = await judgeResponse.json();
+                    judgePassed = judgeData.passed;
+                    judgeVerdict = judgeData.verdict;
+                    if (judgePassed) {
+                        judgeResultLine = `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
+                    } else {
+                        const failedCase = judgeData.results?.find((r: any) => !r.passed);
+                        judgeDetails = failedCase ? ` (Test ${failedCase.testCase}: ${failedCase.verdict})` : '';
+                        judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
+                    }
+                } else {
+                    judgePassed = false;
+                    judgeVerdict = 'Judge Error';
+                    judgeResultLine = `**Judge Error** — Could not reach the judge service`;
+                }
+            } catch (err) {
+                console.error('[Tutor] Judge error:', err);
+                judgePassed = false;
+                judgeVerdict = 'Judge unavailable';
+                judgeResultLine = `**Judge unavailable** — Could not connect to the testing service`;
             }
 
-        } catch (error) {
+            // ── Phase 6: Final result — thinking chain + explanation below ───
+            const finalThinkBlock = `<think>\n${thinkBase}\n\nCode written successfully\n\n${judgeResultLine}\n</think>`;
+
+            if (judgePassed && explanationText) {
+                updateMessage(thinkMsgId,
+                    finalThinkBlock + `\n\n${explanationText}`
+                );
+            } else if (judgePassed) {
+                updateMessage(thinkMsgId,
+                    finalThinkBlock + `\n\nThe solution has been written to the editor and passes all test cases.`
+                );
+            } else {
+                updateMessage(thinkMsgId,
+                    finalThinkBlock + `\n\nThe solution might need adjustments. Try asking me to fix it in the chat.`
+                );
+            }
+
+            // Save concepts
+            if (data.concepts && data.concepts.length > 0) {
+                setConcepts(data.concepts);
+            }
+
+        } catch (error: any) {
             console.error('[Tutor] Error:', error);
-            updateMessage(thinkingMsgId, 'Something went wrong starting the tutor session.');
+            updateMessage(thinkMsgId, `Something went wrong: ${error.message || 'Unknown error'}. Please try again.`);
             setIsTutorActive(false);
             tutorActiveRef.current = false;
         } finally {
             setIsLoading(false);
         }
-    }, [problemId, language, problemDescription, testCases, getHeaders, onAiCodeUpdate, onSwitchToAiTab, addMessage, updateMessage, playSequence]);
+    }, [isLoading, problemDescription, language, testCases, settings, onSwitchToAiTab, onAiCodeUpdate, addMessage, updateMessage, streamTextToMessage, streamCodeToEditor]);
 
     const changeLevel = useCallback(async (level: number) => {
-        if (!variants || variants.length === 0) return;
-
-        // Stop any current playback
-        tutorActiveRef.current = false;
-        await new Promise(r => setTimeout(r, 100)); // Wait for loop to break
-        tutorActiveRef.current = true; // Re-enable
-
         setSelectedLevel(level);
-        const variant = variants.find(v => v.level === level);
-
-        if (!variant) return;
-
-        let steps: TutorStep[] = [];
-        if (level === 2 && mainSteps.length > 0) {
-            steps = mainSteps;
-        } else if (level === 2 && variant.steps) {
-            steps = [
-                { type: 'explain', text: `Here is the ${variant.title} approach.` },
-                { type: 'type', code: variant.code }
-            ];
-        } else {
-            const complexityInfo = variant.timeComplexity ? `Time: ${variant.timeComplexity}` : '';
-            steps = [
-                { type: 'explain', text: `**${variant.title} Solution**\n${variant.comment}\n${complexityInfo}` },
-                { type: 'type', code: variant.code }
-            ];
-        }
-
-        await playSequence(steps as TutorStep[], variant.code);
-
-    }, [variants, playSequence, mainSteps]);
+    }, []);
 
     const stopTutor = useCallback(() => {
         tutorActiveRef.current = false;

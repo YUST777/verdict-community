@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { search, SafeSearchType } from 'duck-duck-scrape';
-import ytSearch from 'yt-search';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
     try {
@@ -9,6 +10,10 @@ export async function POST(req: Request) {
         if (!query) {
             return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
+
+        // Dynamic imports to avoid "File is not defined" at build time
+        const { search, SafeSearchType } = await import('duck-duck-scrape');
+        const ytSearch = (await import('yt-search')).default;
 
         // Run web + YouTube searches in parallel
         const [webRaw, ytRaw] = await Promise.allSettled([

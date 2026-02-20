@@ -57,16 +57,9 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
 
     return (
         <Message from={message.role === 'sources' ? 'assistant' : message.role} className="py-2">
-            {!isUser && message.role !== 'sources' && (
-                <Avatar className="size-8 mt-auto hidden sm:block">
-                    <AvatarImage alt="AI" src="/icons/logo.webp" className="p-1 cursor-pointer hover:opacity-80 transition-opacity" />
-                    <AvatarFallback className="bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30">AI</AvatarFallback>
-                </Avatar>
-            )}
-
             <MessageContent className={cn(
-                "max-w-[85%] text-left",
-                isUser ? "bg-emerald-600/90 text-white rounded-2xl rounded-tr-sm shadow-md border-0" : "bg-[#1E1E24]/90 text-white/90 border border-white/5 rounded-2xl rounded-tl-sm shadow-md"
+                "text-left",
+                isUser ? "max-w-[85%] bg-emerald-600/90 text-white rounded-2xl rounded-tr-sm shadow-md border-0" : "w-full max-w-[95%] bg-[#1E1E24]/90 text-white/90 border border-white/5 rounded-2xl shadow-md"
             )}>
                 {message.codeBlock && (
                     <div className="mb-3 mt-1 rounded-lg bg-black/60 border border-white/10 overflow-hidden text-left shadow-inner">

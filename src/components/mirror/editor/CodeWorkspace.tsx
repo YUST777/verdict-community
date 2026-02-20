@@ -411,7 +411,7 @@ export default function CodeWorkspace({
                 }}
             >
                 {/* Floating "Add to Chat" Button (Cursor Style) */}
-                {showAskAIButton && selectedCode && onAskAboutCode && selectionPosition && selectionLineNumbers && !isReadOnly && (
+                {showAskAIButton && selectedCode && onAskAboutCode && selectionPosition && selectionLineNumbers && (
                     <div
                         ref={askAIButtonRef}
                         onMouseEnter={() => setShowAskAIButton(true)}

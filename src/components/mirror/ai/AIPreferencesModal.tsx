@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LLMSettings {
     enabled: boolean;
@@ -59,187 +60,199 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
         onClose();
     };
 
-    if (!isOpen) return null;
-
     const fillProvider = (baseURL: string, model: string) => {
         setSettings(prev => ({ ...prev, baseURL, model }));
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex justify-end">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
-                onClick={onClose}
-            />
-
-            {/* Drawer */}
-            <div className="relative w-full sm:max-w-lg h-full bg-[#1a1a1a] border-l border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300 flex flex-col">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-                    <div>
-                        <h2 className="text-xl font-bold text-white">Bring your own LLM</h2>
-                        <p className="text-sm text-white/50 mt-1">Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.</p>
-                    </div>
-                    <button
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-[100] flex justify-end">
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
                         onClick={onClose}
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    />
+
+                    {/* Drawer */}
+                    <motion.div
+                        initial={{ x: '100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '100%' }}
+                        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+                        className="relative w-full sm:max-w-lg h-full bg-[#1a1a1a] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col"
                     >
-                        <X size={18} strokeWidth={2.5} />
-                    </button>
-                </div>
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Bring your own LLM</h2>
+                                <p className="text-sm text-white/50 mt-1">Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.</p>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                            >
+                                <X size={18} strokeWidth={2.5} />
+                            </button>
+                        </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-                    <div className="flex items-center gap-3 border-b border-white/10 pb-5">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={settings.enabled}
-                                onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
-                                className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                        </label>
-                        <span className="text-base font-semibold text-white">Enable</span>
-                    </div>
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                            <div className="flex items-center gap-3 border-b border-white/10 pb-5">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.enabled}
+                                        onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                                <span className="text-base font-semibold text-white">Enable</span>
+                            </div>
 
-                    {settings.enabled && (
-                        <div className="space-y-4 animate-in fade-in duration-200">
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-white">Base URL</label>
-                                <input
-                                    type="text"
-                                    value={settings.baseURL}
-                                    onChange={e => setSettings({ ...settings, baseURL: e.target.value })}
-                                    placeholder="OpenAI compatible base URL"
-                                    className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
-                                />
-                                <div className="flex gap-2">
-                                    <button onClick={() => fillProvider('https://api.openai.com/v1', 'gpt-4o')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenAI</button>
-                                    <button onClick={() => fillProvider('https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-2.5-flash')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">Gemini</button>
-                                    <button onClick={() => fillProvider('https://api.x.ai/v1', 'grok-beta')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">xAI</button>
-                                    <button onClick={() => fillProvider('https://openrouter.ai/api/v1', 'anthropic/claude-3-5-sonnet')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenRouter</button>
+                            {settings.enabled && (
+                                <div className="space-y-4 animate-in fade-in duration-200">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-white">Base URL</label>
+                                        <input
+                                            type="text"
+                                            value={settings.baseURL}
+                                            onChange={e => setSettings({ ...settings, baseURL: e.target.value })}
+                                            placeholder="OpenAI compatible base URL"
+                                            className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => fillProvider('https://api.openai.com/v1', 'gpt-4o')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenAI</button>
+                                            <button onClick={() => fillProvider('https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-2.5-flash')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">Gemini</button>
+                                            <button onClick={() => fillProvider('https://api.x.ai/v1', 'grok-beta')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">xAI</button>
+                                            <button onClick={() => fillProvider('https://openrouter.ai/api/v1', 'anthropic/claude-3-5-sonnet')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenRouter</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-white">API key</label>
+                                        <input
+                                            type="password"
+                                            value={settings.apiKey}
+                                            onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
+                                            placeholder="sk-..."
+                                            className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-white">Model</label>
+                                        <input
+                                            type="text"
+                                            value={settings.model}
+                                            onChange={e => setSettings({ ...settings, model: e.target.value })}
+                                            placeholder="Model name (e.g., gpt-4o)"
+                                            className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-white">System prompt</label>
+                                        <textarea
+                                            value={settings.systemPrompt}
+                                            onChange={e => setSettings({ ...settings, systemPrompt: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white/60 text-sm focus:outline-none min-h-[100px] resize-y"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Solution difficulty level */}
+                            {variants && variants.length > 0 && onLevelChange && (
+                                <div className="space-y-3 pt-1">
+                                    <div>
+                                        <label className="text-sm font-semibold text-white">Solution Difficulty</label>
+                                        <p className="text-xs text-white/40 mt-0.5">How much the AI reveals when explaining a solution.</p>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        {variants.map((v) => {
+                                            const sel = selectedLevel === v.level;
+                                            const palette = [
+                                                { active: 'bg-orange-500/10 border-orange-500/30 text-orange-300', dot: 'bg-orange-400' },
+                                                { active: 'bg-blue-500/10 border-blue-500/30 text-blue-300', dot: 'bg-blue-400' },
+                                                { active: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300', dot: 'bg-emerald-400' },
+                                            ];
+                                            const p = palette[(v.level - 1) % 3];
+                                            return (
+                                                <button
+                                                    key={v.level}
+                                                    onClick={() => onLevelChange(v.level)}
+                                                    className={`flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all text-left ${sel
+                                                        ? `${p.active}`
+                                                        : 'bg-white/[0.03] border-white/[0.08] text-white/50 hover:bg-white/[0.06] hover:text-white/70'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sel ? p.dot : 'bg-white/20'}`} />
+                                                        <div>
+                                                            <div className="text-[13px] font-semibold">{v.title}</div>
+                                                            {v.timeComplexity && (
+                                                                <div className="text-[10px] font-mono opacity-50 mt-0.5">{v.timeComplexity}</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {sel && (
+                                                        <div className="text-[10px] font-semibold opacity-60 uppercase tracking-wide">Active</div>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                            {/* Solution Style (Simple vs Smart) */}
+                            <div className="space-y-3 pt-4 border-t border-white/10 mt-4">
+                                <div>
+                                    <label className="text-sm font-semibold text-white">Solution Style</label>
+                                    <p className="text-xs text-white/40 mt-0.5">How the AI approaches writing the code.</p>
+                                </div>
+                                <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
+                                    <button
+                                        onClick={() => setSolutionStyle('simple')}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'simple' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                    >
+                                        <div className="text-[13px]">Simple Logic</div>
+                                        <div className="text-[10px] opacity-60 font-normal">Readable & beginner-friendly</div>
+                                    </button>
+                                    <button
+                                        onClick={() => setSolutionStyle('smart')}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'smart' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                    >
+                                        <div className="text-[13px]">Smart / Optimal</div>
+                                        <div className="text-[10px] opacity-60 font-normal">Best time/space complexity</div>
+                                    </button>
                                 </div>
                             </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-white">API key</label>
-                                <input
-                                    type="password"
-                                    value={settings.apiKey}
-                                    onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
-                                    placeholder="sk-..."
-                                    className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-white">Model</label>
-                                <input
-                                    type="text"
-                                    value={settings.model}
-                                    onChange={e => setSettings({ ...settings, model: e.target.value })}
-                                    placeholder="Model name (e.g., gpt-4o)"
-                                    className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-white">System prompt</label>
-                                <textarea
-                                    value={settings.systemPrompt}
-                                    onChange={e => setSettings({ ...settings, systemPrompt: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white/60 text-sm focus:outline-none min-h-[100px] resize-y"
-                                />
-                            </div>
                         </div>
-                    )}
 
-                    {/* Solution difficulty level */}
-                    {variants && variants.length > 0 && onLevelChange && (
-                        <div className="space-y-3 pt-1">
-                            <div>
-                                <label className="text-sm font-semibold text-white">Solution Difficulty</label>
-                                <p className="text-xs text-white/40 mt-0.5">How much the AI reveals when explaining a solution.</p>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                {variants.map((v) => {
-                                    const sel = selectedLevel === v.level;
-                                    const palette = [
-                                        { active: 'bg-orange-500/10 border-orange-500/30 text-orange-300', dot: 'bg-orange-400' },
-                                        { active: 'bg-blue-500/10 border-blue-500/30 text-blue-300', dot: 'bg-blue-400' },
-                                        { active: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300', dot: 'bg-emerald-400' },
-                                    ];
-                                    const p = palette[(v.level - 1) % 3];
-                                    return (
-                                        <button
-                                            key={v.level}
-                                            onClick={() => onLevelChange(v.level)}
-                                            className={`flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all text-left ${sel
-                                                ? `${p.active}`
-                                                : 'bg-white/[0.03] border-white/[0.08] text-white/50 hover:bg-white/[0.06] hover:text-white/70'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sel ? p.dot : 'bg-white/20'}`} />
-                                                <div>
-                                                    <div className="text-[13px] font-semibold">{v.title}</div>
-                                                    {v.timeComplexity && (
-                                                        <div className="text-[10px] font-mono opacity-50 mt-0.5">{v.timeComplexity}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {sel && (
-                                                <div className="text-[10px] font-semibold opacity-60 uppercase tracking-wide">Active</div>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                    {/* Solution Style (Simple vs Smart) */}
-                    <div className="space-y-3 pt-4 border-t border-white/10 mt-4">
-                        <div>
-                            <label className="text-sm font-semibold text-white">Solution Style</label>
-                            <p className="text-xs text-white/40 mt-0.5">How the AI approaches writing the code.</p>
-                        </div>
-                        <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-white/10 shrink-0 flex items-center gap-3">
                             <button
-                                onClick={() => setSolutionStyle('simple')}
-                                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'simple' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                onClick={onClose}
+                                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors font-medium text-sm"
                             >
-                                <div className="text-[13px]">Simple Logic</div>
-                                <div className="text-[10px] opacity-60 font-normal">Readable & beginner-friendly</div>
+                                Cancel
                             </button>
                             <button
-                                onClick={() => setSolutionStyle('smart')}
-                                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'smart' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                onClick={handleSave}
+                                className="flex-1 py-2.5 bg-white hover:bg-gray-200 text-black rounded-lg transition-colors font-medium text-sm"
                             >
-                                <div className="text-[13px]">Smart / Optimal</div>
-                                <div className="text-[10px] opacity-60 font-normal">Best time/space complexity</div>
+                                Save
                             </button>
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
-
-                {/* Footer */}
-                <div className="px-6 py-4 border-t border-white/10 shrink-0 flex items-center gap-3">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors font-medium text-sm"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="flex-1 py-2.5 bg-white hover:bg-gray-200 text-black rounded-lg transition-colors font-medium text-sm"
-                    >
-                        Save
-                    </button>
-                </div>
-            </div>
-        </div>
+            )}
+        </AnimatePresence>
     );
 }

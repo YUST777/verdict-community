@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Loader2, Wand2, Code, Settings, BrainCircuit, Globe, X, Youtube, BookOpen, ExternalLink, PlayCircle } from 'lucide-react';
+import { Loader2, Wand2, Code, Settings, BrainCircuit, Globe, X, Youtube, BookOpen, ExternalLink, PlayCircle, Plus, MessageSquare } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { loadAIPreferences, inferPreferencesFromProfile, AILearningPreferences } from '@/lib/ai-personalization';
 
@@ -14,6 +15,7 @@ import ChatMessage from './ChatMessage';
 import { useTutorSession } from './useTutorSession';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
+import { AIContextUsageProvider, useAIContextUsage } from '@/components/ui/ai-context-usage';
 
 interface Message {
     id: string;
@@ -70,7 +72,7 @@ export default function AIAgentPanel({
     problemId,
     isActive = false
 }: AIAgentPanelProps) {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messagesByTab, setMessagesByTab] = useState<Record<string, Message[]>>({ 'default': [] });
     const [input, setInput] = useState(initialQuestion || '');
     const [isLoadingMessage, setIsLoadingMessage] = useState(false);
     const [aiStatus, setAiStatus] = useState('Thinking...');
@@ -78,6 +80,60 @@ export default function AIAgentPanel({
     const [showPreferencesModal, setShowPreferencesModal] = useState(false);
     const [isResourcesOpen, setIsResourcesOpen] = useState(false);
     const { settings } = useLLM();
+
+    // Chat tabs state
+    const [chatTabs, setChatTabs] = useState<{ id: string; label: string }[]>([{ id: 'default', label: 'Chat 1' }]);
+    const [activeChatTab, setActiveChatTab] = useState('default');
+
+    const messages = messagesByTab[activeChatTab] || [];
+
+    const setMessages = useCallback((updater: React.SetStateAction<Message[]>) => {
+        setMessagesByTab(prev => {
+            const currentTabId = activeChatTab;
+            const prevMsgs = prev[currentTabId] || [];
+            const nextMsgs = typeof updater === 'function' ? (updater as (p: Message[]) => Message[])(prevMsgs) : updater;
+            return {
+                ...prev,
+                [currentTabId]: nextMsgs
+            };
+        });
+    }, [activeChatTab]);
+
+    const addNewChat = useCallback(() => {
+        const newId = `chat-${Date.now()}`;
+        const newLabel = `Chat ${chatTabs.length + 1}`;
+        setChatTabs(prev => [...prev, { id: newId, label: newLabel }]);
+        setActiveChatTab(newId);
+        setMessagesByTab(prev => ({ ...prev, [newId]: [] }));
+    }, [chatTabs.length]);
+
+    const deleteChat = useCallback((tabId: string) => {
+        setChatTabs(prev => {
+            if (prev.length <= 1) {
+                // Reset the last tab instead of deleting the whole array
+                const newId = `chat-${Date.now()}`;
+                setActiveChatTab(newId);
+                setMessagesByTab(p => {
+                    const newDict = { ...p, [newId]: [] };
+                    delete newDict[tabId];
+                    return newDict;
+                });
+                return [{ id: newId, label: 'Chat 1' }];
+            }
+            const filtered = prev.filter(t => t.id !== tabId);
+            if (tabId === activeChatTab) {
+                const deletedIndex = prev.findIndex(t => t.id === tabId);
+                const newActive = filtered[Math.min(deletedIndex, filtered.length - 1)];
+                setActiveChatTab(newActive.id);
+            }
+            setMessagesByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            return filtered;
+        });
+    }, [activeChatTab]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +152,7 @@ export default function AIAgentPanel({
         }
     }, [messages.length, isActive]);
 
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    // Streaming ref for regular chat messages
     const prevInitialQuestion = useRef(initialQuestion);
 
     // Sync initialQuestion to input when it changes from the parent
@@ -111,15 +167,36 @@ export default function AIAgentPanel({
     useEffect(() => {
         if (!problemId) return;
         try {
+            const tabsKey = `verdict_ai_tabs_${problemId}`;
+            const tabsStored = localStorage.getItem(tabsKey);
+            if (tabsStored) {
+                const parsedTabs = JSON.parse(tabsStored);
+                if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
+                    setChatTabs(parsedTabs);
+                    setActiveChatTab(parsedTabs[parsedTabs.length - 1].id);
+                }
+            }
+
             const key = `verdict_ai_chat_${problemId}`;
             const stored = localStorage.getItem(key);
             if (stored) {
                 const parsed = JSON.parse(stored);
-                const hydratedMessages = parsed.map((m: any) => ({
-                    ...m,
-                    timestamp: new Date(m.timestamp)
-                }));
-                setMessages(hydratedMessages);
+                if (Array.isArray(parsed)) {
+                    const hydratedMessages = parsed.map((m: any) => ({
+                        ...m,
+                        timestamp: new Date(m.timestamp)
+                    }));
+                    setMessagesByTab({ 'default': hydratedMessages });
+                } else {
+                    const hydratedRecord: Record<string, Message[]> = {};
+                    for (const tabId in parsed) {
+                        hydratedRecord[tabId] = (parsed[tabId] || []).map((m: any) => ({
+                            ...m,
+                            timestamp: new Date(m.timestamp)
+                        }));
+                    }
+                    setMessagesByTab(hydratedRecord);
+                }
             }
         } catch (e) {
             console.error('[AI History] Failed to load chat history from storage:', e);
@@ -128,10 +205,13 @@ export default function AIAgentPanel({
 
     // Save messages to LocalStorage whenever they change
     useEffect(() => {
-        if (!problemId || messages.length === 0) return;
+        if (!problemId) return;
         const key = `verdict_ai_chat_${problemId}`;
-        localStorage.setItem(key, JSON.stringify(messages));
-    }, [messages, problemId]);
+        localStorage.setItem(key, JSON.stringify(messagesByTab));
+
+        const tabsKey = `verdict_ai_tabs_${problemId}`;
+        localStorage.setItem(tabsKey, JSON.stringify(chatTabs));
+    }, [messagesByTab, chatTabs, problemId]);
 
     // Message helpers for hook
     const addMessage = useCallback((msg: { id: string; role: 'assistant'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string } }) => {
@@ -161,31 +241,24 @@ export default function AIAgentPanel({
     // Tutor Usage Tracking (Once per problem per language)
     const [hasUsedTutor, setHasUsedTutor] = useState(false);
 
-    // Check usage limits and restore state from DB history
+    // Check if tutor was already used for this problem
     useEffect(() => {
         if (!problemId) return;
 
-        // Check Message History from DB (Reliable/Cross-device)
-        // If we have a message saying "Found a verified solution" or "Solution Verified", then we used the tutor.
         const hasTutorMessage = messages.some(m =>
             m.role === 'assistant' &&
-            (m.content.includes('Solution Verified') ||
-                m.content.includes('Found a verified solution') ||
-                m.content.includes('Verdict Verification Protocol'))
+            (m.content.includes('✅') ||
+                m.content.includes('⚠️') ||
+                m.content.includes('Solution Verified') ||
+                m.content.includes('test') && m.content.includes('passed'))
         );
 
         if (hasTutorMessage) {
             setHasUsedTutor(true);
-            // Sync to localStorage for faster checks
-            const key = `tutor_used_${problemId}_${language}`;
-            localStorage.setItem(key, 'true');
+            localStorage.setItem(`tutor_used_${problemId}_${language}`, 'true');
         } else {
-            // Fallback to localStorage if no messages loaded yet
-            const key = `tutor_used_${problemId}_${language}`;
-            const locallyUsed = localStorage.getItem(key) === 'true';
-            if (locallyUsed) {
-                setHasUsedTutor(true);
-            }
+            const locallyUsed = localStorage.getItem(`tutor_used_${problemId}_${language}`) === 'true';
+            if (locallyUsed) setHasUsedTutor(true);
         }
     }, [problemId, language, messages]);
 
@@ -262,21 +335,7 @@ export default function AIAgentPanel({
         loadPrefs();
     }, [codeforcesRating, showPreferencesModal]);
 
-    // TTS disabled for now
-    // const handlePlayTTS = async () => {
-    //     console.log('[TTS] TTS is currently disabled');
-    //     return;
-    // };
 
-    // Cleanup audio on unmount
-    useEffect(() => {
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-        };
-    }, []);
 
     // Update input when selected code or initial question changes
     useEffect(() => {
@@ -301,6 +360,21 @@ export default function AIAgentPanel({
     const handleSendMessage = async (overridePrompt?: string, file?: File) => {
         const promptToSend = (overridePrompt || input).trim();
         if (!promptToSend || isLoadingMessage) return;
+
+        // Detect "teach me" to auto-trigger tutor
+        if (promptToSend.toLowerCase().includes('teach me') && !hasUsedTutor && (onSolveProblem || onAiCodeUpdate)) {
+            handleStartTutor();
+            // Still show the user message in chat
+            const userMsg: Message = {
+                id: Date.now().toString(),
+                role: 'user',
+                content: promptToSend,
+                timestamp: new Date()
+            };
+            setMessages(prev => [...prev, userMsg]);
+            if (!overridePrompt) setInput('');
+            return;
+        }
 
         // Check LLM Configuration
         if (!settings.enabled || !settings.apiKey) {
@@ -350,6 +424,9 @@ export default function AIAgentPanel({
         setIsLoadingMessage(true);
         setAiStatus('Reading the problem...');
 
+        // Create streaming message ID before try so catch can access it
+        const streamMsgId = `ai-${Date.now()}`;
+
         try {
             const chatMessages: any[] = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({
                 role: m.role,
@@ -367,6 +444,7 @@ export default function AIAgentPanel({
             chatMessages.push({ role: 'user', content: contentString });
 
             // Load solution style preference
+            const solutionStyle = (typeof window !== 'undefined' ? localStorage.getItem('verdict_solution_style') : 'simple') || 'simple';
             const styleInstruction = solutionStyle === 'smart'
                 ? 'When writing code solutions, prefer the most optimal time/space complexity. Show the most efficient approach even if it requires advanced data structures or algorithms.'
                 : 'When writing code solutions, prefer simple and readable code that is easy to understand. Avoid over-optimizing — a clean O(n²) solution is fine if it fits the constraints. Focus on clear logic over performance tricks.';
@@ -379,6 +457,15 @@ export default function AIAgentPanel({
             ];
 
             setAiStatus('Thinking...');
+
+            // Create streaming assistant message (uses streamMsgId from outer scope)
+            addMessage({
+                id: streamMsgId,
+                role: 'assistant',
+                content: '<think>\nThinking...\n</think>',
+                timestamp: new Date()
+            });
+            setIsLoadingMessage(false); // Hide loading dots, we have a message now
 
             const tools = [
                 {
@@ -424,6 +511,16 @@ export default function AIAgentPanel({
 
                 const data = await response.json();
                 const responseMessage = data.choices?.[0]?.message;
+
+                // Track token usage
+                if (data.usage) {
+                    try {
+                        const usageCtx = (window as any).__aiContextUsage;
+                        if (usageCtx?.addUsage) {
+                            usageCtx.addUsage(data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0);
+                        }
+                    } catch { /* ignore */ }
+                }
 
                 if (!responseMessage) {
                     throw new Error('No message in AI response');
@@ -484,314 +581,382 @@ export default function AIAgentPanel({
 
             if (!finalAiResponse) finalAiResponse = 'I apologize, but I couldn\'t generate a response. Please try again.';
 
-            const aiMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: finalAiResponse,
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, aiMessage]);
+            // Stream the response word-by-word into the existing message
+            const words = finalAiResponse.split(' ');
+            let streamed = '';
+            for (let i = 0; i < words.length; i++) {
+                streamed += (i > 0 ? ' ' : '') + words[i];
+                updateMessage(streamMsgId, streamed);
+                await new Promise(r => setTimeout(r, 18));
+            }
+            // Ensure final content is set
+            updateMessage(streamMsgId, finalAiResponse);
 
             // Update last interaction with response length for learning
             updateLastInteractionResponse(finalAiResponse.length);
 
-            // TTS disabled for now - don't set explanation
-            // setTtsExplanation(finalAiResponse);
         } catch (error) {
             console.error('[AI Chat Error]', error);
-            const errorMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: 'Sorry, I encountered an error. Please try again or check your connection.',
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, errorMessage]);
+            updateMessage(streamMsgId, 'Sorry, I encountered an error. Please try again or check your connection.');
         } finally {
             setIsLoadingMessage(false);
         }
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#0e0e13] min-h-0 text-white" data-lenis-prevent>
+        <AIContextUsageProvider maxTokens={128000}>
+            <AIContextUsageTracker
+                messages={messages}
+                modelName={settings.model}
+                problemDescription={problemDescription}
+                userCode={userCode}
+            />
+            <div className="flex flex-col h-full bg-[#0e0e13] min-h-0 text-white" data-lenis-prevent>
 
-            {/* ── Header ─────────────────────────────────────── */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg overflow-hidden relative border border-emerald-500/20 bg-emerald-500/5 flex-shrink-0">
-                        <Image src="/icons/logo.webp" alt="Verdict" fill className="object-contain p-1" />
-                    </div>
-                    <span className="text-[13px] font-semibold tracking-wide text-white/90">AI Tutor</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    {(onSolveProblem || onAiCodeUpdate) && !hasUsedTutor && (
+                {/* ── Chat Tab Bar ─────────────────────────────────── */}
+                <div className="flex items-center gap-0 border-b border-white/[0.06] shrink-0 bg-[#0a0a0f] overflow-x-auto">
+                    {chatTabs.map(tab => (
                         <button
-                            onClick={handleStartTutor}
-                            disabled={tutorLoading || isTutorActive}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/90 hover:bg-emerald-400 text-black transition-all disabled:opacity-60"
+                            key={tab.id}
+                            onClick={() => setActiveChatTab(tab.id)}
+                            className={`group/tab flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-medium border-b-2 transition-all shrink-0 ${activeChatTab === tab.id
+                                ? 'border-emerald-500 text-white/90 bg-white/[0.03]'
+                                : 'border-transparent text-white/35 hover:text-white/60 hover:bg-white/[0.02]'
+                                }`}
                         >
-                            {tutorLoading
-                                ? <Loader2 size={11} className="animate-spin" strokeWidth={2.5} />
-                                : <Wand2 size={11} strokeWidth={2.5} />}
-                            Teach Me
+                            <MessageSquare size={12} strokeWidth={2} />
+                            {tab.label}
+                            <span
+                                onClick={(e) => { e.stopPropagation(); deleteChat(tab.id); }}
+                                className="ml-0.5 p-0.5 rounded opacity-0 group-hover/tab:opacity-100 hover:bg-white/10 text-white/40 hover:text-white/80 transition-all cursor-pointer"
+                                title="Delete chat"
+                            >
+                                <X size={10} strokeWidth={2.5} />
+                            </span>
                         </button>
-                    )}
+                    ))}
                     <button
-                        onClick={() => setShowPreferencesModal(true)}
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white/70 transition-colors"
+                        onClick={addNewChat}
+                        className="flex items-center justify-center w-8 h-8 my-0.5 mx-1 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.05] transition-all shrink-0"
+                        title="New chat"
                     >
-                        <Settings size={13} strokeWidth={2} />
+                        <Plus size={14} strokeWidth={2} />
                     </button>
                 </div>
-            </div>
 
-            {/* ── Solution level pills ───────────────────────── */}
-            {/* Removed level pills as per instruction */}
-            {/* {variants && variants.length > 0 && (
-                <div className="px-3 py-2 border-b border-white/[0.06] flex gap-1.5">
-                    {variants.map((v) => {
-                        const sel = selectedLevel === v.level;
-                        const colors = [
-                            { bg: 'bg-orange-500/15', text: 'text-orange-300', border: 'border-orange-500/30' },
-                            { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30' },
-                            { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
-                        ];
-                        const c = sel ? colors[(v.level - 1) % 3] : { bg: 'bg-white/[0.04] hover:bg-white/[0.07]', text: 'text-white/40 hover:text-white/60', border: 'border-white/[0.08]' };
-                        return (
-                            <button key={v.level} onClick={() => changeLevel(v.level)}
-                                className={`flex-1 py-1.5 px-2 rounded-lg border transition-all ${c.bg} ${c.text} ${c.border}`}>
-                                <div className="text-[10px] font-semibold">{v.title}</div>
-                                {v.timeComplexity && <div className="text-[8px] opacity-50 font-mono mt-0.5">{v.timeComplexity}</div>}
-                            </button>
-                        );
-                    })}
-                </div>
-            )} */}
 
-            {/* ── Messages ───────────────────────────────────── */}
-            <Conversation className="relative flex-1 min-h-0 bg-[#0e0e13]">
-                <ConversationContent className="px-3 py-4">
-                    {messages.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
-                            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
-                                <Image src="/icons/logo.webp" alt="Verdict" fill className="object-contain p-2.5 opacity-80" />
-                            </div>
-                            <h3 className="text-base font-semibold text-white/80 mb-1.5">How can I help?</h3>
-                            <p className="text-xs text-white/35 max-w-[220px] leading-relaxed">
-                                Ask about algorithms, debug your code, or get problem-solving hints.
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="flex flex-col gap-1">
-                        {messages.map((message) => {
-                            if (message.role === 'sources' && message.sources?.length) {
-                                return (
-                                    <div key={message.id} className="px-1 py-2">
-                                        <div className="flex items-center gap-1.5 mb-2">
-                                            <Globe size={10} className="text-white/25" />
-                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25">Sources</span>
-                                        </div>
-                                        <div className="flex flex-col gap-1.5">
-                                            {message.sources.map((src, i) => {
-                                                let domain = '';
-                                                try { domain = new URL(src.url).hostname.replace('www.', ''); } catch { }
-                                                const isYT = src.type === 'youtube' || domain.includes('youtube');
-                                                return (
-                                                    <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.07] hover:bg-white/[0.07] hover:border-white/[0.14] transition-all group"
-                                                    >
-                                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${isYT ? 'bg-red-500/15' : 'bg-white/5'
-                                                            }`}>
-                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                            <img
-                                                                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-                                                                alt=""
-                                                                className="w-3.5 h-3.5 rounded-sm opacity-80"
-                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                                            />
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="text-[12px] text-white/70 group-hover:text-white/95 font-medium truncate">{src.title || domain}</div>
-                                                            <div className="text-[10px] text-white/25 truncate mt-0.5">{domain}</div>
-                                                        </div>
-                                                        {isYT && (
-                                                            <div className="text-[9px] font-semibold text-red-400/70 uppercase tracking-wide flex-shrink-0">YT</div>
-                                                        )}
-                                                    </a>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                );
-                            }
-                            return <ChatMessage key={message.id} message={message as any} isAuthenticated={true} userEmail="You" />;
-                        })}
-
-                        {isLoadingMessage && (
-                            <div className="flex items-center gap-3 py-3">
-                                <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center shrink-0 relative overflow-hidden">
-                                    <Image src="/icons/logo.webp" alt="AI" fill className="object-contain p-1.5 opacity-60" />
+                {/* ── Messages ───────────────────────────────────── */}
+                <Conversation className="relative flex-1 min-h-0 bg-[#0e0e13]">
+                    <ConversationContent className="px-3 py-4">
+                        {messages.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
+                                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
+                                    <Image src="/icons/logo.webp" alt="Verdict" fill className="object-contain p-2.5 opacity-80" />
                                 </div>
-                                <div className="flex flex-col gap-0.5">
-                                    <div className="flex gap-1 items-center">
-                                        {[0, 1, 2].map(i => (
-                                            <div key={i} className="w-1 h-1 rounded-full bg-emerald-400/60 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                                        ))}
-                                    </div>
-                                    <span className="text-[10px] text-white/30 animate-pulse">{aiStatus}</span>
-                                </div>
+                                <h3 className="text-base font-semibold text-white/80 mb-1.5">How can I help?</h3>
+                                <p className="text-xs text-white/35 max-w-[220px] leading-relaxed">
+                                    Ask about algorithms, debug your code, or get problem-solving hints.
+                                </p>
                             </div>
                         )}
-                        <div ref={messagesEndRef} />
-                    </div>
-                </ConversationContent>
-                <ConversationScrollButton />
-            </Conversation>
 
-            <div className="bg-[#0e0e13] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10">
+                        <div className="flex flex-col gap-1">
+                            {messages.map((message) => {
+                                if (message.role === 'sources' && message.sources?.length) {
+                                    return (
+                                        <div key={message.id} className="px-1 py-2">
+                                            <div className="flex items-center gap-1.5 mb-2">
+                                                <Globe size={10} className="text-white/25" />
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25">Sources</span>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                {message.sources.map((src, i) => {
+                                                    let domain = '';
+                                                    try { domain = new URL(src.url).hostname.replace('www.', ''); } catch { }
+                                                    const isYT = src.type === 'youtube' || domain.includes('youtube');
+                                                    return (
+                                                        <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
+                                                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.07] hover:bg-white/[0.07] hover:border-white/[0.14] transition-all group"
+                                                        >
+                                                            <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${isYT ? 'bg-red-500/15' : 'bg-white/5'
+                                                                }`}>
+                                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                <img
+                                                                    src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                                                                    alt=""
+                                                                    className="w-3.5 h-3.5 rounded-sm opacity-80"
+                                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                                />
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-[12px] text-white/70 group-hover:text-white/95 font-medium truncate">{src.title || domain}</div>
+                                                                <div className="text-[10px] text-white/25 truncate mt-0.5">{domain}</div>
+                                                            </div>
+                                                            {isYT && (
+                                                                <div className="text-[9px] font-semibold text-red-400/70 uppercase tracking-wide flex-shrink-0">YT</div>
+                                                            )}
+                                                        </a>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return <ChatMessage key={message.id} message={message as any} isAuthenticated={true} userEmail="You" />;
+                            })}
 
-                {/* Selected code context badge */}
-                {selectedCode?.trim() && selectedLineReference && (
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-500/[0.08] border border-blue-500/20 text-blue-300/80 text-[11px] font-mono overflow-hidden">
-                            <Code size={11} className="shrink-0" />
-                            <span className="truncate">{selectedLineReference.replace('@ ', '')}</span>
+                            {isLoadingMessage && (
+                                <div className="flex items-center gap-3 py-3">
+                                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center shrink-0 relative overflow-hidden">
+                                        <Image src="/icons/logo.webp" alt="AI" fill className="object-contain p-1.5 opacity-60" />
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex gap-1 items-center">
+                                            {[0, 1, 2].map(i => (
+                                                <div key={i} className="w-1 h-1 rounded-full bg-emerald-400/60 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                                            ))}
+                                        </div>
+                                        <span className="text-[10px] text-white/30 animate-pulse">{aiStatus}</span>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
                         </div>
-                        <button onClick={() => onSelectionCleared?.()} className="h-7 w-7 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-colors text-xs">
-                            ✕
+                    </ConversationContent>
+                    <ConversationScrollButton />
+                </Conversation>
+
+                <div className="bg-[#0e0e13] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10">
+
+                    {/* Selected code context badge */}
+                    {selectedCode?.trim() && selectedLineReference && (
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-500/[0.08] border border-blue-500/20 text-blue-300/80 text-[11px] font-mono overflow-hidden">
+                                <Code size={11} className="shrink-0" />
+                                <span className="truncate">{selectedLineReference.replace('@ ', '')}</span>
+                            </div>
+                            <button onClick={() => onSelectionCleared?.()} className="h-7 w-7 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.07] transition-colors text-xs">
+                                ✕
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Configure LLM banner */}
+                    {(!settings.enabled || !settings.apiKey) && (
+                        <button
+                            onClick={() => setShowPreferencesModal(true)}
+                            className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.13] border border-emerald-500/20 rounded-2xl text-emerald-400 text-[12px] font-medium transition-all group"
+                        >
+                            <BrainCircuit size={14} strokeWidth={2} />
+                            Configure Bring Your Own LLM
+                        </button>
+                    )}
+
+                    {/* Chat input + action buttons */}
+                    <div className={`transition-opacity duration-200 ${(isLoadingMessage || !settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+                        <PromptInputBox
+                            value={input}
+                            onChange={setInput}
+                            isLoading={isLoadingMessage}
+                            placeholder={
+                                !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
+                                    : selectedCode && selectedLineReference ? 'Ask about the selected code...'
+                                        : 'Ask anything...'
+                            }
+                            onSend={(msg) => handleSendMessage(msg)}
+                            onOpenResources={() => setIsResourcesOpen(true)}
+                            onTeachMe={() => handleSendMessage('Teach me this problem')}
+                            isTutorLoading={tutorLoading}
+                            isTutorActive={isTutorActive}
+                            hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
+                        />
+                    </div>
+
+                    {/* Bottom action row: Settings */}
+                    <div className="flex items-center justify-end mt-2">
+                        <button
+                            onClick={() => setShowPreferencesModal(true)}
+                            className="p-1.5 rounded-lg hover:bg-white/5 text-white/25 hover:text-white/60 transition-colors"
+                            title="AI Settings"
+                        >
+                            <Settings size={13} strokeWidth={2} />
                         </button>
                     </div>
-                )}
-
-                {/* Configure LLM banner */}
-                {(!settings.enabled || !settings.apiKey) && (
-                    <button
-                        onClick={() => setShowPreferencesModal(true)}
-                        className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.13] border border-emerald-500/20 rounded-2xl text-emerald-400 text-[12px] font-medium transition-all group"
-                    >
-                        <BrainCircuit size={14} strokeWidth={2} />
-                        Configure Bring Your Own LLM
-                    </button>
-                )}
-
-                {/* Chat input */}
-                <div className={`transition-opacity duration-200 ${(isLoadingMessage || !settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
-                    <PromptInputBox
-                        isLoading={isLoadingMessage}
-                        placeholder={
-                            !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
-                                : selectedCode && selectedLineReference ? 'Ask about the selected code...'
-                                    : 'Ask anything...'
-                        }
-                        onSend={(msg) => handleSendMessage(msg)}
-                        onOpenResources={() => setIsResourcesOpen(true)}
-                    />
-                </div>
-            </div>
-
-            {/* ── Resources Drawer Overlay ──────────────────────────────── */}
-            <div
-                className={`absolute inset-y-0 right-0 w-full sm:w-[90%] bg-[#1c1c1f] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col border-l border-white/10 ${isResourcesOpen ? 'translate-x-0' : 'translate-x-full'}`}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#1c1c1f]">
-                    <h3 className="text-sm font-semibold text-white/90">Resources</h3>
-                    <button
-                        onClick={() => setIsResourcesOpen(false)}
-                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-                    >
-                        <X size={16} />
-                    </button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-8 bg-[#161619]">
-                    {concepts.length === 0 && (
-                        <div className="text-center py-10 text-white/40 text-sm">
-                            No resources available yet. Start a session or ask a question to generate resources.
-                        </div>
-                    )}
+                {/* ── Resources Drawer Overlay ──────────────────────────────── */}
+                <AnimatePresence>
+                    {isResourcesOpen && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                onClick={() => setIsResourcesOpen(false)}
+                                className="absolute inset-0 bg-black/40 z-40"
+                            />
+                            {/* Drawer */}
+                            <motion.div
+                                initial={{ x: '100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '100%' }}
+                                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+                                className="absolute inset-y-0 right-0 w-full sm:w-[90%] bg-[#1c1c1f] shadow-2xl z-50 flex flex-col border-l border-white/10"
+                            >
+                                {/* Header */}
+                                <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#1c1c1f]">
+                                    <h3 className="text-sm font-semibold text-white/90">Resources</h3>
+                                    <button
+                                        onClick={() => setIsResourcesOpen(false)}
+                                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
 
-                    {/* Video Tutorials */}
-                    {concepts.filter(c => c.type === 'video').length > 0 && (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 tracking-wider">
-                                <PlayCircle size={14} />
-                                VIDEO TUTORIALS
-                            </div>
-                            <div className="flex flex-col gap-3">
-                                {concepts.filter(c => c.type === 'video').map((c, i) => (
-                                    <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex gap-3 text-left transition-colors hover:bg-white/5 p-2 rounded-xl -m-2">
-                                        <div className="relative w-28 h-16 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-black/50">
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <Youtube className="w-8 h-8 text-red-500 opacity-90 group-hover:scale-110 transition-transform" />
-                                            </div>
-                                            <div className="absolute bottom-1 right-1 bg-black/80 px-1 py-0.5 rounded text-[9px] font-mono text-white/90">Play</div>
+                                {/* Content */}
+                                <div className="flex-1 overflow-y-auto p-4 space-y-8 bg-[#161619]">
+                                    {concepts.length === 0 && (
+                                        <div className="text-center py-10 text-white/40 text-sm">
+                                            No resources available yet. Start a session or ask a question to generate resources.
                                         </div>
-                                        <div className="flex flex-col justify-center">
-                                            <h4 className="text-sm font-medium text-white/90 group-hover:text-white line-clamp-2 leading-tight">{c.title}</h4>
-                                            <p className="text-xs text-white/40 mt-1">YouTube</p>
-                                        </div>
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                                    )}
 
-                    {/* Articles & Wikis */}
-                    {concepts.filter(c => c.type === 'article').length > 0 && (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 tracking-wider">
-                                <Globe size={14} />
-                                ARTICLES & WIKIS
-                            </div>
-                            <div className="flex flex-col gap-3">
-                                {concepts.filter(c => c.type === 'article').map((c, i) => {
-                                    let domain = 'Website';
-                                    try {
-                                        domain = new URL(c.url).hostname.replace('www.', '');
-                                    } catch (e) {
-                                        // Ignore invalid URLs
-                                    }
-                                    return (
-                                        <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between gap-4 p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                                                    {domain.includes('wikipedia') ? (
-                                                        <Globe className="w-5 h-5 text-white/50 group-hover:text-white/80 transition-colors" />
-                                                    ) : (
-                                                        <BookOpen className="w-5 h-5 text-white/50 group-hover:text-white/80 transition-colors" />
-                                                    )}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <h4 className="text-sm font-medium text-white/90 group-hover:text-white truncate">{c.title}</h4>
-                                                    <p className="text-xs text-white/40 mt-0.5">{domain}</p>
-                                                </div>
+                                    {/* Video Tutorials */}
+                                    {concepts.filter(c => c.type === 'video').length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 tracking-wider">
+                                                <PlayCircle size={14} />
+                                                VIDEO TUTORIALS
                                             </div>
-                                            <ExternalLink className="w-4 h-4 text-white/20 group-hover:text-white/50 shrink-0" />
-                                        </a>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+                                            <div className="flex flex-col gap-3">
+                                                {concepts.filter(c => c.type === 'video').map((c, i) => (
+                                                    <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex gap-3 text-left transition-colors hover:bg-white/5 p-2 rounded-xl -m-2">
+                                                        <div className="relative w-28 h-16 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-black/50">
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <Youtube className="w-8 h-8 text-red-500 opacity-90 group-hover:scale-110 transition-transform" />
+                                                            </div>
+                                                            <div className="absolute bottom-1 right-1 bg-black/80 px-1 py-0.5 rounded text-[9px] font-mono text-white/90">Play</div>
+                                                        </div>
+                                                        <div className="flex flex-col justify-center">
+                                                            <h4 className="text-sm font-medium text-white/90 group-hover:text-white line-clamp-2 leading-tight">{c.title}</h4>
+                                                            <p className="text-xs text-white/40 mt-1">YouTube</p>
+                                                        </div>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
-            {/* AI Preferences Modal */}
-            <AIPreferencesModal
-                isOpen={showPreferencesModal}
-                onClose={() => setShowPreferencesModal(false)}
-                codeforcesRating={codeforcesRating}
-                variants={variants}
-                selectedLevel={selectedLevel}
-                onLevelChange={changeLevel}
-                onPreferencesSaved={() => {
-                    const loaded = loadAIPreferences();
-                    const inferred = inferPreferencesFromProfile({ codeforcesRating });
-                    setPreferences({ ...inferred, ...loaded });
-                }}
-            />
-        </div>
+                                    {/* Articles & Wikis */}
+                                    {concepts.filter(c => c.type === 'article').length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 tracking-wider">
+                                                <Globe size={14} />
+                                                ARTICLES & WIKIS
+                                            </div>
+                                            <div className="flex flex-col gap-3">
+                                                {concepts.filter(c => c.type === 'article').map((c, i) => {
+                                                    let domain = 'Website';
+                                                    try {
+                                                        domain = new URL(c.url).hostname.replace('www.', '');
+                                                    } catch (e) {
+                                                        // Ignore invalid URLs
+                                                    }
+                                                    return (
+                                                        <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between gap-4 p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                                                    {domain.includes('wikipedia') ? (
+                                                                        <Globe className="w-5 h-5 text-white/50 group-hover:text-white/80 transition-colors" />
+                                                                    ) : (
+                                                                        <BookOpen className="w-5 h-5 text-white/50 group-hover:text-white/80 transition-colors" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <h4 className="text-sm font-medium text-white/90 group-hover:text-white truncate">{c.title}</h4>
+                                                                    <p className="text-xs text-white/40 mt-0.5">{domain}</p>
+                                                                </div>
+                                                            </div>
+                                                            <ExternalLink className="w-4 h-4 text-white/20 group-hover:text-white/50 shrink-0" />
+                                                        </a>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                {/* AI Preferences Modal */}
+                <AIPreferencesModal
+                    isOpen={showPreferencesModal}
+                    onClose={() => setShowPreferencesModal(false)}
+                    codeforcesRating={codeforcesRating}
+                    variants={variants}
+                    selectedLevel={selectedLevel}
+                    onLevelChange={changeLevel}
+                    onPreferencesSaved={() => {
+                        const loaded = loadAIPreferences();
+                        const inferred = inferPreferencesFromProfile({ codeforcesRating });
+                        setPreferences({ ...inferred, ...loaded });
+                    }}
+                />
+            </div>
+        </AIContextUsageProvider>
     );
+}
+
+// Bridge component that exposes context to window for imperative token tracking
+function AIContextUsageTracker({ messages, modelName, problemDescription, userCode }: { messages: Message[], modelName: string, problemDescription?: string, userCode?: string }) {
+    const ctx = useAIContextUsage();
+
+    // Imperative bridge for active generation
+    useEffect(() => {
+        (window as any).__aiContextUsage = ctx;
+        return () => { delete (window as any).__aiContextUsage; };
+    }, [ctx]);
+
+    // Reactive context sizing
+    useEffect(() => {
+        let maxTokens = 32000;
+        if (modelName) {
+            const m = modelName.toLowerCase();
+            if (m.includes('claude-3-5') || m.includes('claude-3')) maxTokens = 200000;
+            else if (m.includes('gpt-4') || m.includes('gpt-4o')) maxTokens = 128000;
+            else if (m.includes('llama-3.1') || m.includes('llama-3.2')) maxTokens = 128000;
+            else if (m.includes('llama')) maxTokens = 8192;
+            else if (m.includes('gemini-1.5')) maxTokens = 1000000;
+            else if (m.includes('qwen')) maxTokens = 128000;
+        }
+
+        let txt = (problemDescription || '') + '\n' + (userCode || '');
+        for (const msg of messages) {
+            txt += '\n' + msg.content;
+            if (msg.role === 'sources' && msg.sources) {
+                txt += '\n' + JSON.stringify(msg.sources);
+            }
+        }
+
+        let isMounted = true;
+        import('gpt-tokenizer').then(({ encode }) => {
+            if (!isMounted) return;
+            const tokens = encode(txt).length;
+            ctx.setUsageData({
+                inputTokens: tokens,
+                outputTokens: 0,
+                maxTokens: maxTokens,
+                totalTokens: tokens
+            });
+        }).catch(err => console.error('[Token Count Error]', err));
+
+        return () => { isMounted = false; };
+    }, [messages, modelName, problemDescription, userCode, ctx.setUsageData]);
+
+    return null;
 }
