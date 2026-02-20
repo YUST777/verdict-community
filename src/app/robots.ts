@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/_next/'],
       },
     ],
-    sitemap: 'https://sast.tech/sitemap.xml',
+    sitemap: 'https://verdict.run/sitemap.xml',
   }
 }

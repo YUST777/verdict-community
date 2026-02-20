@@ -563,7 +563,7 @@ export default function TestRunnerPanel({
                                                 value={formInput}
                                                 onChange={(e) => setFormInput(e.target.value)}
                                                 placeholder="Enter test input..."
-                                                className="w-full h-32 bg-[#1e1e1e] border border-white/10 rounded-lg p-3 text-sm font-mono text-[#d4d4d4] placeholder-[#555] focus:outline-none focus:border-[#10B981]/50 resize-none scrollbar-thin scrollbar-thumb-white/10"
+                                                className="w-full h-32 bg-[#1e1e1e] border border-white/10 rounded-lg p-3 text-sm font-mono text-[#d4d4d4] placeholder-[#555] focus:outline-none focus:border-[#10B981]/50 resize-none custom-scrollbar"
                                             />
                                         </div>
                                         <div>
@@ -574,7 +574,7 @@ export default function TestRunnerPanel({
                                                 value={formOutput}
                                                 onChange={(e) => setFormOutput(e.target.value)}
                                                 placeholder="Enter expected output..."
-                                                className="w-full h-32 bg-[#1e1e1e] border border-white/10 rounded-lg p-3 text-sm font-mono text-[#d4d4d4] placeholder-[#555] focus:outline-none focus:border-[#10B981]/50 resize-none scrollbar-thin scrollbar-thumb-white/10"
+                                                className="w-full h-32 bg-[#1e1e1e] border border-white/10 rounded-lg p-3 text-sm font-mono text-[#d4d4d4] placeholder-[#555] focus:outline-none focus:border-[#10B981]/50 resize-none custom-scrollbar"
                                             />
                                         </div>
                                     </div>
@@ -613,13 +613,13 @@ export default function TestRunnerPanel({
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 font-mono text-sm text-[#d4d4d4] whitespace-pre-wrap leading-relaxed shadow-inner overflow-auto max-h-[400px] scrollbar-thin scrollbar-thumb-white/10 flex-1">
+                                        <div className="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 font-mono text-sm text-[#d4d4d4] whitespace-pre-wrap leading-relaxed shadow-inner overflow-auto max-h-[400px] custom-scrollbar flex-1">
                                             {testCases[selectedTestCase].input || <span className="italic text-[#555]">Empty input</span>}
                                         </div>
                                     </div>
                                     <div className="flex flex-col">
                                         <label className="text-xs font-medium text-[#888] mb-2 block uppercase tracking-wider">Expected Output</label>
-                                        <div className="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 font-mono text-sm text-[#d4d4d4] whitespace-pre-wrap leading-relaxed shadow-inner overflow-auto max-h-[400px] scrollbar-thin scrollbar-thumb-white/10 flex-1">
+                                        <div className="bg-[#2d2d2d] rounded-lg p-3 border border-white/5 font-mono text-sm text-[#d4d4d4] whitespace-pre-wrap leading-relaxed shadow-inner overflow-auto max-h-[400px] custom-scrollbar flex-1">
                                             {testCases[selectedTestCase].output || testCases[selectedTestCase].expectedOutput || <span className="italic text-[#555]">No expected output</span>}
                                         </div>
                                     </div>
@@ -634,7 +634,7 @@ export default function TestRunnerPanel({
                                                 </span>
                                             )}
                                         </div>
-                                        <div className={`bg-[#2d2d2d] rounded-lg p-3 border font-mono text-sm whitespace-pre-wrap leading-relaxed shadow-inner overflow-auto max-h-[400px] scrollbar-thin scrollbar-thumb-white/10 flex-1 ${result && result.results[selectedTestCase]
+                                        <div className={`bg-[#2d2d2d] rounded-lg p-3 border font-mono text-sm whitespace-pre-wrap leading-relaxed shadow-inner overflow-auto max-h-[400px] custom-scrollbar flex-1 ${result && result.results[selectedTestCase]
                                             ? result.results[selectedTestCase].passed
                                                 ? 'border-green-500/20 text-[#d4d4d4]'
                                                 : 'border-red-500/20 text-red-300'

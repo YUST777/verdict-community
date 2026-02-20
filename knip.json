@@ -1,0 +1,25 @@
+{
+    "$schema": "https://unpkg.com/knip@next/schema-json.json",
+    "entry": [
+        "src/app/**/*.{ts,tsx}",
+        "src/components/**/*.{ts,tsx}",
+        "src/lib/**/*.{ts,tsx}",
+        "src/hooks/**/*.{ts,tsx}",
+        "src/contexts/**/*.{ts,tsx}",
+        "mirror/server.js",
+        "mirror/cli_fetch.js",
+        "next.config.ts"
+    ],
+    "project": [
+        "src/**/*.{ts,tsx}",
+        "mirror/**/*.{js,ts}"
+    ],
+    "ignore": [
+        "**/*.d.ts",
+        "**/types.ts",
+        ".gemini/**",
+        "**/tailwind.config.ts",
+        "**/postcss.config.mjs",
+        "**/.eslintrc.json"
+    ]
+}

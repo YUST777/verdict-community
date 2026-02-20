@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://sast.tech'
+  const baseUrl = 'https://verdict.run'
 
   return [
     {

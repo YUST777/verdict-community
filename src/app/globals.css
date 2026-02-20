@@ -97,3 +97,74 @@ body {
     --r: 360deg;
   }
 }
+
+/* Global Scrollbar - Ultra Aggressive Force */
+::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  border: 1px solid transparent !important;
+  background-clip: padding-box !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent !important;
+}
+
+.custom-scrollbar {
+  overscroll-behavior: contain !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Hide scrollbar but keep functionality - Ultra Aggressive Version */
+.scrollbar-hide {
+  -ms-overflow-style: none !important;
+  /* IE and Edge */
+  scrollbar-width: none !important;
+  /* Firefox */
+  overflow: -moz-scrollbars-none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar-track,
+.scrollbar-hide::-webkit-scrollbar-thumb {
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
+}

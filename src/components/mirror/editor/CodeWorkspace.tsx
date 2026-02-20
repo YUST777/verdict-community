@@ -1,4 +1,4 @@
-import { Wand2 } from 'lucide-react';
+import { Wand2, MessageSquarePlus, Copy, Check } from 'lucide-react';
 import { Editor, OnMount } from '@monaco-editor/react';
 import { useEffect, useRef, useState } from 'react';
 import { SubmissionResult, Example, CFSubmissionStatus } from '../shared/types';
@@ -92,7 +92,8 @@ export default function CodeWorkspace({
     const [selectionPosition, setSelectionPosition] = useState<{ top: number; left: number } | null>(null);
     const [showAskAIButton, setShowAskAIButton] = useState(false);
     const [selectionLineNumbers, setSelectionLineNumbers] = useState<{ start: number; end: number } | null>(null);
-    const askAIButtonRef = useRef<HTMLButtonElement>(null);
+    const askAIButtonRef = useRef<HTMLDivElement>(null);
+    const [isCopied, setIsCopied] = useState(false);
 
     // Use external tab control if provided, otherwise internal
     const codeTab = externalActiveTab ?? internalCodeTab;
@@ -151,14 +152,18 @@ export default function CodeWorkspace({
         }
     }, []);
 
-    // ResizeObserver for smooth Monaco layout
+    // Smooth Resize Fix for Monaco
     useEffect(() => {
-        if (!editorContainerRef.current || !wrapperRef.current) return;
+        if (typeof window === 'undefined' || !wrapperRef.current) return;
 
-        // Find the monaco editor instance (it might hide deep in the DOM)
-        // Actually, we can use the handleEditorDidMount callback to save the editor instance locally
-        // But for now, let's just observe the wrapper and rely on Monaco's internal observer if we use automaticLayout: false
-        // Better: store the editor instance from onMount props intercept
+        const observer = new ResizeObserver(() => {
+            if (editorInstanceRef.current) {
+                editorInstanceRef.current.layout();
+            }
+        });
+
+        observer.observe(wrapperRef.current);
+        return () => observer.disconnect();
     }, []);
 
     // Intercept onMount to get editor instance for manual layout
@@ -405,33 +410,10 @@ export default function CodeWorkspace({
                     flex: isTestPanelVisible ? `1 1 calc(100% - var(--test-panel-h))` : '1 1 100%'
                 }}
             >
-                {/* Floating "Ask AI" Button - Cursor IDE style */}
-                {showAskAIButton && activeLeftPanelTab === 'solution' && selectedCode && onAskAboutCode && selectionPosition && selectionLineNumbers && !isReadOnly && (
-                    <button
+                {/* Floating "Add to Chat" Button (Cursor Style) */}
+                {showAskAIButton && selectedCode && onAskAboutCode && selectionPosition && selectionLineNumbers && !isReadOnly && (
+                    <div
                         ref={askAIButtonRef}
-                        onClick={() => {
-                            const lineRef = selectionLineNumbers.start === selectionLineNumbers.end
-                                ? `@ line ${selectionLineNumbers.start}`
-                                : `@ lines ${selectionLineNumbers.start}-${selectionLineNumbers.end}`;
-                            onAskAboutCode(selectedCode, lineRef);
-                            setShowAskAIButton(false);
-                            setSelectionLineNumbers(null);
-                            // Clear selection after clicking
-                            if (editorInstanceRef.current) {
-                                editorInstanceRef.current.setSelection({
-                                    startLineNumber: 0,
-                                    startColumn: 0,
-                                    endLineNumber: 0,
-                                    endColumn: 0
-                                });
-                            }
-                        }}
-                        className="absolute z-50 flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] hover:bg-[#252526] border border-emerald-500/40 hover:border-emerald-500/60 text-white text-xs font-medium rounded-md transition-all duration-150 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
-                        style={{
-                            top: `${selectionPosition.top}px`,
-                            left: `${selectionPosition.left}px`,
-                            position: 'fixed'
-                        }}
                         onMouseEnter={() => setShowAskAIButton(true)}
                         onMouseLeave={() => {
                             // Keep button visible if code is still selected
@@ -444,18 +426,56 @@ export default function CodeWorkspace({
                                 }
                             }, 300);
                         }}
+                        className="absolute z-50 flex transform items-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-800 p-1 shadow-xl transition-all duration-200 ease-out"
+                        style={{
+                            top: `${selectionPosition.top}px`,
+                            left: `${selectionPosition.left}px`,
+                            position: 'fixed',
+                            transform: 'translate(-50%, -120%)' // Shift it higher
+                        }}
                     >
-                        <Wand2 size={12} className="text-emerald-400" strokeWidth={2} />
-                        <span className="text-white font-medium">Ask AI</span>
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400 text-[10px] font-mono leading-tight">
-                            <span>@</span>
-                            <span>
-                                {selectionLineNumbers.start === selectionLineNumbers.end
-                                    ? `line ${selectionLineNumbers.start}`
-                                    : `lines ${selectionLineNumbers.start}-${selectionLineNumbers.end}`}
-                            </span>
-                        </span>
-                    </button>
+                        {/* Add to Chat Action */}
+                        <button
+                            className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+                            onClick={() => {
+                                const lineRef = selectionLineNumbers.start === selectionLineNumbers.end
+                                    ? `@ line ${selectionLineNumbers.start}`
+                                    : `@ lines ${selectionLineNumbers.start}-${selectionLineNumbers.end}`;
+                                onAskAboutCode(selectedCode, lineRef);
+                                setShowAskAIButton(false);
+                                setSelectionLineNumbers(null);
+                                // Clear selection after clicking
+                                if (editorInstanceRef.current) {
+                                    editorInstanceRef.current.setSelection({
+                                        startLineNumber: 0,
+                                        startColumn: 0,
+                                        endLineNumber: 0,
+                                        endColumn: 0
+                                    });
+                                }
+                            }}
+                        >
+                            <MessageSquarePlus className="h-4 w-4" />
+                            <span>Add to Chat</span>
+                            <span className="ml-1 text-[10px] tracking-widest text-zinc-500 hidden sm:inline-block">⌘L</span>
+                        </button>
+
+                        {/* Divider */}
+                        <div className="mx-1 h-4 w-[1px] bg-zinc-700" />
+
+                        {/* Copy Code Action */}
+                        <button
+                            className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-white"
+                            title="Copy Code"
+                            onClick={async () => {
+                                await navigator.clipboard.writeText(selectedCode);
+                                setIsCopied(true);
+                                setTimeout(() => setIsCopied(false), 2000);
+                            }}
+                        >
+                            {isCopied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                    </div>
                 )}
 
                 <div className="absolute inset-0">
@@ -517,6 +537,15 @@ export default function CodeWorkspace({
                                 strings: false
                             },
                             contextmenu: false, // Disable default context menu, we'll use custom
+                            scrollbar: {
+                                vertical: 'visible',
+                                horizontal: 'visible',
+                                verticalScrollbarSize: 6,
+                                horizontalScrollbarSize: 6,
+                                useShadows: false,
+                                verticalHasArrows: false,
+                                horizontalHasArrows: false,
+                            },
                         }}
                         loading={
                             <div className="flex items-center justify-center h-full text-[#666]">
@@ -525,29 +554,31 @@ export default function CodeWorkspace({
                         }
                     />
                 </div>
-            </div>
+            </div >
 
             {/* Test Panel Section */}
-            {isTestPanelVisible && (
-                <TestRunnerPanel
-                    height="var(--test-panel-h)"
-                    activeTab={testPanelTab}
-                    setActiveTab={setTestPanelTab}
-                    selectedTestCase={selectedTestCase}
-                    setSelectedTestCase={setSelectedTestCase}
-                    testCases={testCases}
-                    result={result}
-                    cfStatus={cfStatus}
-                    onClose={() => setIsTestPanelVisible(false)}
-                    onResizeStart={handleVerticalResizeStart}
-                    contestId={contestId}
-                    problemId={problemId}
-                    onAddTestCase={onAddTestCase}
-                    onDeleteTestCase={onDeleteTestCase}
-                    onUpdateTestCase={onUpdateTestCase}
-                    sampleTestCasesCount={sampleTestCasesCount}
-                />
-            )}
-        </div>
+            {
+                isTestPanelVisible && (
+                    <TestRunnerPanel
+                        height="var(--test-panel-h)"
+                        activeTab={testPanelTab}
+                        setActiveTab={setTestPanelTab}
+                        selectedTestCase={selectedTestCase}
+                        setSelectedTestCase={setSelectedTestCase}
+                        testCases={testCases}
+                        result={result}
+                        cfStatus={cfStatus}
+                        onClose={() => setIsTestPanelVisible(false)}
+                        onResizeStart={handleVerticalResizeStart}
+                        contestId={contestId}
+                        problemId={problemId}
+                        onAddTestCase={onAddTestCase}
+                        onDeleteTestCase={onDeleteTestCase}
+                        onUpdateTestCase={onUpdateTestCase}
+                        sampleTestCasesCount={sampleTestCasesCount}
+                    />
+                )
+            }
+        </div >
     );
 }

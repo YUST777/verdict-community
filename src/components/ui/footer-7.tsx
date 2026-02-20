@@ -24,23 +24,22 @@ const sections = [
         title: "Product",
         links: [
             { name: "Features", href: "/#features" },
-            { name: "Pricing", href: "/#pricing" },
-            { name: "FAQ", href: "/#faq" },
+            { name: "Extension", href: "/extension" },
+            { name: "Changelog", href: "/#changelog" },
         ],
     },
     {
         title: "Company",
         links: [
-            { name: "About", href: "/company" },
-            { name: "Roadmap", href: "/#roadmap" },
+            { name: "About", href: "/about" },
+            { name: "Blog", href: "/blog" },
         ],
     },
     {
-        title: "Support",
+        title: "Resources",
         links: [
-            { name: "Help Center", href: "/help-center" },
-            { name: "Contact", href: "/help-center#contact" },
-            { name: "Community", href: "/help-center#community" },
+            { name: "Community", href: "/community" },
+            { name: "Help Center", href: "/help" },
         ],
     },
 ];
@@ -86,7 +85,7 @@ export const Footer = () => {
                             ))}
                         </ul>
                     </div>
-                    <div className="grid w-full gap-6 md:grid-cols-3 lg:gap-10">
+                    <div className="grid w-full gap-6 grid-cols-3 lg:gap-10 mt-8 lg:mt-0">
                         {sections.map((section) => (
                             <div key={section.title}>
                                 <h3 className="mb-4 font-semibold text-sm text-white">{section.title}</h3>

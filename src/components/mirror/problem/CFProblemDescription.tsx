@@ -9,13 +9,20 @@ import { Clock, HardDrive } from 'lucide-react';
 // This is critical because re-render recreates dangerouslySetInnerHTML object, 
 // forcing React to reset the DOM and wiping out MathJax.
 export const CFProblemDescription = React.memo(function CFProblemDescription({ data }: { data: CFProblemData | null }) {
+    // Helper to rewrite relative Codeforces image URLs to absolute ones
+    const processHtml = (html: string) => {
+        if (!html) return '';
+        // Replace relative image paths with absolute Codeforces paths
+        return html.replace(/src="\/problemset\/img\//g, 'src="https://codeforces.com/problemset/img/');
+    };
+
     // Trigger MathJax typeset whenever re-render occurs (which means data changed due to memo)
     useEffect(() => {
         const w = window as Window & { MathJax?: { typesetPromise?: () => Promise<void> } };
         if (data && typeof window !== 'undefined' && w.MathJax?.typesetPromise) {
             w.MathJax.typesetPromise();
         }
-    }); // No dependency array: run on every commit (mount + update)
+    }, [data]); // Only run when data actually changes
 
     if (!data) return null;
 
@@ -35,15 +42,15 @@ export const CFProblemDescription = React.memo(function CFProblemDescription({ d
             />
 
             <style jsx global>{`
-                .prose img { display: inline-block; margin: 0 auto; max-width: 100%; border-radius: 8px; }
-                .prose .tex-font-style-tt { font-family: monospace; background: rgba(255,255,255,0.1); padding: 0.1em 0.3em; run: 4px; }
+                .prose img { display: inline-block; margin: 1em auto; max-width: 100%; border-radius: 8px; }
+                .prose .tex-font-style-tt { font-family: monospace; background: rgba(255,255,255,0.1); padding: 0.1em 0.3em; border-radius: 4px; }
                 .prose .tex-formula { color: #10B981; }
-                .prose ul { list-style-type: disc; padding-left: 1.5em; }
-                .prose ol { list-style-type: decimal; padding-left: 1.5em; }
-                .prose pre { background: #1a1a1a; padding: 1em; border-radius: 8px; overflow-x: auto; }
+                .prose ul { list-style-type: disc; padding-left: 1.5em; margin: 1em 0; }
+                .prose ol { list-style-type: decimal; padding-left: 1.5em; margin: 1em 0; }
+                .prose pre { background: #1a1a1a; padding: 1em; border-radius: 8px; overflow-x: auto; margin: 1em 0; }
                 
                 /* MathJax specific overrides for dark mode visibility */
-                mjx-container { color: #E0E0E0 !important; }
+                mjx-container { color: #E0E0E0 !important; font-size: 1.1em !important; }
             `}</style>
 
             <h1 className="text-3xl font-bold mb-2 text-white">{data.meta.title}</h1>
@@ -52,18 +59,18 @@ export const CFProblemDescription = React.memo(function CFProblemDescription({ d
                 <span className="flex items-center gap-2"><HardDrive size={16} className="text-[#10B981]" /> {data.meta.memoryLimitMB} MB</span>
             </div>
 
-            <div dangerouslySetInnerHTML={{ __html: data.story }} className="mb-8 leading-relaxed" />
+            <div dangerouslySetInnerHTML={{ __html: processHtml(data.story) }} className="mb-8 leading-relaxed" />
 
             {data.inputSpec && (
                 <div className="mb-8">
                     <h3 className="text-xl font-bold mb-3 text-[#10B981]">Input</h3>
-                    <div dangerouslySetInnerHTML={{ __html: data.inputSpec }} />
+                    <div dangerouslySetInnerHTML={{ __html: processHtml(data.inputSpec) }} />
                 </div>
             )}
             {data.outputSpec && (
                 <div className="mb-8">
                     <h3 className="text-xl font-bold mb-3 text-[#10B981]">Output</h3>
-                    <div dangerouslySetInnerHTML={{ __html: data.outputSpec }} />
+                    <div dangerouslySetInnerHTML={{ __html: processHtml(data.outputSpec) }} />
                 </div>
             )}
 
@@ -88,7 +95,7 @@ export const CFProblemDescription = React.memo(function CFProblemDescription({ d
             {data.note && (
                 <div className="mt-8 pt-8 border-t border-white/10">
                     <h3 className="text-lg font-bold mb-3 text-white/80">Note</h3>
-                    <div dangerouslySetInnerHTML={{ __html: data.note }} className="text-white/70 italic" />
+                    <div dangerouslySetInnerHTML={{ __html: processHtml(data.note) }} className="text-white/70 italic" />
                 </div>
             )}
         </div>

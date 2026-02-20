@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, History, Globe, User, Clock, HardDrive, RefreshCw } from 'lucide-react';
 import { Submission } from './shared/types';
 

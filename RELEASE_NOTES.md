@@ -1,3 +1,21 @@
+# 🚀 Verdict v2.0.1 Release Notes
+
+> **Release Date:** February 20, 2026  
+> **Extension Version:** 1.0.3
+
+---
+
+## 🔥 Highlights
+
+This release brings a polished AI Tutor user experience. We replaced the overly verbose AI chat responses with an integrated "Chain of Thought" UI to better represent the AI's complex reasoning steps.
+
+### 🤖 AI Tutor & UI/UX Improvements
+
+- **Fixed AI Chat UI** — Improved the AI thought process component display to use a new sleek, collapsible `ChainOfThought` UI.
+- **Fixed Tutor Chat Spam** — Resolved an issue where AI Tutor would send 15+ messages in a row during explanations. Now updates properly in a single expanding message.
+
+---
+
 # 🚀 Verdict v1.0.1 Release Notes
 
 > **Release Date:** January 22, 2026  

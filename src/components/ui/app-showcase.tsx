@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, RotateCw, Lock, Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RotateCw, Lock, Plus, X, FileText, Code2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Component — Verdict.run IDE showcase (matches screenshot design)
@@ -12,9 +12,10 @@ export function AppShowcase() {
     const [activeDescTab] = useState<'description' | 'submissions' | 'analytics' | 'solution'>('description')
     const [activeTestTab] = useState<'testcase' | 'result'>('testcase')
     const [activeCase] = useState(1)
+    const [mobileTab, setMobileTab] = useState<'problem' | 'code'>('problem')
 
     return (
-        <div className="bg-[#111111] aspect-[3/4] sm:aspect-[15/8] w-full rounded-2xl overflow-hidden flex flex-col select-none text-[13px]">
+        <div className="bg-[#111111] h-[600px] sm:h-auto sm:aspect-[15/8] w-full rounded-2xl overflow-hidden flex flex-col select-none text-[13px]">
 
             {/* ============================================================= */}
             {/* Browser Chrome — Tab bar */}
@@ -72,12 +73,15 @@ export function AppShowcase() {
             {/* ============================================================= */}
             {/* Main content area */}
             {/* ============================================================= */}
-            <div className="flex flex-1 min-h-0">
+            <div className="flex flex-1 min-h-0 relative">
 
                 {/* ======================================================= */}
                 {/* LEFT: Problem panel */}
                 {/* ======================================================= */}
-                <div className="flex-1 flex flex-col min-w-0 border-r border-white/[0.06]">
+                <div className={cn(
+                    "flex-1 flex flex-col min-w-0 border-r border-white/[0.06]",
+                    mobileTab === 'code' ? 'hidden lg:flex' : 'flex'
+                )}>
 
                     {/* Problem title + time/memory */}
                     <div className="px-5 pt-4 pb-3 shrink-0">
@@ -123,7 +127,7 @@ export function AppShowcase() {
                     </div>
 
                     {/* Problem body */}
-                    <div className="flex-1 overflow-hidden min-h-0 p-5">
+                    <div className="flex-1 overflow-y-auto min-h-0 p-5 custom-scrollbar">
                         <div className="space-y-5 text-[13px] leading-relaxed">
                             {/* Problem Statement */}
                             <div>
@@ -142,7 +146,7 @@ export function AppShowcase() {
                             </div>
 
                             {/* INPUT and OUTPUT side by side */}
-                            <div className="grid grid-cols-2 gap-6 pt-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-1">
                                 <div>
                                     <h3 className="text-white/80 font-bold text-sm mb-2">INPUT</h3>
                                     <p className="text-white/45 leading-[1.7] text-xs">
@@ -163,7 +167,10 @@ export function AppShowcase() {
                 {/* ======================================================= */}
                 {/* RIGHT: Code + Tests panel (desktop only) */}
                 {/* ======================================================= */}
-                <div className="hidden lg:flex w-[46%] flex-col shrink-0">
+                <div className={cn(
+                    "w-full lg:w-[46%] flex-col shrink-0",
+                    mobileTab === 'problem' ? 'hidden lg:flex' : 'flex'
+                )}>
 
                     {/* Code header: Code | GNU C++20 (64) | Run Tests | Submit */}
                     <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2 shrink-0">
@@ -184,7 +191,7 @@ export function AppShowcase() {
                     </div>
 
                     {/* Code editor */}
-                    <div className="flex-1 min-h-0 overflow-hidden bg-[#0d0d0d]">
+                    <div className="flex-1 min-h-0 overflow-y-auto bg-[#0d0d0d] custom-scrollbar">
                         <CodeEditor />
                     </div>
 
@@ -234,14 +241,14 @@ export function AppShowcase() {
                         </div>
 
                         {/* 3-column test data: INPUT | EXPECTED OUTPUT | ACTUAL OUTPUT */}
-                        <div className="grid grid-cols-3 gap-0 min-h-[80px] max-h-[120px] overflow-hidden">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-0 min-h-[80px] sm:max-h-[120px] overflow-y-auto custom-scrollbar">
                             {/* INPUT column */}
-                            <div className="border-r border-white/[0.06] p-3">
+                            <div className="border-b sm:border-b-0 sm:border-r border-white/[0.06] p-3">
                                 <span className="text-[10px] text-white/20 uppercase tracking-wider font-medium block mb-2">INPUT</span>
                                 <pre className="text-white/50 text-[11px] font-mono leading-5 whitespace-pre">5{'\n'}2 6 1 3 2 5{'\n'}4 4 1 1 2 1</pre>
                             </div>
                             {/* EXPECTED OUTPUT column */}
-                            <div className="border-r border-white/[0.06] p-3">
+                            <div className="border-b sm:border-b-0 sm:border-r border-white/[0.06] p-3">
                                 <span className="text-[10px] text-white/20 uppercase tracking-wider font-medium block mb-2">EXPECTED OUTPUT</span>
                                 <pre className="text-[11px] font-mono leading-5 whitespace-pre"><span className="text-emerald-400">YES</span>{'\n'}<span className="text-emerald-400">YES</span>{'\n'}<span className="text-red-400">NO</span></pre>
                             </div>
@@ -254,7 +261,40 @@ export function AppShowcase() {
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* ============================================================= */}
+            {/* Mobile Bottom Tab Bar */}
+            {/* ============================================================= */}
+            <div className="lg:hidden flex border-t border-white/[0.06] bg-[#1a1a1a] shrink-0">
+                <button
+                    onClick={() => setMobileTab('problem')}
+                    className={cn(
+                        "flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors relative",
+                        mobileTab === 'problem' ? "text-emerald-400" : "text-white/40"
+                    )}
+                >
+                    <FileText className="size-5" />
+                    <span className="text-[10px] font-medium">Problem</span>
+                    {mobileTab === 'problem' && (
+                        <div className="absolute top-0 inset-x-0 h-0.5 bg-emerald-400" />
+                    )}
+                </button>
+                <div className="w-px bg-white/[0.06]" />
+                <button
+                    onClick={() => setMobileTab('code')}
+                    className={cn(
+                        "flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors relative",
+                        mobileTab === 'code' ? "text-emerald-400" : "text-white/40"
+                    )}
+                >
+                    <Code2 className="size-5" />
+                    <span className="text-[10px] font-medium">Code</span>
+                    {mobileTab === 'code' && (
+                        <div className="absolute top-0 inset-x-0 h-0.5 bg-emerald-400" />
+                    )}
+                </button>
+            </div>
+        </div >
     )
 }
 

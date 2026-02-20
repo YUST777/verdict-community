@@ -1,26 +1,10 @@
-# Verdict.run - Docker Compose
-# Shares Judge0 infrastructure with verdict.xyz
-# Runs on port 81 (use Cloudflare Origin Rules to forward port 443 -> 81)
-# Run: docker compose up -d
-
-x-logging: &default-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
-
+version: '3'
 
 services:
-
-  # ===========================================
-  # ===========================================
-  # FRONTEND (Next.js) - DEV MODE
-  # ===========================================
   # ===========================================
   # MIRROR SERVICE (Puppeteer)
   # ===========================================
-  mirror:
+  verdict-mirror:
     build:
       context: ./mirror
       dockerfile: Dockerfile
@@ -37,12 +21,12 @@ services:
           memory: 2G
 
   # ===========================================
-  # FRONTEND (Next.js) - DEV MODE
+  # FRONTEND (Next.js)
   # ===========================================
-  frontend:
+  verdict-frontend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.frontend
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
@@ -50,33 +34,32 @@ services:
         REDIS_PASSWORD: ${REDIS_PASSWORD}
     image: verdict-frontend:latest
     container_name: verdict-frontend
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    ports:
+      - "3002:3000"
     environment:
       - NODE_ENV=production
-      - PORT=3000
-
       - NEXT_PUBLIC_SITE_URL=https://verdict.run
-      - REDIS_HOST=shared-redis-icpc-verdict
+      - REDIS_HOST=verdict-redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-
-      - JUDGE0_URL=http://shared-judge-icpc-verdict-server:2358
-      - MIRROR_SERVICE_URL=http://mirror:3099
+      - JUDGE0_URL=http://icpchue-judge0-server:2358
+      - MIRROR_SERVICE_URL=http://verdict-mirror:3099
+      - SMTP_SERVER=icpchue-mailserver
+      - SMTP_PORT=25
     env_file:
       - .env
-    # depends_on:
-    #   - backend (Removed: backend service deleted)
     networks:
-      - verdict-network
+      - icpchue-network
       - verdict-network
     restart: always
-    logging: *default-logging
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - verdict-mirror
+      - verdict-redis
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 30s
@@ -84,19 +67,20 @@ services:
       retries: 3
       start_period: 40s
 
-
+  verdict-redis:
+    image: redis:7.2-alpine
+    container_name: verdict-redis
+    command: ["redis-server", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD}"]
+    networks:
+      - verdict-network
+    restart: always
 
 # ===========================================
 # NETWORKS
 # ===========================================
 networks:
+  icpchue-network:
+    external: true
+    name: icpchue_icpchue-network
   verdict-network:
     driver: bridge
-  verdict-network:
-    external: true
-    name: verdict_verdict-network
-
-# ===========================================
-# VOLUMES
-# ===========================================
-

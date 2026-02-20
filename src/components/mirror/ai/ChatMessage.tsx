@@ -1,13 +1,21 @@
 'use client';
 
-import { User, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
-import Image from 'next/image';
+import { User } from 'lucide-react';
 import MarkdownRenderer from '../shared/MarkdownRenderer';
+import { Message, MessageContent } from '@/components/ui/message';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+import {
+    ChainOfThought,
+    ChainOfThoughtContent,
+    ChainOfThoughtHeader,
+    ChainOfThoughtStep,
+} from '@/components/ui/chain-of-thought';
 
-interface Message {
+interface ChatMessageData {
     id: string;
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'sources';
     content: string;
     timestamp: Date;
     codeBlock?: {
@@ -15,70 +23,94 @@ interface Message {
         language: string;
         lineReference?: string;
     };
+    sources?: any[];
 }
 
 interface ChatMessageProps {
-    message: Message;
+    message: ChatMessageData;
     isAuthenticated: boolean;
     userEmail?: string;
 }
 
 export default function ChatMessage({ message, isAuthenticated, userEmail }: ChatMessageProps) {
-    const [msgCopied, setMsgCopied] = useState(false);
+    const isUser = message.role === 'user';
+    const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+
+    let thinkContent = null;
+    let mainContent = message.content || '';
+
+    if (!isUser && message.role !== 'sources') {
+        const thinkMatch = mainContent.match(/<think>([\s\S]*?)<\/think>/);
+        if (thinkMatch) {
+            thinkContent = thinkMatch[1].trim();
+            mainContent = mainContent.replace(thinkMatch[0], '').trim();
+        } else if (mainContent.includes('<think>')) {
+            thinkContent = mainContent.replace('<think>', '').trim();
+            mainContent = '';
+        }
+    }
+
+    const isThoughtExpanded = userExpanded !== null ? userExpanded : (!!thinkContent && !mainContent);
+
+    // Split think content into rough steps by double newlines for the ChainOfThought visual
+    const thinkSteps = thinkContent ? thinkContent.split(/\n\n+/).filter(step => step.trim().length > 0) : [];
+
     return (
-        <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
-            {message.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 overflow-hidden relative">
-                    <Image
-                        src="/icons/logo.webp"
-                        alt="AI"
-                        fill
-                        className="object-contain p-1.5"
-                    />
-                </div>
+        <Message from={message.role === 'sources' ? 'assistant' : message.role} className="py-2">
+            {!isUser && message.role !== 'sources' && (
+                <Avatar className="size-8 mt-auto hidden sm:block">
+                    <AvatarImage alt="AI" src="/icons/logo.webp" className="p-1 cursor-pointer hover:opacity-80 transition-opacity" />
+                    <AvatarFallback className="bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30">AI</AvatarFallback>
+                </Avatar>
             )}
-            <div
-                className={`inline-block max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${message.role === 'user'
-                    ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
-                    : 'bg-[#1a1a1a] text-white/95 border border-white/[0.08]'
-                    }`}
-            >
+
+            <MessageContent className={cn(
+                "max-w-[85%] text-left",
+                isUser ? "bg-emerald-600/90 text-white rounded-2xl rounded-tr-sm shadow-md border-0" : "bg-[#1E1E24]/90 text-white/90 border border-white/5 rounded-2xl rounded-tl-sm shadow-md"
+            )}>
                 {message.codeBlock && (
-                    <div className="mb-3 mt-1 rounded-lg bg-black/40 border border-white/10 overflow-hidden">
-                        <div className="px-3 py-2 bg-black/50 border-b border-white/10 flex items-center justify-between">
+                    <div className="mb-3 mt-1 rounded-lg bg-black/60 border border-white/10 overflow-hidden text-left shadow-inner">
+                        <div className="px-3 py-2 bg-[#121212]/80 border-b border-white/5 flex items-center justify-between backdrop-blur-sm">
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] text-white/50 font-mono uppercase tracking-wider">{message.codeBlock.language}</span>
                                 {message.codeBlock.lineReference && (
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] font-mono">
+                                    <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded flex-shrink-0 bg-blue-500/15 border border-blue-500/20 text-blue-300 text-[10px] font-mono">
                                         <span>@</span>
                                         <span>{message.codeBlock.lineReference.replace('@ ', '').replace('@', '')}</span>
                                     </div>
                                 )}
                             </div>
                         </div>
-                        <pre className="px-3 py-2.5 text-xs font-mono text-white/90 overflow-x-auto">
+                        <pre className="px-3 py-2.5 text-xs font-mono text-white/80 overflow-x-auto text-left leading-relaxed">
                             <code>{message.codeBlock.code}</code>
                         </pre>
                     </div>
                 )}
-                <div className="text-sm leading-relaxed text-white/95 break-words" style={{ unicodeBidi: 'plaintext' }}>
-                    <MarkdownRenderer content={message.content} />
-                </div>
-                <p className="text-[10px] text-white/40 font-medium mt-2.5">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-            </div>
-            {message.role === 'user' && (
-                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                    {isAuthenticated && userEmail ? (
-                        <span className="text-[11px] font-bold text-emerald-400">
-                            {userEmail.charAt(0).toUpperCase()}
-                        </span>
-                    ) : (
-                        <User size={13} className="text-emerald-400" strokeWidth={2.5} />
+
+                <div className="text-[13px] sm:text-sm leading-relaxed break-words markdown-body" style={{ unicodeBidi: 'plaintext' }}>
+                    {thinkSteps.length > 0 && (
+                        <ChainOfThought>
+                            <ChainOfThoughtHeader title="Analyzed reasoning process" />
+                            <ChainOfThoughtContent>
+                                {thinkSteps.map((stepContent, idx) => (
+                                    <ChainOfThoughtStep key={idx} status={mainContent ? "completed" : (idx === thinkSteps.length - 1 ? "in-progress" : "completed")}>
+                                        <MarkdownRenderer content={stepContent} />
+                                    </ChainOfThoughtStep>
+                                ))}
+                            </ChainOfThoughtContent>
+                        </ChainOfThought>
                     )}
+                    {mainContent && <MarkdownRenderer content={mainContent} />}
                 </div>
+            </MessageContent>
+
+            {isUser && (
+                <Avatar className="size-8 mt-auto hidden sm:block">
+                    <AvatarFallback className="bg-zinc-800 text-zinc-300 font-bold border border-zinc-700">
+                        {isAuthenticated && userEmail ? userEmail.charAt(0).toUpperCase() : <User size={13} strokeWidth={2.5} />}
+                    </AvatarFallback>
+                </Avatar>
             )}
-        </div>
+        </Message>
     );
 }

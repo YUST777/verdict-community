@@ -35,6 +35,15 @@ export const metadata: Metadata = {
   creator: "Verdict.run",
   publisher: "Verdict.run",
   category: "technology",
+  alternates: {
+    canonical: "https://verdict.run",
+  },
+  metadataBase: new URL("https://verdict.run"),
+  icons: {
+    icon: "/icons/logo.webp",
+    shortcut: "/icons/logo.webp",
+    apple: "/icons/logo.webp",
+  },
   openGraph: {
     title: "Verdict.run — Solve Problems Without Limits",
     description:
@@ -43,19 +52,17 @@ export const metadata: Metadata = {
     siteName: "Verdict.run",
     locale: "en_US",
     type: "website",
+    images: ["/images/metadata.webp"], // Use the requested image
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Verdict.run — Solve Problems Without Limits",
     description:
       "Mirror Codeforces problems instantly. Code, test, and submit — all in one beautiful interface.",
     creator: "@verdictrun",
     site: "@verdictrun",
+    images: ["/images/metadata.webp"], // Use the requested image
   },
-  alternates: {
-    canonical: "https://verdict.run",
-  },
-  metadataBase: new URL("https://verdict.run"),
 };
 
 export default function RootLayout({

@@ -1,80 +1,85 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Settings, Wand2, MessageSquare, Zap, BookOpen, Brain } from 'lucide-react';
-// @ts-ignore - module may not exist in this branch
-import { AILearningPreferences, loadAIPreferences, saveAIPreferences, DEFAULT_PREFERENCES } from '@/lib/ai-personalization';
+import { X } from 'lucide-react';
+
+interface LLMSettings {
+    enabled: boolean;
+    baseURL: string;
+    apiKey: string;
+    model: string;
+    systemPrompt: string;
+}
+
+const DEFAULT_SETTINGS: LLMSettings = {
+    enabled: false,
+    baseURL: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'gpt-4o',
+    systemPrompt: 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.',
+};
 
 interface AIPreferencesModalProps {
     isOpen: boolean;
     onClose: () => void;
     codeforcesRating?: number;
     onPreferencesSaved?: () => void;
+    selectedLevel?: number;
+    onLevelChange?: (level: number) => void;
+    variants?: { level: number; title: string; timeComplexity?: string }[];
 }
 
-export default function AIPreferencesModal({ isOpen, onClose, codeforcesRating, onPreferencesSaved }: AIPreferencesModalProps) {
-    const [preferences, setPreferences] = useState<Partial<AILearningPreferences>>(DEFAULT_PREFERENCES);
-    const [hasChanges, setHasChanges] = useState(false);
+export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved, selectedLevel, onLevelChange, variants }: AIPreferencesModalProps) {
+    const [settings, setSettings] = useState<LLMSettings>(DEFAULT_SETTINGS);
+    const [solutionStyle, setSolutionStyle] = useState<'simple' | 'smart'>('simple');
 
     useEffect(() => {
         if (isOpen) {
-            const loaded = loadAIPreferences();
-            const current = { ...DEFAULT_PREFERENCES, ...loaded };
-            setPreferences(current);
-            setHasChanges(false);
+            const stored = localStorage.getItem('verdict_byok_llm');
+            if (stored) {
+                try {
+                    setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+                } catch (e) {
+                    console.error('Failed to parse LLM settings');
+                }
+            }
+
+            const storedStyle = localStorage.getItem('verdict_solution_style');
+            if (storedStyle === 'smart' || storedStyle === 'simple') {
+                setSolutionStyle(storedStyle);
+            }
         }
     }, [isOpen]);
 
-    const handleSave = async () => {
-        // Save to LocalStorage (fast fallback)
-        saveAIPreferences(preferences);
-
-        // Save to Server (Supabase)
-        try {
-            await fetch('/api/ai/preferences', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(preferences)
-            });
-        } catch (e) {
-            console.error('[AI Preferences] Failed to sync with server:', e);
-        }
-
-        setHasChanges(false);
-        onPreferencesSaved?.(); // Notify parent to reload preferences
+    const handleSave = () => {
+        localStorage.setItem('verdict_byok_llm', JSON.stringify(settings));
+        localStorage.setItem('verdict_solution_style', solutionStyle);
+        window.dispatchEvent(new Event('llm_settings_changed'));
+        onPreferencesSaved?.();
         onClose();
-    };
-
-    const handleChange = <K extends keyof AILearningPreferences>(
-        key: K,
-        value: AILearningPreferences[K]
-    ) => {
-        setPreferences((prev: any) => ({ ...prev, [key]: value }));
-        setHasChanges(true);
     };
 
     if (!isOpen) return null;
 
+    const fillProvider = (baseURL: string, model: string) => {
+        setSettings(prev => ({ ...prev, baseURL, model }));
+    };
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        <div className="fixed inset-0 z-[100] flex justify-end">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
                 onClick={onClose}
             />
 
-            {/* Modal */}
-            <div className="relative w-full max-w-2xl mx-4 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            {/* Drawer */}
+            <div className="relative w-full sm:max-w-lg h-full bg-[#1a1a1a] border-l border-white/10 shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300 flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0f0f10] shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                            <Settings size={18} className="text-emerald-400" strokeWidth={2.5} />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-white">AI Preferences</h2>
-                            <p className="text-xs text-white/50">Customize how the AI responds to you</p>
-                        </div>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+                    <div>
+                        <h2 className="text-xl font-bold text-white">Bring your own LLM</h2>
+                        <p className="text-sm text-white/50 mt-1">Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -85,143 +90,153 @@ export default function AIPreferencesModal({ isOpen, onClose, codeforcesRating, 
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                    <div className="flex items-center gap-3 border-b border-white/10 pb-5">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={settings.enabled}
+                                onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                        <span className="text-base font-semibold text-white">Enable</span>
+                    </div>
 
-
-                    {/* Auto-Detect Intent */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Brain size={16} className="text-emerald-400" strokeWidth={2.5} />
-                                <h3 className="text-sm font-semibold text-white">Auto-Detect Intent</h3>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
+                    {settings.enabled && (
+                        <div className="space-y-4 animate-in fade-in duration-200">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-white">Base URL</label>
                                 <input
-                                    type="checkbox"
-                                    checked={preferences.preferredExplanationFormat === 'mixed'}
-                                    onChange={(e) => {
-                                        if (e.target.checked) {
-                                            handleChange('preferredExplanationFormat', 'mixed');
-                                        }
-                                    }}
-                                    className="sr-only peer"
+                                    type="text"
+                                    value={settings.baseURL}
+                                    onChange={e => setSettings({ ...settings, baseURL: e.target.value })}
+                                    placeholder="OpenAI compatible base URL"
+                                    className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
                                 />
-                                <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                            </label>
-                        </div>
-                        <p className="text-xs text-white/50">
-                            Automatically adjust response length based on your question (recommended)
-                        </p>
-                    </div>
-
-                    {/* Tone Preference */}
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                            <Zap size={16} className="text-emerald-400" strokeWidth={2.5} />
-                            <h3 className="text-sm font-semibold text-white">Communication Tone</h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            {(['friendly', 'professional', 'casual', 'technical'] as const).map((tone) => (
-                                <button
-                                    key={tone}
-                                    onClick={() => handleChange('preferredTone', tone)}
-                                    className={`px-4 py-2.5 rounded-lg border transition-all text-left ${preferences.preferredTone === tone
-                                        ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
-                                        : 'bg-white/5 border-white/10 text-white/70 hover:border-white/20'
-                                        }`}
-                                >
-                                    <div className="text-xs font-medium capitalize">{tone}</div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Learning Style */}
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                            <BookOpen size={16} className="text-emerald-400" strokeWidth={2.5} />
-                            <h3 className="text-sm font-semibold text-white">Learning Style</h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            {(['visual', 'detailed', 'concise', 'interactive'] as const).map((style) => (
-                                <button
-                                    key={style}
-                                    onClick={() => handleChange('learningStyle', style)}
-                                    className={`px-4 py-2.5 rounded-lg border transition-all text-left ${preferences.learningStyle === style
-                                        ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
-                                        : 'bg-white/5 border-white/10 text-white/70 hover:border-white/20'
-                                        }`}
-                                >
-                                    <div className="text-xs font-medium capitalize">{style}</div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Expert Mode */}
-                    {codeforcesRating && codeforcesRating >= 1600 && (
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Wand2 size={16} className="text-emerald-400" strokeWidth={2.5} />
-                                    <h3 className="text-sm font-semibold text-white">Expert Mode</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={() => fillProvider('https://api.openai.com/v1', 'gpt-4o')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenAI</button>
+                                    <button onClick={() => fillProvider('https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-2.5-flash')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">Gemini</button>
+                                    <button onClick={() => fillProvider('https://api.x.ai/v1', 'grok-beta')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">xAI</button>
+                                    <button onClick={() => fillProvider('https://openrouter.ai/api/v1', 'anthropic/claude-3-5-sonnet')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenRouter</button>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={preferences.useExpertMode || false}
-                                        onChange={(e) => handleChange('useExpertMode', e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                                </label>
                             </div>
-                            <p className="text-xs text-white/50">
-                                World Finals level analysis with sensitivity audits (for advanced users)
-                            </p>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-white">API key</label>
+                                <input
+                                    type="password"
+                                    value={settings.apiKey}
+                                    onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
+                                    placeholder="sk-..."
+                                    className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-white">Model</label>
+                                <input
+                                    type="text"
+                                    value={settings.model}
+                                    onChange={e => setSettings({ ...settings, model: e.target.value })}
+                                    placeholder="Model name (e.g., gpt-4o)"
+                                    className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-white">System prompt</label>
+                                <textarea
+                                    value={settings.systemPrompt}
+                                    onChange={e => setSettings({ ...settings, systemPrompt: e.target.value })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white/60 text-sm focus:outline-none min-h-[100px] resize-y"
+                                />
+                            </div>
                         </div>
                     )}
 
-                    {/* Content Preferences */}
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-white">Include in Responses</h3>
-                        <div className="space-y-2">
-                            {[
-                                { key: 'includeComplexityAnalysis' as const, label: 'Complexity Analysis' },
-                                { key: 'includeOptimizationTips' as const, label: 'Optimization Tips' },
-                                { key: 'includeCommonMistakes' as const, label: 'Common Mistakes' },
-                                { key: 'useExamples' as const, label: 'Code Examples' },
-                            ].map(({ key, label }) => (
-                                <label key={key} className="flex items-center gap-3 cursor-pointer group">
-                                    <input
-                                        type="checkbox"
-                                        checked={preferences[key] ?? true}
-                                        onChange={(e) => handleChange(key, e.target.checked)}
-                                        className="w-4 h-4 rounded bg-white/10 border-white/20 text-emerald-500 focus:ring-emerald-500/50 focus:ring-2"
-                                    />
-                                    <span className="text-sm text-white/80 group-hover:text-white transition-colors">
-                                        {label}
-                                    </span>
-                                </label>
-                            ))}
+                    {/* Solution difficulty level */}
+                    {variants && variants.length > 0 && onLevelChange && (
+                        <div className="space-y-3 pt-1">
+                            <div>
+                                <label className="text-sm font-semibold text-white">Solution Difficulty</label>
+                                <p className="text-xs text-white/40 mt-0.5">How much the AI reveals when explaining a solution.</p>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                {variants.map((v) => {
+                                    const sel = selectedLevel === v.level;
+                                    const palette = [
+                                        { active: 'bg-orange-500/10 border-orange-500/30 text-orange-300', dot: 'bg-orange-400' },
+                                        { active: 'bg-blue-500/10 border-blue-500/30 text-blue-300', dot: 'bg-blue-400' },
+                                        { active: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300', dot: 'bg-emerald-400' },
+                                    ];
+                                    const p = palette[(v.level - 1) % 3];
+                                    return (
+                                        <button
+                                            key={v.level}
+                                            onClick={() => onLevelChange(v.level)}
+                                            className={`flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all text-left ${sel
+                                                ? `${p.active}`
+                                                : 'bg-white/[0.03] border-white/[0.08] text-white/50 hover:bg-white/[0.06] hover:text-white/70'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sel ? p.dot : 'bg-white/20'}`} />
+                                                <div>
+                                                    <div className="text-[13px] font-semibold">{v.title}</div>
+                                                    {v.timeComplexity && (
+                                                        <div className="text-[10px] font-mono opacity-50 mt-0.5">{v.timeComplexity}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {sel && (
+                                                <div className="text-[10px] font-semibold opacity-60 uppercase tracking-wide">Active</div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    {/* Solution Style (Simple vs Smart) */}
+                    <div className="space-y-3 pt-4 border-t border-white/10 mt-4">
+                        <div>
+                            <label className="text-sm font-semibold text-white">Solution Style</label>
+                            <p className="text-xs text-white/40 mt-0.5">How the AI approaches writing the code.</p>
+                        </div>
+                        <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
+                            <button
+                                onClick={() => setSolutionStyle('simple')}
+                                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'simple' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                            >
+                                <div className="text-[13px]">Simple Logic</div>
+                                <div className="text-[10px] opacity-60 font-normal">Readable & beginner-friendly</div>
+                            </button>
+                            <button
+                                onClick={() => setSolutionStyle('smart')}
+                                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'smart' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                            >
+                                <div className="text-[13px]">Smart / Optimal</div>
+                                <div className="text-[10px] opacity-60 font-normal">Best time/space complexity</div>
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-white/10 bg-[#0f0f10] shrink-0 flex items-center justify-end gap-3">
+                <div className="px-6 py-4 border-t border-white/10 shrink-0 flex items-center gap-3">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-white/70 hover:text-white transition-colors"
+                        className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors font-medium text-sm"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        disabled={!hasChanges}
-                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-white/10 disabled:text-white/30 text-white rounded-lg transition-colors font-medium"
+                        className="flex-1 py-2.5 bg-white hover:bg-gray-200 text-black rounded-lg transition-colors font-medium text-sm"
                     >
-                        Save Preferences
+                        Save
                     </button>
                 </div>
             </div>

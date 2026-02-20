@@ -1,7 +1,11 @@
+import '@/lib/polyfill';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/simple-rate-limit';
+import * as cheerio from 'cheerio';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for') || 'unknown-ip';
@@ -21,21 +25,30 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Missing contestId or problemId' }, { status: 400 });
     }
 
-    // 1. Try Cache
-    try {
-        const cacheResult = await query(
-            `SELECT data, updated_at FROM mirror_problems WHERE contest_id = $1 AND problem_index = $2`,
-            [contestId, problemId]
-        );
+    const noCache = searchParams.get('noCache') === 'true';
 
-        if (cacheResult.rows.length > 0) {
-            const { data } = cacheResult.rows[0];
-            // Async Log View
-            logView(req, contestId, problemId).catch(e => console.error('Log error', e));
-            return NextResponse.json(data);
+    // 1. Try Cache (skip if noCache or cached data was a bot-protection mock)
+    if (!noCache) {
+        try {
+            const cacheResult = await query(
+                `SELECT data, updated_at FROM mirror_problems WHERE contest_id = $1 AND problem_index = $2`,
+                [contestId, problemId]
+            );
+
+            if (cacheResult.rows.length > 0) {
+                const { data } = cacheResult.rows[0];
+                // Don't serve stale bot-protection mocks from cache
+                const title = (data as any)?.meta?.title || '';
+                if (title.includes('Bot Protection') || title.includes('Unavailable')) {
+                    console.log('[Mirror] Cached mock detected — forcing fresh fetch');
+                } else {
+                    logView(req, contestId, problemId).catch(e => console.error('Log error', e));
+                    return NextResponse.json(data);
+                }
+            }
+        } catch (e) {
+            console.warn('[Mirror] Cache read failed (skipping):', e instanceof Error ? e.message : 'Unknown error');
         }
-    } catch (e) {
-        console.warn('[Mirror] Cache read failed (skipping):', e instanceof Error ? e.message : 'Unknown error');
     }
 
     // Build the correct URL based on type
@@ -62,46 +75,52 @@ export async function GET(req: NextRequest) {
             break;
     }
 
-    // Call the host mirror service (runs puppeteer outside Docker)
+    // Race mirror service vs Wayback — return as soon as EITHER succeeds.
+    // Wayback fetches archived CF pages in ~2s without going through CloudFlare.
+    // Mirror gets a short 10s window in case CF unblocks in future.
     const mirrorServiceUrl = process.env.MIRROR_SERVICE_URL || 'http://localhost:3099';
 
-    try {
-        const response = await fetch(`${mirrorServiceUrl}/fetch?url=${encodeURIComponent(targetUrl)}`, {
-            signal: AbortSignal.timeout(60000)
+    const mirrorPromise: Promise<any> = (async () => {
+        const resp = await fetch(`${mirrorServiceUrl}/fetch?url=${encodeURIComponent(targetUrl)}`, {
+            signal: AbortSignal.timeout(10000)
         });
+        if (!resp.ok) throw new Error(`Mirror HTTP ${resp.status}`);
+        const d = await resp.json();
+        if (d.error) throw new Error(d.error);
+        console.log('[Mirror] Mirror service succeeded');
+        return d;
+    })();
 
-        if (!response.ok) {
-            console.warn('[Mirror] Service failed or timed out. Switching to local fallback...');
-            throw new Error('Service Unavailable');
-        }
+    const waybackPromise: Promise<any> = (async () => {
+        const d = await scrapeDirectly(targetUrl);
+        if (!d) throw new Error('Wayback: all timestamps failed');
+        console.log('[Mirror] Wayback Machine succeeded');
+        return d;
+    })();
 
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
+    // firstSuccess: resolves with the first non-rejected promise
+    const firstSuccess = Promise.any([mirrorPromise, waybackPromise]);
 
-        // Cache & Return
-        await cacheAndLog(req, contestId, problemId, data);
-        return NextResponse.json(data);
-
-    } catch (error) {
-        console.warn(`[Mirror] External service failed (${error instanceof Error ? error.message : 'Unknown'}). Attempting direct scrape...`);
-
-        try {
-            const fallbackData = await scrapeDirectly(targetUrl);
-            if (fallbackData) {
-                await cacheAndLog(req, contestId, problemId, fallbackData);
-                return NextResponse.json(fallbackData);
-            } else {
-                return NextResponse.json({ error: 'Failed to scrape problem directly', detail: 'Parser could not find problem statement' }, { status: 500 });
-            }
-        } catch (fallbackError) {
-            console.error('[Mirror] Direct scrape failed:', fallbackError);
-            return NextResponse.json({
-                error: 'Mirror service and fallback both failed',
-                detail: fallbackError instanceof Error ? fallbackError.message : 'Unknown error'
-            }, { status: 500 });
-        }
+    let data: any = null;
+    try {
+        data = await firstSuccess;
+    } catch {
+        console.error('[Mirror] Both mirror and Wayback failed');
     }
+
+    if (data) {
+        const title = (data?.meta?.title as string) || '';
+        if (!title.includes('Bot Protection') && !title.includes('Unavailable')) {
+            cacheAndLog(req, contestId, problemId, data).catch(() => { }); // async, don't block
+        }
+        return NextResponse.json(data);
+    }
+
+    // Complete fallback — return graceful mock
+    return NextResponse.json(await buildMock(targetUrl));
+
 }
+
 
 // --- Helper Functions ---
 
@@ -122,106 +141,155 @@ async function cacheAndLog(req: NextRequest, contestId: string, problemId: strin
     }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function scrapeDirectly(url: string) {
-    // Strategy 1: Try mirror.codeforces.com
+    // Strategy 1: Fetch from Wayback Machine (archive.org) — bypasses Cloudflare IP blocks
     try {
-        const mirrorUrl = url.replace('codeforces.com', 'mirror.codeforces.com');
-        console.log(`[Mirror] Strategy 1: Scraping ${mirrorUrl}`);
+        console.log('[Mirror] Strategy: Wayback Machine fetch for', url);
+        const data = await fetchViaWayback(url);
+        if (data) return data;
+    } catch (e) {
+        console.warn('[Mirror] Wayback Machine failed:', e instanceof Error ? e.message : 'Unknown');
+    }
+
+    // Strategy 2: mirror.codeforces.com subdomain
+    try {
+        const mirrorUrl = url.replace('https://codeforces.com', 'https://mirror.codeforces.com');
+        console.log('[Mirror] Strategy: mirror subdomain', mirrorUrl);
         const data = await fetchAndParse(mirrorUrl);
-        return data;
-    } catch (e1) {
-        console.warn(`[Mirror] Strategy 1 failed (${e1 instanceof Error ? e1.message : 'Unknown'}).`);
+        if (data) return data;
+    } catch (e) {
+        console.warn('[Mirror] mirror subdomain failed:', e instanceof Error ? e.message : 'Unknown');
     }
 
-    // Strategy 2: Try m.codeforces.com (Mobile Site)
-    try {
-        const mobileUrl = url.replace('https://codeforces.com', 'https://m.codeforces.com').replace('https://mirror.codeforces.com', 'https://m.codeforces.com');
-        console.log(`[Mirror] Strategy 2: Scraping ${mobileUrl}`);
-        const data = await fetchAndParse(mobileUrl);
-        return data;
-    } catch (e2) {
-        console.warn(`[Mirror] Strategy 2 failed (${e2 instanceof Error ? e2.message : 'Unknown'}).`);
-    }
+    return null; // All strategies exhausted
+}
 
-    // Strategy 3: Graceful Mock (Final Resort)
-    console.warn('[Mirror] All strategies failed. Returning graceful mock.');
+async function buildMock(url: string) {
     return {
         meta: {
-            title: 'Problem Content Unavailable',
+            title: 'Problem Unavailable (Bot Protection)',
             timeLimitMs: 2000,
             memoryLimitMB: 256,
             sourceUrl: url
         },
-        story: '<div class="alert alert-warning"><strong>Connection Error:</strong> We could not retrieve the problem statement from Codeforces at this time (likely due to bot protection).<br/><br/>You can still use the editor and test runner if you copy the test cases manually.</div>',
-        inputSpec: 'See Codeforces link',
-        outputSpec: 'See Codeforces link',
+        story: `
+            <div class="alert alert-warning" style="background: rgba(255, 166, 0, 0.1); border: 1px solid rgba(255, 166, 0, 0.3); padding: 16px; border-radius: 8px; color: #ffca28; margin-bottom: 24px;">
+                <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
+                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    Connection Error
+                </h3>
+                <p>We could not retrieve the problem statement from Codeforces at this time.</p>
+                <p style="margin-bottom: 0;"><strong>You can still solve this problem:</strong></p>
+                <ol style="margin-top: 8px; padding-left: 20px;">
+                    <li>Open the problem on Codeforces manually.</li>
+                    <li>Copy test cases from the original problem.</li>
+                    <li>Write your solution and test it here.</li>
+                </ol>
+            </div>
+            <p>Please try refreshing the page in a few minutes.</p>
+        `,
+        inputSpec: '<p>Please refer to the original problem statement on Codeforces for input specifications.</p>',
+        outputSpec: '<p>Please refer to the original problem statement on Codeforces for output specifications.</p>',
         testCases: [],
-        note: 'Scraping failed. Click "View on Codeforces" to see original problem.'
+        note: `Codeforces URL: <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #10B981; text-decoration: underline;">${url}</a>`
     };
 }
+
+
+async function fetchViaWayback(url: string) {
+    // Use a fixed timestamp that reliably works — skip CDX which can be slow
+    // The Wayback Machine serves archived CF pages without Cloudflare interference
+    const knownTimestamps = ['20260101120000', '20251201120000', '20251001120000', '20250601120000'];
+
+    for (const timestamp of knownTimestamps) {
+        try {
+            const waybackUrl = `https://web.archive.org/web/${timestamp}/${url}`;
+            console.log('[Mirror] Fetching archived snapshot:', waybackUrl);
+            const data = await fetchAndParse(waybackUrl);
+            if (data) return data;
+        } catch (e) {
+            console.warn('[Mirror] Wayback timestamp failed:', e instanceof Error ? e.message : 'Unknown');
+        }
+    }
+
+    return null;
+}
+
 
 async function fetchAndParse(url: string) {
     const res = await fetch(url, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Referer': 'https://codeforces.com/'
+            'Accept-Language': 'en-US,en;q=0.9'
         },
-        redirect: 'follow'
+        next: { revalidate: 0 } // No Next.js cache
     });
 
-    if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+    // Check for explicit Cloudflare headers or content
     const html = await res.text();
-    if (html.includes('Redirecting to the completion of the challenge') || html.includes('Just a moment...')) {
-        throw new Error('Cloudflare Challenge Detected');
+    if (html.includes('Just a moment...') || html.includes('cf-browser-verification') || html.includes('cf-mitigated')) {
+        throw new Error('Cloudflare Blocked');
     }
 
-    // Regex Extractors
-    const titleMatch = html.match(/<div class="title">([^<]+)<\/div>/);
-    const title = titleMatch ? titleMatch[1].trim() : 'Unknown Problem';
+    const $ = cheerio.load(html);
+    const statement = $('.problem-statement');
 
-    const timeMatch = html.match(/time limit per test<\/div>([^<]+)<\/div>/);
-    const memMatch = html.match(/memory limit per test<\/div>([^<]+)<\/div>/);
-    const timeText = timeMatch ? timeMatch[1].trim() : '2 seconds';
-    const memText = memMatch ? memMatch[1].trim() : '256 megabytes';
-    const timeLimitMs = (parseFloat(timeText) || 2) * 1000;
-    const memoryLimitMB = parseInt(memText) || 256;
+    if (!statement.length) throw new Error('No problem statement found');
 
-    const headerEnd = html.indexOf('</div>', html.indexOf('<div class="header">') + 20) + 6;
-    const inputStart = html.indexOf('<div class="input-specification">');
+    // Sanitization
+    $('.MathJax_Preview').remove();
+    $('.MathJax').remove();
+    $('.MathJax_Display').remove();
+    $('script').remove(); // Cheerio removes script tags easily
+
+    // Images
+    $('img').each((i, el) => {
+        const src = $(el).attr('src');
+        if (src && !src.startsWith('http')) {
+            $(el).attr('src', `https://codeforces.com${src.startsWith('/') ? '' : '/'}${src}`);
+        }
+        $(el).css('max-width', '100%');
+    });
+
+    const header = statement.find('.header');
+    const title = header.find('.title').text().trim() || 'Unknown';
+    const timeLimit = header.find('.time-limit').contents().last().text().trim();
+    const memoryLimit = header.find('.memory-limit').contents().last().text().trim();
+
+    const timeLimitMs = (parseFloat(timeLimit) || 2) * 1000;
+    const memoryLimitMB = parseInt(memoryLimit) || 256;
+
+    // Story
     let story = '';
-    if (headerEnd > 6 && inputStart > headerEnd) {
-        story = html.substring(headerEnd, inputStart).trim();
-    } else {
-        const statementMatch = html.match(/<div class="problem-statement">([\s\S]*?)<div class="input-specification">/);
-        if (statementMatch) story = statementMatch[1];
+    let curr = header.next();
+    while (curr.length && !curr.hasClass('input-specification') && !curr.hasClass('output-specification')) {
+        story += $.html(curr);
+        curr = curr.next();
     }
 
-    const inputMatch = html.match(/<div class="input-specification">([\s\S]*?)<\/div>\s*<div class="output-specification">/);
-    const outputMatch = html.match(/<div class="output-specification">([\s\S]*?)<\/div>\s*<div class="sample-tests">/);
-    const inputSpec = inputMatch ? inputMatch[1].replace(/<div class="section-title">Input<\/div>/, '').trim() : '';
-    const outputSpec = outputMatch ? outputMatch[1].replace(/<div class="section-title">Output<\/div>/, '').trim() : '';
+    const extract = (sel: string) => {
+        const el = statement.find(sel).clone();
+        el.find('.section-title').remove();
+        return el.html()?.trim() || '';
+    };
 
-    const testCases: { input: string; output: string }[] = [];
-    const sampleRegex = /<div class="input">\s*<div class="title">Input<\/div>\s*<pre>([\s\S]*?)<\/pre>\s*<\/div>\s*<div class="output">\s*<div class="title">Output<\/div>\s*<pre>([\s\S]*?)<\/pre>\s*<\/div>/g;
-    let match;
-    while ((match = sampleRegex.exec(html)) !== null) {
-        testCases.push({
-            input: match[1].replace(/<br\s*\/?>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim(),
-            output: match[2].replace(/<br\s*\/?>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim()
-        });
-    }
+    // Test Cases
+    const testCases: { id: number; input: string; output: string }[] = [];
+    const inputs = statement.find('.sample-test .input pre');
+    const outputs = statement.find('.sample-test .output pre');
 
-    const cleanStory = story
-        .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gm, "")
-        .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gm, "")
-        .replace(/&nbsp;/g, ' ');
+    inputs.each((i, el) => {
+        // preserve newlines in pre? Cheerio .text() might flatten.
+        // Use html and replace br?
+        const clean = (e: any) => $(e).html()?.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '') || '';
+        const input = clean(el);
+        const output = clean(outputs.eq(i));
+        testCases.push({ id: i + 1, input: input.trim(), output: output.trim() });
+    });
 
     return {
         meta: {
@@ -230,11 +298,11 @@ async function fetchAndParse(url: string) {
             memoryLimitMB,
             sourceUrl: url
         },
-        story: cleanStory,
-        inputSpec,
-        outputSpec,
-        testCases,
-        note: ''
+        story,
+        inputSpec: extract('.input-specification'),
+        outputSpec: extract('.output-specification'),
+        note: extract('.note'),
+        testCases
     };
 }
 

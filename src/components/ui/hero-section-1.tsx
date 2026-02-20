@@ -188,7 +188,7 @@ export function HeroSection() {
                                 },
                                 ...transitionVariants,
                             }}>
-                            <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
+                            <div className="relative mt-8 px-2 sm:mt-12 md:mt-20">
                                 <div
                                     aria-hidden
                                     className="bg-gradient-to-b to-background absolute inset-0 z-10 from-transparent from-35%"
@@ -196,16 +196,16 @@ export function HeroSection() {
                                 <div className="relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 shadow-2xl shadow-black/40 ring-1 ring-white/[0.05] backdrop-blur-sm">
                                     <AppShowcase />
                                 </div>
-                                <div className="relative z-20 mx-auto mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                                    <a href="/contest/1/problem/A">
-                                        <GradientButton width="170px" height="44px">
-                                            <Play size={14} className="fill-current" />
+                                <div className="relative z-20 mx-auto mt-8 flex flex-row w-full items-center justify-center gap-2 sm:gap-4 px-2 sm:w-auto sm:px-0">
+                                    <a href="/contest/1/problem/A" className="w-1/2 sm:w-auto">
+                                        <GradientButton width="100%" height="44px" className="sm:min-w-[170px] [&_.label]:text-[11px] sm:[&_.label]:text-sm">
+                                            <Play size={14} className="fill-current shrink-0 hidden sm:block" />
                                             Try it Live
                                         </GradientButton>
                                     </a>
-                                    <a href="https://github.com/YUST777/verdict-community" target="_blank" rel="noopener noreferrer">
-                                        <GradientButton width="210px" height="44px">
-                                            <ArrowRight size={14} />
+                                    <a href="https://github.com/YUST777/verdict-community" target="_blank" rel="noopener noreferrer" className="w-1/2 sm:w-auto">
+                                        <GradientButton width="100%" height="44px" className="sm:min-w-[210px] [&_.label]:text-[11px] sm:[&_.label]:text-sm">
+                                            <ArrowRight size={14} className="shrink-0 hidden sm:block" />
                                             Download Extension
                                         </GradientButton>
                                     </a>
@@ -250,7 +250,7 @@ const HeroHeader = () => {
     const playStarSound = () => {
         const audio = new Audio('/images/star.mp3')
         audio.volume = 0.5
-        audio.play().catch(() => {})
+        audio.play().catch(() => { })
     }
 
     return (

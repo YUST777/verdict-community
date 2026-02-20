@@ -1,3 +1,4 @@
+import React from 'react';
 import { CFProblemData, Submission, AnalyticsStats } from '../shared/types';
 import { CFProblemDescription } from './CFProblemDescription';
 import SubmissionsList from '../SubmissionsList';
@@ -6,7 +7,7 @@ import Whiteboard from '../Whiteboard';
 import ProblemTabs from './ProblemTabs';
 import HandleInputSection from '../HandleInputSection';
 import AIAgentPanel from '../ai/AIAgentPanel';
-// @ts-ignore
+
 import { useAIAuth } from '@/lib/hooks/useAIAuth';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -87,10 +88,12 @@ export default function ProblemLeftPanel({
     return (
         <div
             ref={leftPanelRef}
-            className={`problem-panel flex flex-col bg-[#121212] ${mobileView === 'code' ? 'hidden md:flex' : 'flex'} w-full md:w-auto`}
+            className={`problem-panel flex flex-col bg-[#121212] ${mobileView === 'code' ? 'hidden md:flex md:w-0 md:flex-none' : 'flex w-full md:w-[var(--panel-width)] md:flex-none'} min-w-0 h-full overflow-hidden`}
+            data-lenis-prevent="true"
             style={{
                 '--panel-width': `${lastWidth.current}%`,
-                willChange: 'width'
+                willChange: 'width, flex-basis',
+                WebkitOverflowScrolling: 'touch'
             } as React.CSSProperties}
         >
             <ProblemTabs
@@ -98,22 +101,28 @@ export default function ProblemLeftPanel({
                 setActiveTab={(tab) => {
                     setActiveTab(tab);
                     // UX: Automatically switch the editor to AI mode when opening the AI Tutor tab
-                    if (tab === 'solution' && otherProps.onSwitchToAiTab) {
-                        otherProps.onSwitchToAiTab();
+                    if (tab === 'solution' && (otherProps as any).onSwitchToAiTab) {
+                        (otherProps as any).onSwitchToAiTab();
                     }
                 }}
                 isWhiteboardExpanded={isWhiteboardExpanded}
                 setIsWhiteboardExpanded={setIsWhiteboardExpanded}
             />
 
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col relative">
                 {activeTab === 'description' && (
-                    <div className="h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                    <div
+                        className="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar"
+                        data-lenis-prevent="true"
+                    >
                         {cfData && <CFProblemDescription data={cfData} />}
                     </div>
                 )}
                 {activeTab === 'submissions' && (
-                    <div className="h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                    <div
+                        className="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar"
+                        data-lenis-prevent="true"
+                    >
                         {!handleLoading && !cfHandle ? (
                             <div className="flex items-center justify-center py-12">
                                 <HandleInputSection onSave={onHandleSave} compact />
@@ -130,7 +139,10 @@ export default function ProblemLeftPanel({
                     </div>
                 )}
                 {activeTab === 'analytics' && (
-                    <div className="h-full overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-white/10">
+                    <div
+                        className="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar"
+                        data-lenis-prevent="true"
+                    >
                         <AnalyticsView
                             stats={stats}
                             cfStats={cfStats}
@@ -141,8 +153,12 @@ export default function ProblemLeftPanel({
                     </div>
                 )}
                 {/* Keep AIAgentPanel mounted but hidden when inactive to allow auto-start and ghost typing */}
-                <div className={activeTab === 'solution' ? 'h-full' : 'hidden'}>
+                <div
+                    className={`absolute inset-0 ${activeTab === 'solution' ? 'flex flex-col' : 'hidden'}`}
+                    data-lenis-prevent="true"
+                >
                     <AIAgentPanel
+                        isActive={activeTab === 'solution'}
                         onSolveProblem={onSolveProblem}
                         onAiCodeUpdate={otherProps.onAiCodeUpdate}
                         onSwitchToAiTab={otherProps.onSwitchToAiTab}

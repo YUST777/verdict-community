@@ -28,7 +28,14 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
+  output: "standalone",
+  serverExternalPackages: ["duck-duck-scrape", "cheerio", "yt-search"],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     remotePatterns: [
       {

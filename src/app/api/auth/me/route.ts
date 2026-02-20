@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         if (!user) {
             return NextResponse.json(
                 { authenticated: false, user: null },
-                { status: 401 }
+                { status: 200 }
             );
         }
 
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         if (userResult.rows.length === 0) {
             return NextResponse.json(
                 { authenticated: false, user: null },
-                { status: 401 }
+                { status: 200 }
             );
         }
 

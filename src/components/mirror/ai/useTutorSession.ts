@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { useLLM } from '@/lib/useLLM';
 
 interface Concept {
     title: string;
@@ -44,27 +45,39 @@ export function useTutorSession({
     const [mainSteps, setMainSteps] = useState<TutorStep[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
     const tutorActiveRef = useRef(false);
+    const { settings } = useLLM();
 
-    // Reusable playback function
     const playSequence = useCallback(async (steps: TutorStep[], fullSolution: string) => {
         let currentRevealedLength = 0;
+        let accumulatedExplain = '';
+        const msgId = `${Date.now()}-${Math.random()}`;
 
         // Initialize code
         if (onAiCodeUpdate) onAiCodeUpdate(`// Switching to Level...`);
         await new Promise(r => setTimeout(r, 500));
         if (onAiCodeUpdate) onAiCodeUpdate('');
 
+        // Pre-create the single message if there are explain steps
+        const hasExplains = steps.some(s => s.type === 'explain');
+        if (hasExplains) {
+            addMessage({
+                id: msgId,
+                role: 'assistant',
+                content: '<think>\nInitializing step-by-step playback...\n</think>',
+                timestamp: new Date()
+            });
+        }
+
         // Execute steps sequentially
         for (const step of steps) {
             if (!tutorActiveRef.current) break;
 
             if (step.type === 'explain' && step.text) {
-                addMessage({
-                    id: `${Date.now()}-${Math.random()}`,
-                    role: 'assistant',
-                    content: step.text,
-                    timestamp: new Date()
-                });
+                accumulatedExplain += (accumulatedExplain ? '\n\n' : '') + step.text;
+                // Update the single message with the accumulated thought process
+                updateMessage(msgId, `<think>\n${accumulatedExplain}\n</think>\n\nTyping code...`);
+                // Wait briefly for reading
+                await new Promise(r => setTimeout(r, 800));
             } else if (step.type === 'type' && step.code) {
                 if (onAiCodeUpdate) {
                     // Reveal strategy: animate from current length to target length
@@ -88,7 +101,12 @@ export function useTutorSession({
         if (onAiCodeUpdate && fullSolution && tutorActiveRef.current) {
             onAiCodeUpdate(fullSolution);
         }
-    }, [onAiCodeUpdate, addMessage]);
+
+        // Finalize the message text
+        if (hasExplains && tutorActiveRef.current) {
+            updateMessage(msgId, `<think>\n${accumulatedExplain}\n</think>\n\nFinished typing solution.`);
+        }
+    }, [onAiCodeUpdate, addMessage, updateMessage]);
 
     const startTutor = useCallback(async () => {
         // Prevent multiple simultaneous calls
@@ -96,7 +114,7 @@ export function useTutorSession({
             console.log('[Tutor] Already active, ignoring call');
             return;
         }
-        
+
         if (isLoading) {
             console.log('[Tutor] Already loading, ignoring call');
             return;
@@ -109,6 +127,16 @@ export function useTutorSession({
                 id: Date.now().toString(),
                 role: 'assistant',
                 content: 'Unable to start tutor: No test cases available for this problem. Test cases are required to verify solutions.',
+                timestamp: new Date()
+            });
+            return;
+        }
+
+        if (!settings.enabled || !settings.apiKey) {
+            addMessage({
+                id: Date.now().toString(),
+                role: 'assistant',
+                content: 'Please configure Bring Your Own LLM settings first by clicking the configuration button.',
                 timestamp: new Date()
             });
             return;
@@ -150,20 +178,43 @@ export function useTutorSession({
         }
 
         try {
-            // 2. Call API
-            const response = await fetch('/api/ai/tutor/solve', {
+            // 2. Call API directly to BYOK LLM
+            const systemTutorPrompt = `You are an expert competitive programming tutor.
+You MUST respond with ONLY valid JSON and no markdown wrapping.
+The JSON must have the following structure:
+{
+  "success": true,
+  "verdict": "ACCEPTED",
+  "concepts": [ { "title": "Example Concept", "url": "#", "type": "article" } ],
+  "variants": [
+      {
+          "level": 2,
+          "title": "Optimal",
+          "timeComplexity": "O(N)",
+          "comment": "Optimal approach",
+          "code": "full code string"
+      }
+  ],
+  "steps": [
+      { "type": "explain", "text": "let's start..." },
+      { "type": "type", "code": "full code string" }
+  ],
+  "solution": "full code string"
+}`;
+
+            const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\/+/g, "$1"), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getHeaders()
+                    'Authorization': `Bearer ${settings.apiKey}`
                 },
                 body: JSON.stringify({
-                    contestId: cId,
-                    problemId: pId,
-                    prompt: "Solve this problem",
-                    problemDescription: problemDescription || '',
-                    testCases: testCases,
-                    language: language
+                    model: settings.model,
+                    response_format: { type: "json_object" },
+                    messages: [
+                        { role: 'system', content: systemTutorPrompt },
+                        { role: 'user', content: `Problem Description:\n${problemDescription}\n\nLanguage: ${language}\n\nProvide the solution as JSON. The full code string must be syntactically correct and run successfully. Write it natively in ${language}. Use the exact response format JSON requested.` }
+                    ]
                 })
             });
 
@@ -179,7 +230,10 @@ export function useTutorSession({
                 throw new Error(`Failed to start tutor session (${response.status}): ${errorDetails}`);
             }
 
-            const data = await response.json() as { success?: boolean; error?: string; verdict?: string; concepts?: unknown[]; variants?: unknown[]; steps?: unknown[]; solution?: string };
+            const chatObj = await response.json();
+            const contentText = chatObj.choices?.[0]?.message?.content || "{}";
+            const data = JSON.parse(contentText) as { success?: boolean; error?: string; verdict?: string; concepts?: unknown[]; variants?: unknown[]; steps?: unknown[]; solution?: string };
+            data.success = true;
 
             if (!data.success) {
                 updateMessage(thinkingMsgId, `I encountered an error: ${data.error || 'Unknown error'}`);
@@ -189,13 +243,66 @@ export function useTutorSession({
                 return;
             }
 
+            // 3. Test the generated solution with internal Judge0 endpoint
+            let judgePassed = true;
+            let judgeVerdict = data.verdict || 'ACCEPTED';
+            let judgeErrorDetails = '';
+
+            if (data.solution) {
+                try {
+                    updateMessage(thinkingMsgId, `Testing generated solution against ${testCases.length} constraints using Judge0...`);
+
+                    const judgeResponse = await fetch('/api/judge/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sourceCode: data.solution,
+                            language: language,
+                            testCases: testCases.map((tc: any) => ({
+                                input: tc.input,
+                                output: tc.output || tc.expectedOutput || ''
+                            })),
+                            timeLimit: 2000,
+                            memoryLimit: 256
+                        })
+                    });
+
+                    if (judgeResponse.ok) {
+                        const judgeData = await judgeResponse.json();
+                        judgePassed = judgeData.passed;
+                        judgeVerdict = judgeData.verdict;
+                        if (!judgePassed) {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const failedCases = judgeData.results?.filter((r: any) => !r.passed) || [];
+                            if (failedCases.length > 0) {
+                                judgeErrorDetails = `\nFailed Case ${failedCases[0].testCase}: ${failedCases[0].verdict}`;
+                            } else {
+                                judgeErrorDetails = '\nFailed on provided test cases.';
+                            }
+                        }
+                    } else {
+                        judgePassed = false;
+                        judgeVerdict = 'JUDGE_ERROR';
+                        judgeErrorDetails = '\nUnable to execute against Judge0 api.';
+                    }
+                } catch (err) {
+                    console.error('[Tutor Judge Error]', err);
+                    judgePassed = false;
+                    judgeVerdict = 'JUDGE_CRASH';
+                }
+            }
+
             // Save state
             if (data.concepts) setConcepts(data.concepts as any);
             if (data.variants) setVariants(data.variants as any);
             if (data.steps) setMainSteps(data.steps as any);
 
-            // 3. Success! Start Ghost Typing Playback (Default Level 2)
-            updateMessage(thinkingMsgId, `Solution Verified (Verdict: **${data.verdict || 'ACCEPTED'}**).`);
+            // 4. Success or Failure Display
+            if (judgePassed) {
+                updateMessage(thinkingMsgId, `Solution Verified by Judge0 (Verdict: **${judgeVerdict}**). Starting playback...`);
+            } else {
+                updateMessage(thinkingMsgId, `Warning: AI Solution Verification Failed by Judge0 (Verdict: **${judgeVerdict}**).${judgeErrorDetails}\nI'll show you the code anyway so we can fix it together.`);
+            }
 
             // Play the solution with steps
             if (data.steps && data.solution) {

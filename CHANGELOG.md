@@ -4,6 +4,15 @@ All notable changes to Verdict.run will be documented in this file.
 
 ---
 
+## [2.0.1] - 2026-02-20
+
+### 🤖 AI Tutor & UI/UX Improvements
+
+- **Fixed AI Chat UI** — Improved the AI thought process component display to use a new sleek, collapsible `ChainOfThought` UI.
+- **Fixed Tutor Chat Spam** — Resolved an issue where AI Tutor would send 15+ messages in a row during explanations. Now updates properly in a single expanding message.
+
+---
+
 ## [1.0.1] - 2026-01-22
 
 ### 🏗️ Major Refactoring

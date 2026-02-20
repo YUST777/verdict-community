@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Minimize2, ExternalLink, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-// @ts-expect-error - excalidraw types may not be installed
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ExcalidrawImperativeAPI = any;
 
 // Dynamically import Excalidraw to avoid SSR issues
 const Excalidraw = dynamic(
-    // @ts-expect-error - ExcalidrawWrapper may not exist in this branch
-    () => import('@/app/components/ExcalidrawWrapper'),
+    () => import('@/components/ExcalidrawWrapper'),
     {
         ssr: false,
         loading: () => (
@@ -50,12 +49,13 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
             // Try to migrate legacy data
             const legacy = localStorage.getItem(legacyKey);
             if (legacy) {
-
                 localStorage.setItem(storageKey, legacy);
                 return JSON.parse(legacy);
             }
         } catch (e) {
             console.error('Failed to load whiteboard data:', e);
+            // If malformed data, clear it to prevent infinite crash loop
+            localStorage.removeItem(storageKey);
         }
         return null;
     }, [storageKey, legacyKey]);
@@ -146,23 +146,23 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
                     {/* Excalidraw Container */}
                     <div className="flex-1 min-h-0">
                         {(Excalidraw as any) && (
-                        <Excalidraw
-                            {...({
-                            excalidrawAPI: (api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api),
-                            initialData: savedData,
-                            onChange: handleChange,
-                            theme: "dark",
-                            UIOptions: {
-                                canvasActions: {
-                                    saveAsImage: true,
-                                    loadScene: false,
-                                    export: false,
-                                    clearCanvas: false,
-                                },
-                            },
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            } as any)}
-                        />
+                            <Excalidraw
+                                {...({
+                                    excalidrawAPI: (api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api),
+                                    initialData: savedData,
+                                    onChange: handleChange,
+                                    theme: "dark",
+                                    UIOptions: {
+                                        canvasActions: {
+                                            saveAsImage: true,
+                                            loadScene: false,
+                                            export: false,
+                                            clearCanvas: false,
+                                        },
+                                    },
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                } as any)}
+                            />
                         )}
                     </div>
                 </>
