@@ -75,8 +75,8 @@ export async function GET(req: NextRequest) {
             { expiresIn: JWT_EXPIRES_IN }
         );
 
-        // Redirect to return URL or dashboard
-        let redirectPath = '/dashboard';
+        // Redirect to return URL or problemsets
+        let redirectPath = '/problemsets';
 
         if (returnUrl) {
             try {

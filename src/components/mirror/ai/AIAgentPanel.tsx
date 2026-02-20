@@ -226,7 +226,7 @@ export default function AIAgentPanel({
     }, []);
 
     // Tutor hook
-    const { isTutorActive, isLoading: tutorLoading, concepts, startTutor, variants, selectedLevel, changeLevel } = useTutorSession({
+    const { isTutorActive, isLoading: tutorLoading, concepts, startTutor, stopTutor, variants, selectedLevel, changeLevel } = useTutorSession({
         problemId,
         language,
         problemDescription,
@@ -353,6 +353,20 @@ export default function AIAgentPanel({
     // The handleStartTutor function is now managed by the useTutorSession hook.
     // Call startTutor() from the hook where this function was previously invoked.
 
+    const chatAbortControllerRef = useRef<AbortController | null>(null);
+
+    const stopGeneration = useCallback(() => {
+        if (tutorLoading || isTutorActive) {
+            stopTutor();
+        }
+        if (chatAbortControllerRef.current) {
+            chatAbortControllerRef.current.abort();
+            chatAbortControllerRef.current = null;
+        }
+        setIsLoadingMessage(false);
+        setAiStatus('Idle');
+    }, [tutorLoading, isTutorActive, stopTutor]);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -363,7 +377,6 @@ export default function AIAgentPanel({
 
         // Detect "teach me" to auto-trigger tutor
         if (promptToSend.toLowerCase().includes('teach me') && !hasUsedTutor && (onSolveProblem || onAiCodeUpdate)) {
-            handleStartTutor();
             // Still show the user message in chat
             const userMsg: Message = {
                 id: Date.now().toString(),
@@ -373,6 +386,9 @@ export default function AIAgentPanel({
             };
             setMessages(prev => [...prev, userMsg]);
             if (!overridePrompt) setInput('');
+
+            // Start tutor after adding user message so it appears chronologically correct
+            handleStartTutor();
             return;
         }
 
@@ -484,11 +500,46 @@ export default function AIAgentPanel({
                             required: ['query']
                         }
                     }
+                },
+                {
+                    type: 'function',
+                    function: {
+                        name: 'run_code',
+                        description: `Executes code in an isolated sandbox and returns stdout/stderr. Use this to verify algorithms, test edge cases, or do complex computation before answering the user. Ensure the code is written in the user's selected language: ${language}. DO NOT write interactive console input logic as stdin is empty.`,
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                code: {
+                                    type: 'string',
+                                    description: 'The source code string to execute.'
+                                }
+                            },
+                            required: ['code']
+                        }
+                    }
+                },
+                {
+                    type: 'function',
+                    function: {
+                        name: 'lookup_solution',
+                        description: `Looks up a VERIFIED ACCEPTED solution for a Codeforces problem from the archives. Use this when you are stuck or want to verify your approach against a known-correct solution. The current problem ID is: ${problemId || 'unknown'}.`,
+                        parameters: {
+                            type: 'object',
+                            properties: {},
+                            required: []
+                        }
+                    }
                 }
             ];
 
             let attempt = 0;
             let finalAiResponse = '';
+
+            if (chatAbortControllerRef.current) {
+                chatAbortControllerRef.current.abort();
+            }
+            chatAbortControllerRef.current = new AbortController();
+            const signal = chatAbortControllerRef.current.signal;
 
             while (attempt < 3) {
                 const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\/+/g, "$1"), {
@@ -502,10 +553,14 @@ export default function AIAgentPanel({
                         messages: currentMessages,
                         tools: tools,
                         tool_choice: 'auto'
-                    })
+                    }),
+                    signal
                 });
 
                 if (!response.ok) {
+                    if (response.status === 429) {
+                        throw new Error('You have exceeded your API rate limit or quota. Please check your AI provider billing details.');
+                    }
                     throw new Error('Failed to get AI response');
                 }
 
@@ -528,7 +583,10 @@ export default function AIAgentPanel({
 
                 if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
                     currentMessages.push(responseMessage);
-                    setAiStatus('Searching the web...');
+
+                    const isRunningCode = responseMessage.tool_calls.some((tc: any) => tc.function.name === 'run_code');
+                    const isLookingUp = responseMessage.tool_calls.some((tc: any) => tc.function.name === 'lookup_solution');
+                    setAiStatus(isRunningCode ? 'Evaluating code snippet...' : isLookingUp ? 'Looking up reference solution...' : 'Searching the web...');
 
                     const promises = responseMessage.tool_calls.map(async (toolCall: any) => {
                         if (toolCall.function.name === 'search_web') {
@@ -562,6 +620,60 @@ export default function AIAgentPanel({
                                     tool_call_id: toolCall.id,
                                     role: 'tool',
                                     name: 'search_web',
+                                    content: JSON.stringify({ error: e.message })
+                                };
+                            }
+                        } else if (toolCall.function.name === 'run_code') {
+                            try {
+                                const args = JSON.parse(toolCall.function.arguments);
+                                const runRes = await fetch('/api/judge/run', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ code: args.code, language: language })
+                                });
+                                const runData = await runRes.json();
+                                return {
+                                    tool_call_id: toolCall.id,
+                                    role: 'tool',
+                                    name: 'run_code',
+                                    content: JSON.stringify(runData)
+                                };
+                            } catch (e: any) {
+                                return {
+                                    tool_call_id: toolCall.id,
+                                    role: 'tool',
+                                    name: 'run_code',
+                                    content: JSON.stringify({ error: e.message })
+                                };
+                            }
+                        } else if (toolCall.function.name === 'lookup_solution') {
+                            try {
+                                if (!problemId) {
+                                    return {
+                                        tool_call_id: toolCall.id,
+                                        role: 'tool',
+                                        name: 'lookup_solution',
+                                        content: JSON.stringify({ error: 'No problem is currently loaded.' })
+                                    };
+                                }
+                                const [contestIdStr, pIndex] = problemId.split('-');
+                                const solRes = await fetch('/api/solutions/fetch', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ contestId: contestIdStr, problemIndex: pIndex, language })
+                                });
+                                const solData = await solRes.json();
+                                return {
+                                    tool_call_id: toolCall.id,
+                                    role: 'tool',
+                                    name: 'lookup_solution',
+                                    content: JSON.stringify(solData)
+                                };
+                            } catch (e: any) {
+                                return {
+                                    tool_call_id: toolCall.id,
+                                    role: 'tool',
+                                    name: 'lookup_solution',
                                     content: JSON.stringify({ error: e.message })
                                 };
                             }
@@ -753,17 +865,18 @@ export default function AIAgentPanel({
                     )}
 
                     {/* Chat input + action buttons */}
-                    <div className={`transition-opacity duration-200 ${(isLoadingMessage || !settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+                    <div className={`transition-opacity duration-200 ${(!settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
                         <PromptInputBox
                             value={input}
                             onChange={setInput}
-                            isLoading={isLoadingMessage}
+                            isLoading={isLoadingMessage || tutorLoading}
                             placeholder={
                                 !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
                                     : selectedCode && selectedLineReference ? 'Ask about the selected code...'
                                         : 'Ask anything...'
                             }
                             onSend={(msg) => handleSendMessage(msg)}
+                            onStop={stopGeneration}
                             onOpenResources={() => setIsResourcesOpen(true)}
                             onTeachMe={() => handleSendMessage('Teach me this problem')}
                             isTutorLoading={tutorLoading}
@@ -927,12 +1040,32 @@ function AIContextUsageTracker({ messages, modelName, problemDescription, userCo
         let maxTokens = 32000;
         if (modelName) {
             const m = modelName.toLowerCase();
-            if (m.includes('claude-3-5') || m.includes('claude-3')) maxTokens = 200000;
-            else if (m.includes('gpt-4') || m.includes('gpt-4o')) maxTokens = 128000;
-            else if (m.includes('llama-3.1') || m.includes('llama-3.2')) maxTokens = 128000;
-            else if (m.includes('llama')) maxTokens = 8192;
-            else if (m.includes('gemini-1.5')) maxTokens = 1000000;
+            // Google
+            if (m.includes('gemini-1.5')) maxTokens = 1000000;
+            else if (m.includes('gemini')) maxTokens = 32000;
+            // Anthropic
+            else if (m.includes('claude-3') || m.includes('claude-2.1')) maxTokens = 200000;
+            else if (m.includes('claude-2')) maxTokens = 100000;
+            // OpenAI
+            else if (m.includes('gpt-4o') || m.includes('gpt-4-turbo')) maxTokens = 128000;
+            else if (m.includes('gpt-4-32k')) maxTokens = 32768;
+            else if (m.includes('gpt-4')) maxTokens = 8192;
+            else if (m.includes('gpt-3.5-turbo-16k') || m.includes('gpt-3.5-turbo-0125')) maxTokens = 16384;
+            else if (m.includes('gpt-3.5')) maxTokens = 4096;
+            // Meta Llama
+            else if (m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('llama-3.3')) maxTokens = 128000;
+            else if (m.includes('llama-3')) maxTokens = 8192;
+            else if (m.includes('llama-2')) maxTokens = 4096;
+            // Mistral
+            else if (m.includes('mistral-large') || m.includes('mistral-nemo')) maxTokens = 128000;
+            else if (m.includes('mixtral')) maxTokens = 32768;
+            else if (m.includes('mistral')) maxTokens = 8192;
+            // Qwen
             else if (m.includes('qwen')) maxTokens = 128000;
+            // DeepSeek
+            else if (m.includes('deepseek')) maxTokens = 128000;
+            // Cohere
+            else if (m.includes('command-r')) maxTokens = 128000;
         }
 
         let txt = (problemDescription || '') + '\n' + (userCode || '');

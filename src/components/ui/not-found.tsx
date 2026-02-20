@@ -28,13 +28,13 @@ const ICONS = {
 const Logo = () => (
     <Link href="/" className="absolute z-50 top-8 left-8 flex items-center gap-2 hover:opacity-80 transition-opacity">
         <Image
-            src="/apple-touch-icon.png"
-            alt="Sast Logo"
+            src="/icons/logo.webp"
+            alt="Verdict Logo"
             width={28}
             height={28}
             className="size-7"
         />
-        <span className="text-lg font-bold tracking-tight">Sast</span>
+        <span className="text-lg font-bold tracking-tight">Verdict</span>
     </Link>
 )
 

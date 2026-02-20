@@ -1,6 +1,6 @@
 {
   "name": "hero-app",
-  "version": "2.0.1",
+  "version": "2.0.4",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
@@ -36,7 +36,9 @@
     "next": "15.1.7",
     "nodemailer": "^6.10.1",
     "pg": "^8.18.0",
-    "puppeteer": "24.2.0",
+    "puppeteer": "^24.2.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-markdown": "^10.1.0",

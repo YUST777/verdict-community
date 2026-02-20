@@ -328,3 +328,157 @@ export async function executeBatchOnJudge0(
         };
     }
 }
+
+/**
+ * Execute a single script against the Judge0 API for arbitrary code execution (Sandboxed AI Context)
+ */
+export async function executeSingleOnJudge0(
+    sourceCode: string,
+    language: string,
+    stdin: string = ''
+) {
+    // Normalize language string
+    let normalizedLang = language.toLowerCase().trim();
+
+    // Map common aliases to Judge0 keys
+    if (normalizedLang === 'c++' || normalizedLang === 'cpp' || normalizedLang.includes('c++')) normalizedLang = 'cpp';
+    else if (normalizedLang === 'c#' || normalizedLang === 'csharp') normalizedLang = 'csharp';
+    else if (normalizedLang === 'python' || normalizedLang === 'py') normalizedLang = 'python';
+    else if (normalizedLang === 'node.js' || normalizedLang === 'node' || normalizedLang === 'javascript' || normalizedLang === 'js') normalizedLang = 'javascript';
+    else if (normalizedLang === 'golang' || normalizedLang === 'go') normalizedLang = 'go';
+    else if (normalizedLang === 'rust' || normalizedLang === 'rs') normalizedLang = 'rust';
+    else if (normalizedLang === 'kotlin' || normalizedLang === 'kt') normalizedLang = 'kotlin';
+    else if (normalizedLang === 'java') normalizedLang = 'java';
+
+    const judgeLanguageId = JUDGE0_LANGUAGE_MAP[normalizedLang] || JUDGE0_LANGUAGE_MAP['cpp'];
+
+    if (!judgeLanguageId) {
+        throw new Error(`Unsupported language: ${language}.`);
+    }
+
+    if (!JUDGE0_API_URL) {
+        throw new Error('Judge service not configured');
+    }
+
+    const payload = {
+        source_code: Buffer.from(sourceCode).toString('base64'),
+        language_id: judgeLanguageId,
+        stdin: Buffer.from(stdin).toString('base64'),
+        cpu_time_limit: 5.0, // Strict 5-second limit for AI
+        memory_limit: 256 * 1024, // 256MB
+    };
+
+    try {
+        // Submit single execution
+        const response = await fetch(`${JUDGE0_API_URL}/submissions?base64_encoded=true`, {
+            method: 'POST',
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(JUDGE0_AUTH_TOKEN && {
+                    'X-Judge0-Token': JUDGE0_AUTH_TOKEN,
+                    'X-Auth-Token': JUDGE0_AUTH_TOKEN
+                })
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Judge service error: ${response.status}`);
+        }
+
+        const { token } = await response.json();
+        if (!token) throw new Error('No valid token received');
+
+        // Poll for results
+        let result: any = null;
+        let pollAttempts = 0;
+        const maxPollAttempts = 40; // 20 seconds max
+
+        while (pollAttempts < maxPollAttempts) {
+            await new Promise(r => setTimeout(r, 500)); // 0.5 second delay
+            pollAttempts++;
+
+            const pollResponse = await fetch(
+                `${JUDGE0_API_URL}/submissions/${token}?base64_encoded=true&fields=stdout,stderr,status_id,time,memory,compile_output`,
+                {
+                    headers: {
+                        ...(JUDGE0_AUTH_TOKEN && {
+                            'X-Judge0-Token': JUDGE0_AUTH_TOKEN,
+                            'X-Auth-Token': JUDGE0_AUTH_TOKEN
+                        })
+                    }
+                }
+            );
+
+            if (!pollResponse.ok) continue;
+
+            const pollData = await pollResponse.json();
+            if (pollData.status_id >= 3) {
+                result = pollData;
+                break;
+            }
+        }
+
+        if (!result) {
+            return {
+                status: 'Error',
+                output: 'Execution timed out (failed to complete within 20s).',
+                time: null,
+                memory: null
+            };
+        }
+
+        // Decode outputs and apply truncation
+        const truncate = (str: string, maxLen = 2000) => {
+            if (!str) return '';
+            const decoded = Buffer.from(str, 'base64').toString('utf-8');
+            return decoded.length > maxLen ? decoded.substring(0, maxLen) + '\n...[TRUNCATED]' : decoded;
+        };
+
+        const stdout = truncate(result.stdout);
+        const stderr = truncate(result.stderr);
+        const compileOutput = truncate(result.compile_output);
+
+        let statusDesc = 'Unknown Error';
+        switch (result.status_id) {
+            case 3: statusDesc = 'Accepted'; break;
+            case 4: statusDesc = 'Wrong Answer'; break;
+            case 5: statusDesc = 'Time Limit Exceeded (Infinite loop or too slow)'; break;
+            case 6: statusDesc = 'Compilation Error'; break;
+            case 7:
+            case 8:
+            case 9:
+            case 10:
+            case 11:
+            case 12: statusDesc = 'Runtime Error'; break;
+            case 13: statusDesc = 'Internal Error'; break;
+        }
+
+        let finalOutput = '';
+        if (result.status_id === 6) {
+            finalOutput = `[Compilation Error]\n${compileOutput}`;
+        } else if (result.status_id === 5) {
+            finalOutput = `[${statusDesc}]\nPartial Output:\n${stdout}\n${stderr}`.trim();
+        } else if (result.status_id >= 7 && result.status_id <= 12) {
+            finalOutput = `[${statusDesc}]\n${stderr}\n${stdout}`.trim();
+        } else {
+            finalOutput = `${stdout}\n${stderr}`.trim();
+        }
+
+        return {
+            status: statusDesc,
+            output: finalOutput || '(No output)',
+            time: result.time || null,
+            memory: result.memory || null
+        };
+    } catch (error: any) {
+        console.error('Single Execution Error:', error);
+        return {
+            status: 'Internal Error',
+            output: error.message || 'Unknown Judge0 error',
+            time: null,
+            memory: null
+        };
+    }
+}

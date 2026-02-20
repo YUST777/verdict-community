@@ -212,6 +212,7 @@ const CustomDivider: React.FC = () => (
 // ─── Main PromptInputBox ──────────────────────────────────────────────────────
 export interface PromptInputBoxProps {
     onSend?: (message: string, files?: File[]) => void;
+    onStop?: () => void;
     isLoading?: boolean;
     placeholder?: string;
     className?: string;
@@ -225,7 +226,7 @@ export interface PromptInputBoxProps {
 }
 
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>((props, ref) => {
-    const { onSend = () => { }, isLoading = false, placeholder = "Ask anything...", className, onOpenResources, onTeachMe, isTutorLoading, isTutorActive, hasUsedTutor, value, onChange } = props;
+    const { onSend = () => { }, onStop, isLoading = false, placeholder = "Ask anything...", className, onOpenResources, onTeachMe, isTutorLoading, isTutorActive, hasUsedTutor, value, onChange } = props;
     const [internalInput, setInternalInput] = React.useState("");
 
     // Use controlled value if provided, else internal state
@@ -373,19 +374,31 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         <AIContextCircle />
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <PButton
-                                    variant={hasContent ? "default" : "ghost"}
-                                    size="icon"
-                                    className="h-7 w-7 transition-all duration-200"
-                                    onClick={handleSubmit}
-                                    disabled={isLoading && !hasContent}
-                                >
-                                    {isLoading
-                                        ? <Square className="h-3.5 w-3.5 fill-current animate-pulse" />
-                                        : <ArrowUp className="h-3.5 w-3.5" />}
-                                </PButton>
+                                {isLoading ? (
+                                    <PButton
+                                        variant="default"
+                                        size="icon"
+                                        className="h-7 w-7 transition-all duration-200 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            onStop?.();
+                                        }}
+                                    >
+                                        <Square className="h-3 w-3 fill-current" />
+                                    </PButton>
+                                ) : (
+                                    <PButton
+                                        variant={hasContent ? "default" : "ghost"}
+                                        size="icon"
+                                        className="h-7 w-7 transition-all duration-200"
+                                        onClick={handleSubmit}
+                                        disabled={!hasContent}
+                                    >
+                                        <ArrowUp className="h-3.5 w-3.5" />
+                                    </PButton>
+                                )}
                             </TooltipTrigger>
-                            <TooltipContent>Send</TooltipContent>
+                            <TooltipContent>{isLoading ? "Stop generating" : "Send"}</TooltipContent>
                         </Tooltip>
                     </div>
                 </div>

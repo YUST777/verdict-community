@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshSession();
     }, [refreshSession]);
 
-    const login = (token: string, redirectUrl = '/dashboard') => {
+    const login = (token: string, redirectUrl = '/problemsets') => {
         void token; // Cookie is set server-side
         refreshSession().then(() => {
             router.push(redirectUrl);

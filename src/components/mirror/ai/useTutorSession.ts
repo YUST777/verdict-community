@@ -61,6 +61,8 @@ export function useTutorSession({
     const tutorActiveRef = useRef(false);
     const { settings } = useLLM();
 
+    const abortControllerRef = useRef<AbortController | null>(null);
+
     // ─── Stream text word-by-word into a message ────────────────────────
     const streamTextToMessage = useCallback(async (
         msgId: string,
@@ -116,6 +118,13 @@ export function useTutorSession({
             return;
         }
 
+        // Abort previous fetch if running
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        const signal = abortControllerRef.current.signal;
+
         // Reset
         setConcepts([]);
         setVariants([]);
@@ -144,7 +153,30 @@ export function useTutorSession({
         }
 
         try {
-            // ── Phase 2: Call LLM ──────────────────────────────────
+            // ── Phase 2: Fetch reference solution FIRST ──────────────
+            updateMessage(thinkMsgId, '<think>\nReading the problem...\nSearching for reference solutions...\n</think>');
+
+            let referenceBlock = '';
+            if (problemId) {
+                try {
+                    const [contestIdStr, problemIndex] = problemId.split('-');
+                    if (contestIdStr && problemIndex) {
+                        const solRes = await fetch('/api/solutions/fetch', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ contestId: contestIdStr, problemIndex, language }),
+                            signal
+                        });
+                        if (solRes.ok) {
+                            const solData = await solRes.json();
+                            if (solData.found && solData.code) {
+                                referenceBlock = `\n\nIMPORTANT — Here is a VERIFIED ACCEPTED solution for this exact problem from a real user. Use it as your primary reference to understand the correct logic and edge-case handling. Adapt and rewrite it in your own style while ensuring correctness:\n--- REFERENCE CODE START ---\n${solData.code}\n--- REFERENCE CODE END ---`;
+                            }
+                        }
+                    }
+                } catch { /* reference fetch failed, proceed without it */ }
+            }
+
             updateMessage(thinkMsgId, '<think>\nReading the problem...\nIdentifying constraints and edge cases...\n</think>');
             await new Promise(r => setTimeout(r, 400));
 
@@ -164,158 +196,200 @@ You MUST respond with ONLY valid JSON (no markdown, no backticks wrapping). Stru
 The "solution" field must contain the FULL compilable code (with includes, main function, I/O).
 The "solution" must have ZERO comments — no //, no /* */, no #comments. Pure code only.
 The code must be written in ${language}.
-The "explanation" is separate from the code — put ALL explanations there, NOT as code comments.`;
+The "explanation" is separate from the code — put ALL explanations there, NOT as code comments.
+CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping if current_product > 1000) unless absolutely necessary for performance, as it often leads to wrong answers for negative numbers or large results. Use robust 64-bit integers (long long in C++) and check for exact equality at the end.${referenceBlock}`;
 
-            const userPrompt = `Problem:\n${problemDescription}\n\nWrite a ${isSimple ? 'simple, beginner-friendly' : 'optimal'} solution in ${language}. Return ONLY valid JSON. Remember: ZERO comments in the solution code.`;
+            const userPrompt = `Problem:\n${problemDescription}\n\nWrite a ${isSimple ? 'simple, beginner-friendly' : 'optimal'} solution in ${language}.${referenceBlock ? ' You have a verified reference solution — use it to ensure your logic is correct.' : ''} Return ONLY valid JSON. Remember: ZERO comments in the solution code.`;
+
+            const initialMessages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ];
+            let currentMessages: any[] = [...initialMessages];
+
+            let attempt = 0;
+            const maxAttempts = isSimple ? 3 : 5;
+            let finalSolution = "";
+            let finalThinkingText = "";
+            let finalApproachText = "";
+            let finalExplanation = "";
+            let judgePassed = false;
+            let judgeResultLine = "";
+            let data: any = {};
 
             updateMessage(thinkMsgId, '<think>\nReading the problem...\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>');
 
-            const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\//g, "$1"), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${settings.apiKey}`
-                },
-                body: JSON.stringify({
-                    model: settings.model,
-                    response_format: { type: "json_object" },
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: userPrompt }
-                    ]
-                })
-            });
+            while (attempt < maxAttempts) {
+                attempt++;
 
-            if (!response.ok) {
-                const errText = await response.text().catch(() => 'Unknown error');
-                throw new Error(`LLM request failed (${response.status}): ${errText}`);
+                if (attempt > 1) {
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed.\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>`);
+                }
+
+                const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\//g, "$1"), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${settings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: settings.model,
+                        response_format: { type: "json_object" },
+                        messages: currentMessages
+                    }),
+                    signal
+                });
+
+                if (!response.ok) {
+                    if (response.status === 429) {
+                        throw new Error('You have exceeded your API rate limit or quota. Please check your AI provider billing details.');
+                    }
+                    const errText = await response.text().catch(() => 'Unknown error');
+                    throw new Error(`LLM request failed (${response.status}): ${errText}`);
+                }
+
+                const chatObj = await response.json();
+                let rawContent = chatObj.choices?.[0]?.message?.content || '{}';
+
+                rawContent = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonMatch) rawContent = jsonMatch[0];
+
+                try {
+                    data = JSON.parse(rawContent);
+                } catch (parseErr) {
+                    throw new Error('Failed to parse AI response. The AI returned invalid JSON. Please try again.');
+                }
+
+                if (!data.solution) {
+                    throw new Error('LLM did not return a solution');
+                }
+
+                let cleanSolution = data.solution
+                    .replace(/\/\/.*$/gm, '')
+                    .replace(/\/\*[\s\S]*?\*\//g, '')
+                    .replace(/^\s*\n/gm, '');
+
+                finalThinkingText = data.thinking || 'Analyzing the problem and formulating a solution.';
+                finalApproachText = data.approach || '';
+                finalExplanation = data.explanation || '';
+                finalSolution = cleanSolution;
+
+                const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
+
+                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})...\n</think>`);
+
+                try {
+                    const judgeResponse = await fetch('/api/judge/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sourceCode: cleanSolution,
+                            language,
+                            testCases: testCases.map(tc => ({
+                                input: tc.input,
+                                output: tc.output || ''
+                            })),
+                            timeLimit: 2000,
+                            memoryLimit: 256
+                        })
+                    });
+
+                    if (judgeResponse.ok) {
+                        const judgeData = await judgeResponse.json();
+                        judgePassed = judgeData.passed;
+                        const judgeVerdict = judgeData.verdict;
+                        if (judgePassed) {
+                            judgeResultLine = `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
+                        } else {
+                            const failedCase = judgeData.results?.find((r: any) => !r.passed);
+                            let judgeDetails = failedCase ? ` (Test ${failedCase.testCase}: ${failedCase.verdict})` : '';
+                            judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
+                        }
+                    } else {
+                        judgePassed = false;
+                        judgeResultLine = `**Judge Error** — Could not reach the judge service`;
+                    }
+                } catch (err) {
+                    judgePassed = false;
+                    judgeResultLine = `**Judge unavailable** — Could not connect to the testing service`;
+                }
+
+                if (judgePassed || attempt === maxAttempts) {
+                    break;
+                } else {
+                    currentMessages.push({ role: 'assistant', content: rawContent });
+                    currentMessages.push({
+                        role: 'user',
+                        content: `Your solution failed the tests. Judge verdict: ${judgeResultLine}. Please fix the logical errors, edge cases, or syntax errors, and try again. Return ONLY valid JSON with the exact same structure.`
+                    });
+                }
             }
 
-            const chatObj = await response.json();
-            let rawContent = chatObj.choices?.[0]?.message?.content || '{}';
 
-            // Robust JSON extraction — LLMs often wrap JSON in backticks or add extra text
-            // Strip markdown code fences
-            rawContent = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
-            // Try to extract JSON object if there's surrounding text
-            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-            if (jsonMatch) rawContent = jsonMatch[0];
-
-            let data: { thinking?: string; approach?: string; solution?: string; explanation?: string; concepts?: Concept[] };
-            try {
-                data = JSON.parse(rawContent);
-            } catch (parseErr) {
-                console.error('[Tutor] JSON parse error:', parseErr, 'Raw:', rawContent.substring(0, 200));
-                throw new Error('Failed to parse AI response. The AI returned invalid JSON. Please try again.');
-            }
-
-            if (!data.solution) {
-                throw new Error('LLM did not return a solution');
-            }
-
-            // Strip any remaining comments from the solution
-            let cleanSolution = data.solution
-                .replace(/\/\/.*$/gm, '')       // remove // comments
-                .replace(/\/\*[\s\S]*?\*\//g, '') // remove /* */ comments
-                .replace(/^\s*\n/gm, '');          // remove resulting empty lines
 
             // ── Phase 3: Stream thinking ────────────────────────────
-            const thinkingText = data.thinking || 'Analyzing the problem and formulating a solution.';
-            const approachText = data.approach || '';
-            const explanationText = data.explanation || '';
-
-            // Stream the thinking into the collapsible drawer
             await streamTextToMessage(
                 thinkMsgId,
                 '<think>\n',
-                thinkingText + (approachText ? '\n\n**Approach:** ' + approachText : '') + '\n</think>\n\nWriting solution...',
+                finalThinkingText + (finalApproachText ? '\n\n**Approach:** ' + finalApproachText : '') + '\n</think>\n\nWriting solution...',
                 20
             );
 
             // ── Phase 4: Stream code into editor ────────────────────
             await new Promise(r => setTimeout(r, 300));
-            updateMessage(thinkMsgId,
-                `<think>\n${thinkingText}${approachText ? '\n\n**Approach:** ' + approachText : ''}\n\nWriting code...\n</think>`
-            );
+            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nWriting code...\n</think>`);
 
-            await streamCodeToEditor(cleanSolution);
+            await streamCodeToEditor(finalSolution);
 
-            // ── Phase 5: Test with Judge0 ───────────────────────────
-            const thinkBase = `${thinkingText}${approachText ? '\n\n**Approach:** ' + approachText : ''}`;
-
-            updateMessage(thinkMsgId,
-                `<think>\n${thinkBase}\n\nCode written successfully\n\nTesting solution against ${testCases.length} test case${testCases.length > 1 ? 's' : ''}...\n</think>`
-            );
-
-            let judgePassed = true;
-            let judgeVerdict = 'Accepted';
-            let judgeDetails = '';
-            let judgeResultLine = '';
-
-            try {
-                const judgeResponse = await fetch('/api/judge/test', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sourceCode: cleanSolution,
-                        language,
-                        testCases: testCases.map(tc => ({
-                            input: tc.input,
-                            output: tc.output || ''
-                        })),
-                        timeLimit: 2000,
-                        memoryLimit: 256
-                    })
-                });
-
-                if (judgeResponse.ok) {
-                    const judgeData = await judgeResponse.json();
-                    judgePassed = judgeData.passed;
-                    judgeVerdict = judgeData.verdict;
-                    if (judgePassed) {
-                        judgeResultLine = `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
-                    } else {
-                        const failedCase = judgeData.results?.find((r: any) => !r.passed);
-                        judgeDetails = failedCase ? ` (Test ${failedCase.testCase}: ${failedCase.verdict})` : '';
-                        judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
-                    }
-                } else {
-                    judgePassed = false;
-                    judgeVerdict = 'Judge Error';
-                    judgeResultLine = `**Judge Error** — Could not reach the judge service`;
-                }
-            } catch (err) {
-                console.error('[Tutor] Judge error:', err);
-                judgePassed = false;
-                judgeVerdict = 'Judge unavailable';
-                judgeResultLine = `**Judge unavailable** — Could not connect to the testing service`;
-            }
-
-            // ── Phase 6: Final result — thinking chain + explanation below ───
+            // ── Phase 5: Final Result ───────────────────────────────
+            const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
             const finalThinkBlock = `<think>\n${thinkBase}\n\nCode written successfully\n\n${judgeResultLine}\n</think>`;
 
-            if (judgePassed && explanationText) {
-                updateMessage(thinkMsgId,
-                    finalThinkBlock + `\n\n${explanationText}`
-                );
-            } else if (judgePassed) {
-                updateMessage(thinkMsgId,
-                    finalThinkBlock + `\n\nThe solution has been written to the editor and passes all test cases.`
-                );
+            if (judgePassed) {
+                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\nThe solution has been written to the editor and passes all test cases.`);
             } else {
-                updateMessage(thinkMsgId,
-                    finalThinkBlock + `\n\nThe solution might need adjustments. Try asking me to fix it in the chat.`
-                );
+                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\nThe solution might need adjustments. Try asking me to fix it in the chat.`);
             }
 
-            // Save concepts
-            if (data.concepts && data.concepts.length > 0) {
-                setConcepts(data.concepts);
+            // Save concepts & inject real youtube video dynamically
+            let finalConcepts = data.concepts || [];
+            try {
+                const searchQ = finalConcepts[0]?.title ? `${finalConcepts[0].title} algorithm tutorial` : "competitive programming tutorial";
+                const ytRes = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: searchQ })
+                });
+                if (ytRes.ok) {
+                    const ytData = await ytRes.json();
+                    const ytVideo = ytData.results?.find((r: any) => r.type === 'youtube');
+                    if (ytVideo) {
+                        finalConcepts = [
+                            {
+                                title: ytVideo.title,
+                                type: 'video' as any,
+                                url: ytVideo.url
+                            },
+                            ...finalConcepts
+                        ];
+                    }
+                }
+            } catch (e) {
+                console.error('[Tutor] Failed to fetch youtube concept', e);
+            }
+
+            if (finalConcepts.length > 0) {
+                setConcepts(finalConcepts);
             }
 
         } catch (error: any) {
-            console.error('[Tutor] Error:', error);
-            updateMessage(thinkMsgId, `Something went wrong: ${error.message || 'Unknown error'}. Please try again.`);
+            if (error.name === 'AbortError') {
+                updateMessage(thinkMsgId, `Tutor session was stopped.`);
+            } else {
+                console.error('[Tutor] Error:', error);
+                updateMessage(thinkMsgId, `Something went wrong: ${error.message || 'Unknown error'}. Please try again.`);
+            }
             setIsTutorActive(false);
             tutorActiveRef.current = false;
         } finally {
@@ -330,6 +404,11 @@ The "explanation" is separate from the code — put ALL explanations there, NOT 
     const stopTutor = useCallback(() => {
         tutorActiveRef.current = false;
         setIsTutorActive(false);
+        setIsLoading(false);
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
     }, []);
 
     return {
