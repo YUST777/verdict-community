@@ -3,8 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { Minimize2, ExternalLink, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExcalidrawImperativeAPI = any;
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types';
 
 // Dynamically import Excalidraw to avoid SSR issues
 const Excalidraw = dynamic(
