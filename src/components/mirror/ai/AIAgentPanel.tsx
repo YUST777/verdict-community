@@ -73,9 +73,11 @@ export default function AIAgentPanel({
     isActive = false
 }: AIAgentPanelProps) {
     const [messagesByTab, setMessagesByTab] = useState<Record<string, Message[]>>({ 'default': [] });
-    const [input, setInput] = useState(initialQuestion || '');
-    const [isLoadingMessage, setIsLoadingMessage] = useState(false);
-    const [aiStatus, setAiStatus] = useState('Thinking...');
+    const [inputByTab, setInputByTab] = useState<Record<string, string>>({ 'default': initialQuestion || '' });
+    const [conceptsByTab, setConceptsByTab] = useState<Record<string, any[]>>({ 'default': [] });
+    const [tutorActiveByTab, setTutorActiveByTab] = useState<Record<string, boolean>>({ 'default': false });
+    const [isLoadingByTab, setIsLoadingByTab] = useState<Record<string, boolean>>({ 'default': false });
+    const [aiStatusByTab, setAiStatusByTab] = useState<Record<string, string>>({ 'default': 'Thinking...' });
     const [preferences, setPreferences] = useState<Partial<AILearningPreferences>>({});
     const [showPreferencesModal, setShowPreferencesModal] = useState(false);
     const [isResourcesOpen, setIsResourcesOpen] = useState(false);
@@ -86,6 +88,11 @@ export default function AIAgentPanel({
     const [activeChatTab, setActiveChatTab] = useState('default');
 
     const messages = messagesByTab[activeChatTab] || [];
+    const input = inputByTab[activeChatTab] || '';
+    const concepts = conceptsByTab[activeChatTab] || [];
+    const isTutorActive = tutorActiveByTab[activeChatTab] || false;
+    const isLoadingMessage = isLoadingByTab[activeChatTab] || false;
+    const aiStatus = aiStatusByTab[activeChatTab] || 'Thinking...';
 
     const setMessages = useCallback((updater: React.SetStateAction<Message[]>) => {
         setMessagesByTab(prev => {
@@ -99,25 +106,57 @@ export default function AIAgentPanel({
         });
     }, [activeChatTab]);
 
+    const setInput = useCallback((valOrUpdater: string | ((prev: string) => string)) => {
+        setInputByTab(prev => {
+            const current = activeChatTab;
+            const prevVal = prev[current] || '';
+            const nextVal = typeof valOrUpdater === 'function' ? valOrUpdater(prevVal) : valOrUpdater;
+            return { ...prev, [current]: nextVal };
+        });
+    }, [activeChatTab]);
+
+    const setIsLoadingMessage = useCallback((loading: boolean) => {
+        setIsLoadingByTab(prev => ({ ...prev, [activeChatTab]: loading }));
+    }, [activeChatTab]);
+
+    const setAiStatus = useCallback((status: string) => {
+        setAiStatusByTab(prev => ({ ...prev, [activeChatTab]: status }));
+    }, [activeChatTab]);
+
     const addNewChat = useCallback(() => {
         const newId = `chat-${Date.now()}`;
-        const newLabel = `Chat ${chatTabs.length + 1}`;
+
+        // Fix duplicate labels: find highest number in existing "Chat N" labels
+        const existingNumbers = chatTabs
+            .map(t => {
+                const match = t.label.match(/Chat (\d+)/);
+                return match ? parseInt(match[1]) : 0;
+            })
+            .filter(n => n > 0);
+        const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : chatTabs.length + 1;
+        const newLabel = `Chat ${nextNum}`;
+
         setChatTabs(prev => [...prev, { id: newId, label: newLabel }]);
         setActiveChatTab(newId);
         setMessagesByTab(prev => ({ ...prev, [newId]: [] }));
-    }, [chatTabs.length]);
+        setInputByTab(prev => ({ ...prev, [newId]: '' }));
+        setConceptsByTab(prev => ({ ...prev, [newId]: [] }));
+        setTutorActiveByTab(prev => ({ ...prev, [newId]: false }));
+        setIsLoadingByTab(prev => ({ ...prev, [newId]: false }));
+        setAiStatusByTab(prev => ({ ...prev, [newId]: 'Thinking...' }));
+    }, [chatTabs]);
 
     const deleteChat = useCallback((tabId: string) => {
         setChatTabs(prev => {
             if (prev.length <= 1) {
                 // Reset the last tab instead of deleting the whole array
                 const newId = `chat-${Date.now()}`;
-                setActiveChatTab(newId);
-                setMessagesByTab(p => {
-                    const newDict = { ...p, [newId]: [] };
-                    delete newDict[tabId];
-                    return newDict;
-                });
+                setMessagesByTab(p => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
+                setInputByTab(p => { const d = { ...p, [newId]: '' }; delete d[tabId]; return d; });
+                setConceptsByTab(p => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
+                setTutorActiveByTab(p => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
+                setIsLoadingByTab(p => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
+                setAiStatusByTab(p => { const d = { ...p, [newId]: 'Thinking...' }; delete d[tabId]; return d; });
                 return [{ id: newId, label: 'Chat 1' }];
             }
             const filtered = prev.filter(t => t.id !== tabId);
@@ -127,6 +166,31 @@ export default function AIAgentPanel({
                 setActiveChatTab(newActive.id);
             }
             setMessagesByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            setInputByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            setConceptsByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            setTutorActiveByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            setIsLoadingByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            setAiStatusByTab(p => {
                 const newDict = { ...p };
                 delete newDict[tabId];
                 return newDict;
@@ -226,7 +290,7 @@ export default function AIAgentPanel({
     }, []);
 
     // Tutor hook
-    const { isTutorActive, isLoading: tutorLoading, concepts, startTutor, stopTutor, variants, selectedLevel, changeLevel } = useTutorSession({
+    const { isLoading: tutorLoading, startTutor, stopTutor, variants, selectedLevel, changeLevel } = useTutorSession({
         problemId,
         language,
         problemDescription,
@@ -235,7 +299,18 @@ export default function AIAgentPanel({
         onAiCodeUpdate,
         onSwitchToAiTab,
         addMessage,
-        updateMessage
+        updateMessage,
+        setConcepts: (updater) => {
+            setConceptsByTab(prev => {
+                const currentTab = activeChatTab;
+                const prevVal = prev[currentTab] || [];
+                const nextVal = typeof updater === 'function' ? updater(prevVal) : updater;
+                return { ...prev, [currentTab]: nextVal };
+            });
+        },
+        setIsTutorActive: (active) => {
+            setTutorActiveByTab(prev => ({ ...prev, [activeChatTab]: active }));
+        }
     });
 
     // Tutor Usage Tracking (Once per problem per language)
@@ -363,9 +438,9 @@ export default function AIAgentPanel({
             chatAbortControllerRef.current.abort();
             chatAbortControllerRef.current = null;
         }
-        setIsLoadingMessage(false);
-        setAiStatus('Idle');
-    }, [tutorLoading, isTutorActive, stopTutor]);
+        setIsLoadingByTab(prev => ({ ...prev, [activeChatTab]: false }));
+        setAiStatusByTab(prev => ({ ...prev, [activeChatTab]: 'Thinking...' }));
+    }, [tutorLoading, isTutorActive, stopTutor, activeChatTab]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

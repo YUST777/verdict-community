@@ -42,7 +42,7 @@ function Footer() {
                         <div className="space-y-2">
                             <h4 className="text-white font-semibold">Product</h4>
                             <Link href="#features" className="block text-white/40">Features</Link>
-                            <Link href="/extension" className="block text-white/40">Extension</Link>
+                            <Link href="https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj" className="block text-white/40">Extension</Link>
                         </div>
                         <div className="space-y-2">
                             <h4 className="text-white font-semibold">Company</h4>
@@ -98,7 +98,7 @@ function Footer() {
                         <div className="col-span-2 col-start-5 flex flex-col gap-4">
                             <h4 className="text-white font-semibold mb-2">Product</h4>
                             <Link href="#features" className="text-white/50 hover:text-white transition-colors text-sm">Features</Link>
-                            <Link href="/extension" className="text-white/50 hover:text-white transition-colors text-sm">Extension</Link>
+                            <Link href="https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj" className="text-white/50 hover:text-white transition-colors text-sm">Extension</Link>
                             <Link href="#changelog" className="text-white/50 hover:text-white transition-colors text-sm">Changelog</Link>
                         </div>
 

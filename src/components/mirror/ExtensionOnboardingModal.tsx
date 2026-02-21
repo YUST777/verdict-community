@@ -1,11 +1,138 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Download, Check, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowRight, Puzzle, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+    EditorMockup,
+    AITutorMockup,
+    ExtensionMockup,
+    AnalyticsMockup
+} from '@/components/ui/mockups';
+
+// ============================================================================
+// MOCKED SHADCN / ORIGIN UI COMPONENTS
+// ============================================================================
+
+const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "outline" | "ghost", size?: "default" | "sm" | "icon" }>(
+    ({ className, variant = "default", size = "default", type = "button", children, ...props }, ref) => {
+        const baseStyles = "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium transition-colors outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none disabled:opacity-50";
+
+        const variants = {
+            default: "bg-emerald-500 text-black shadow-sm hover:bg-emerald-400 font-semibold",
+            outline: "border border-white/10 bg-transparent shadow-sm hover:bg-white/5 text-white",
+            ghost: "hover:bg-white/10 text-white",
+        };
+
+        const sizes = {
+            default: "h-9 px-4 py-2",
+            sm: "h-8 rounded-lg px-3 text-xs",
+            icon: "h-9 w-9",
+        };
+
+        return (
+            <button
+                ref={ref}
+                type={type}
+                className={cn(baseStyles, variants[variant], sizes[size], className)}
+                {...props}
+            >
+                {children}
+            </button>
+        );
+    }
+);
+Button.displayName = "Button";
+
+const Dialog = ({ open, onOpenChange, children }: { open: boolean, onOpenChange: (open: boolean) => void, children: React.ReactNode }) => {
+    if (!open) return null;
+    return (
+        <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-0">
+            <div
+                className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+                onClick={() => onOpenChange(false)}
+            />
+            <div className="z-[101] flex w-full justify-center animate-in fade-in zoom-in-95 duration-200">
+                {children}
+            </div>
+        </div>
+    );
+};
+
+const DialogContent = ({ children, className, onClose }: { children: React.ReactNode, className?: string, onClose?: () => void }) => (
+    <div className={cn(
+        "relative grid w-full gap-4 overflow-y-auto border border-white/10 bg-[#0a0a0a] text-white shadow-lg shadow-black/50 sm:max-w-[400px] sm:rounded-xl",
+        className
+    )}>
+        {children}
+        {onClose && (
+            <button
+                onClick={onClose}
+                className="group absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg outline-offset-2 transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none z-10 bg-black/20 backdrop-blur-md border border-white/10 sm:bg-transparent sm:border-none sm:backdrop-blur-none"
+            >
+                <X className="h-4 w-4 opacity-60 transition-opacity group-hover:opacity-100" strokeWidth={2} />
+                <span className="sr-only">Close</span>
+            </button>
+        )}
+    </div>
+);
+
+const DialogHeader = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)}>
+        {children}
+    </div>
+);
+
+const DialogTitle = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <h2 className={cn("text-lg font-semibold tracking-tight", className)}>
+        {children}
+    </h2>
+);
+
+const DialogDescription = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <p className={cn("text-sm text-white/60", className)}>
+        {children}
+    </p>
+);
+
+const DialogFooter = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3", className)}>
+        {children}
+    </div>
+);
+
+// ============================================================================
+// VERDICT ONBOARDING MODAL
+// ============================================================================
 
 export default function ExtensionOnboardingModal() {
     const [isOpen, setIsOpen] = useState(false);
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const [step, setStep] = useState(1);
+
+    const stepContent = [
+        {
+            title: "Welcome to Verdict",
+            description: "Unlock the full power of competitive programming directly within your workspace.",
+            component: <EditorMockup />
+        },
+        {
+            title: "Everything You Need",
+            description: "Read Codeforces problems, use an AI Tutor, write in a VS Code-like editor, and track your stats.",
+            component: <AITutorMockup />
+        },
+        {
+            title: "Performance Insights",
+            description: "See runtime and memory distributions across all accepted solutions. Compare your results.",
+            component: <AnalyticsMockup />
+        },
+        {
+            title: "You're All Set!",
+            description: "Install our browser assistant to enable One-Click Submissions and mirror problems.",
+            component: <ExtensionMockup />
+        }
+    ];
+
+    const totalSteps = stepContent.length;
 
     useEffect(() => {
         const hasSeen = localStorage.getItem('verdict-extension-onboarding-seen');
@@ -18,144 +145,85 @@ export default function ExtensionOnboardingModal() {
         return () => clearTimeout(timer);
     }, []);
 
-    const handleVideoEnd = useCallback(() => {
-        if (videoRef.current) {
-            const duration = videoRef.current.duration;
-            if (!duration || duration < 2) {
-                videoRef.current.currentTime = 0;
-            } else {
-                videoRef.current.currentTime = 2;
-            }
-            videoRef.current.play();
-        }
-    }, []);
-
     const handleClose = () => {
         setIsOpen(false);
         localStorage.setItem('verdict-extension-onboarding-seen', 'true');
+        // Reset step after closing animation
+        setTimeout(() => setStep(1), 300);
     };
 
-    if (!isOpen) return null;
+    const handleContinue = () => {
+        if (step < totalSteps) {
+            setStep(step + 1);
+        }
+    };
+
+    const handleFinal = () => {
+        handleClose();
+        window.open('https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj', '_blank');
+    };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <div className="w-full max-w-sm bg-gradient-to-b from-[#0f0f0f] to-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden relative">
-                {/* Close Button */}
-                <button
-                    onClick={handleClose}
-                    className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-all"
-                >
-                    <X size={16} />
-                </button>
-
-                {/* Compact Video Header */}
-                <div className="relative w-full h-24 overflow-hidden">
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        loop
-                        onEnded={handleVideoEnd}
-                        className="absolute inset-0 w-full h-full object-cover scale-110"
-                    >
-                        <source src="/videos/huly_laser.webm" type="video/webm" />
-                    </video>
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/70 to-black/95" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent" />
-                    
-                    {/* Header Content */}
-                    <div className="relative z-10 h-full flex flex-col justify-end p-4 pb-3">
-                        <div className="flex items-center gap-1.5 mb-1">
-                            <div className="w-0.5 h-3 bg-[#10B981] rounded-full" />
-                            <span className="text-[10px] font-medium text-[#10B981] uppercase tracking-wider">Extension</span>
-                        </div>
-                        <h2 className="text-lg font-bold text-white">Mirror Mode</h2>
+        <Dialog open={isOpen} onOpenChange={(open) => {
+            if (!open) handleClose();
+        }}>
+            <DialogContent className="gap-0 p-0 [&>button:last-child]:text-white" onClose={handleClose}>
+                {/* Graphic Section */}
+                <div className="relative h-[240px] w-full overflow-hidden bg-[#0d0d0d] rounded-t-xl">
+                    <div className="absolute inset-0 z-10 pointer-events-none">
+                        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0a0a0a] to-transparent" />
                     </div>
+                    {stepContent[step - 1].component}
                 </div>
 
-                {/* Compact Content */}
-                <div className="p-4 space-y-3.5">
-                    {/* Description */}
-                    <p className="text-xs text-white/60 leading-relaxed">
-                        Unlock seamless Codeforces integration. Submit solutions and get verdicts instantly.
-                    </p>
+                {/* Content Section */}
+                <div className="space-y-6 px-6 pb-6 pt-3 bg-[#0a0a0a]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl">{stepContent[step - 1].title}</DialogTitle>
+                        <DialogDescription className="min-h-[40px]">
+                            {stepContent[step - 1].description}
+                        </DialogDescription>
+                    </DialogHeader>
 
-                    {/* Features - 2x2 Grid */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-start gap-2">
-                            <div className="w-4 h-4 rounded-full bg-[#10B981]/20 flex items-center justify-center shrink-0 mt-0.5">
-                                <Check size={11} className="text-[#10B981]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-white/80 leading-relaxed">
-                                    <span className="font-semibold text-white">One-Click Submission</span> — Submit directly to Codeforces with automatic verdict retrieval
-                                </p>
-                            </div>
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                        {/* Pagination Dots */}
+                        <div className="flex justify-center space-x-1.5 max-sm:order-1">
+                            {[...Array(totalSteps)].map((_, index) => (
+                                <div
+                                    key={index}
+                                    className={cn(
+                                        "h-1.5 w-1.5 rounded-full transition-all duration-300",
+                                        index + 1 === step ? "bg-emerald-500 w-3" : "bg-white/20"
+                                    )}
+                                />
+                            ))}
                         </div>
 
-                        <div className="flex items-start gap-2">
-                            <div className="w-4 h-4 rounded-full bg-[#10B981]/20 flex items-center justify-center shrink-0 mt-0.5">
-                                <Check size={11} className="text-[#10B981]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-white/80 leading-relaxed">
-                                    <span className="font-semibold text-white">Enhanced Experience</span> — Full feature access with real-time status updates
-                                </p>
-                            </div>
-                        </div>
+                        {/* Footer Buttons */}
+                        <DialogFooter>
+                            <Button variant="ghost" onClick={handleClose}>
+                                Skip
+                            </Button>
 
-                        <div className="flex items-start gap-2">
-                            <div className="w-4 h-4 rounded-full bg-[#10B981]/20 flex items-center justify-center shrink-0 mt-0.5">
-                                <Check size={11} className="text-[#10B981]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-white/80 leading-relaxed">
-                                    <span className="font-semibold text-white">Seamless Integration</span> — Works directly in your browser without leaving the page
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start gap-2">
-                            <div className="w-4 h-4 rounded-full bg-[#10B981]/20 flex items-center justify-center shrink-0 mt-0.5">
-                                <Check size={11} className="text-[#10B981]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-white/80 leading-relaxed">
-                                    <span className="font-semibold text-white">Free & Open Source</span> — No cost, no tracking, completely transparent
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Compact Alert */}
-                    <div className="flex gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                        <AlertTriangle size={13} className="text-red-400 shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-red-300/70 leading-relaxed">
-                            <span className="font-semibold text-red-300">Disclaimer:</span> Use responsibly. We are not responsible for rate limiting or contest policy violations.
-                        </p>
-                    </div>
-
-                    {/* Compact Actions */}
-                    <div className="space-y-2 pt-1">
-                        <a
-                            href="/extension"
-                            target="_blank"
-                            onClick={handleClose}
-                            className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-[#10B981] hover:bg-[#059669] text-white font-semibold text-sm rounded-lg transition-all shadow-md shadow-[#10B981]/20 hover:shadow-[#10B981]/40 active:scale-[0.98]"
-                        >
-                            <Download size={16} />
-                            Install Extension
-                        </a>
-                        <button
-                            onClick={handleClose}
-                            className="w-full py-2 text-xs text-white/50 hover:text-white/80 font-medium transition-colors"
-                        >
-                            Continue without extension
-                        </button>
+                            {step < totalSteps ? (
+                                <Button className="group" onClick={handleContinue}>
+                                    Next
+                                    <ArrowRight
+                                        className="-me-1 ms-2 opacity-60 transition-transform group-hover:translate-x-0.5"
+                                        size={16}
+                                        strokeWidth={2}
+                                        aria-hidden="true"
+                                    />
+                                </Button>
+                            ) : (
+                                <Button onClick={handleFinal}>
+                                    Install Assistant
+                                </Button>
+                            )}
+                        </DialogFooter>
                     </div>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

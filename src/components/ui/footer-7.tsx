@@ -24,7 +24,7 @@ const sections = [
         title: "Product",
         links: [
             { name: "Features", href: "/#features" },
-            { name: "Extension", href: "/extension" },
+            { name: "Extension", href: "https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj" },
             { name: "Changelog", href: "/#changelog" },
         ],
     },

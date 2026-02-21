@@ -198,13 +198,13 @@ export function HeroSection() {
                                 </div>
                                 <div className="relative z-20 mx-auto mt-8 flex flex-row w-full items-center justify-center gap-2 sm:gap-4 px-2 sm:w-auto sm:px-0">
                                     <a href="/contest/1/problem/A" className="w-1/2 sm:w-auto">
-                                        <GradientButton width="100%" height="44px" className="sm:min-w-[170px] [&_.label]:text-[11px] sm:[&_.label]:text-sm">
+                                        <GradientButton width="100%" height="48px" className="sm:min-w-[180px] px-6 [&_.label]:text-[11px] sm:[&_.label]:text-sm">
                                             <Play size={14} className="fill-current shrink-0 hidden sm:block" />
                                             Try it Live
                                         </GradientButton>
                                     </a>
-                                    <a href="https://github.com/YUST777/verdict-community" target="_blank" rel="noopener noreferrer" className="w-1/2 sm:w-auto">
-                                        <GradientButton width="100%" height="44px" className="sm:min-w-[210px] [&_.label]:text-[11px] sm:[&_.label]:text-sm">
+                                    <a href="https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj" target="_blank" rel="noopener noreferrer" className="w-1/2 sm:w-auto">
+                                        <GradientButton width="100%" height="48px" className="sm:min-w-[240px] px-8 [&_.label]:text-[11px] sm:[&_.label]:text-sm">
                                             <ArrowRight size={14} className="shrink-0 hidden sm:block" />
                                             Download Extension
                                         </GradientButton>

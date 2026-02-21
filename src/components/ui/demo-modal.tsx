@@ -47,13 +47,13 @@ export function DemoModal({ isOpen, onClose }: DemoModalProps) {
 
                 {/* Video container */}
                 <div className="relative aspect-video w-full rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                    {/* Placeholder — replace with <video> or <iframe> when ready */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/40">
-                        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                            <Play className="w-7 h-7 text-emerald-400 ml-1" />
-                        </div>
-                        <p className="text-sm font-medium">Demo video coming soon</p>
-                    </div>
+                    <iframe
+                        src="https://www.youtube.com/embed/1_Q3agYkioE?autoplay=1"
+                        title="Verdict Demo"
+                        className="absolute inset-0 w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                    />
                 </div>
             </div>
         </div>

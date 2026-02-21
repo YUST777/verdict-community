@@ -14,7 +14,7 @@
 
 
 <a href="https://verdict.run"><img src="https://img.shields.io/badge/Website-verdict.run-3b82f6?style=for-the-badge&logoColor=white" alt="Website"></a>
-<a href="https://verdict.run/extension"><img src="https://img.shields.io/badge/Extension-Available-10B981?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Extension"></a>
+<a href="https://verdict.runhttps://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj"><img src="https://img.shields.io/badge/Extension-Available-10B981?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Extension"></a>
 <a href="https://github.com/YUST777/verdict-community/issues"><img src="https://img.shields.io/github/issues/YUST777/verdict-community?style=for-the-badge&logo=github&logoColor=white" alt="Issues"></a>
 
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
@@ -82,7 +82,7 @@ Verdict is committed to transparency and security. By open-sourcing our entire p
 
 1. **Visit**: [verdict.run](https://verdict.run)
 2. **Setup Locally**: Clone this repo and follow our [Installation Guide](docs/INSTALLATION.md) (or see the [Quick Start](#quick-setup)).
-3. **Install Extension**: [Download Here](https://verdict.run/extension)
+3. **Install Extension**: [Download Here](https://verdict.runhttps://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj)
 
 ---
 
@@ -121,11 +121,21 @@ Verdict is committed to transparency and security. By open-sourcing our entire p
 
 ## Repository Structure
 - `/app` - Next.js 16 frontend and API routes.
-- `/extension` - Source code of the Verdict Browser Extension.
+- `https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj` - Source code of the Verdict Browser Extension.
 - `/mirror` - Puppeteer-based Codeforces scraping service.
 - `/scripts` - Database and maintenance utilities.
 
 ---
+
+## 🤖 AI Agent Developer Experience (DX)
+This repository is optimized for AI-first development. AI agents (like Antigravity) can use the following resources to ship code faster:
+
+- **Workflows**: Standard patterns in `.agents/workflows/` for routes and components.
+- **Architecture**: A complete system map in [DOCS/architecture.md](DOCS/architecture.md).
+- **vcl CLI**: A developer helper at `scripts/vcl` (aliased to `vcl`). Use `vcl help` for commands like `status`, `logs`, and `rebuild`.
+
+---
+
 *Verdict is currently in Beta. We appreciate your feedback!*
 
 ## Support the Project

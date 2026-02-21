@@ -757,7 +757,7 @@ function PreviewWidget() {
                             Try it Live <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                         </Link>
                         <Link
-                            href="/extension"
+                            href="https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj"
                             target="_blank"
                             className="flex-1 sm:flex-none sm:w-auto inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-medium text-[13px] sm:text-base rounded-xl border border-white/10 transition-all hover:scale-105 overflow-hidden"
                         >

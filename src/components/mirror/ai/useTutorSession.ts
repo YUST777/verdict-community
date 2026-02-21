@@ -19,6 +19,8 @@ interface UseTutorSessionProps {
     onSwitchToAiTab?: () => void;
     addMessage: (message: { id: string; role: 'assistant'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string } }) => void;
     updateMessage: (id: string, content: string) => void;
+    setConcepts: (concepts: Concept[] | ((prev: Concept[]) => Concept[])) => void;
+    setIsTutorActive: (active: boolean) => void;
 }
 
 // ─── Simple mode banned constructs ──────────────────────────────────────
@@ -51,11 +53,11 @@ export function useTutorSession({
     onAiCodeUpdate,
     onSwitchToAiTab,
     addMessage,
-    updateMessage
+    updateMessage,
+    setConcepts,
+    setIsTutorActive
 }: UseTutorSessionProps) {
-    const [isTutorActive, setIsTutorActive] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [concepts, setConcepts] = useState<Concept[]>([]);
     const [variants, setVariants] = useState<any[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
     const tutorActiveRef = useRef(false);
@@ -409,12 +411,10 @@ CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping 
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
-    }, []);
+    }, [setIsTutorActive]);
 
     return {
-        isTutorActive,
         isLoading,
-        concepts,
         variants,
         selectedLevel,
         changeLevel,
