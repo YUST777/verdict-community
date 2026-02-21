@@ -1,15 +1,16 @@
 /**
  * Fetches accepted Codeforces solutions via the Wayback Machine.
- * Optimized for Production: 4-Tier Discovery Engine
+ * Super Discovery Engine: Massive Parallel Search & Tiered Verification
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-// Legendary authors whose solutions are most likely to be archived
+// Legendary authors with extremely high archival probability
 const ELITE_AUTHORS = [
     'tourist', 'Benq', 'mnbvmar', 'ecnerwala', 'radewoosh', 'ksun48',
     'um_nik', 'Petr', 'neal', 'maroonrk', 'jiangly', 'scott_wu', 'eat_apple',
-    '300iq', 'Egor', 'V_O_V_A', 'W4utiful', 'Tle'
+    '300iq', 'Egor', 'V_O_V_A', 'W4utiful', 'Tle', 'Reyna', 'molamola.', 'yosupo',
+    'koosaga', 'a_p_p_l_e', 'LGM', 'scottwu'
 ];
 
 interface CFSubmission {
@@ -29,7 +30,7 @@ interface Solution {
 const solutionCache = new Map<string, Solution | null>();
 
 /**
- * Tier 0: Simple utility to normalize languages
+ * Normalizes language strings
  */
 function normalizeLang(cfLang: string): string {
     const l = cfLang.toLowerCase();
@@ -45,57 +46,62 @@ function normalizeLang(cfLang: string): string {
 }
 
 /**
- * Core Helper: Verify and fetch code from a wayback snapshot
+ * Robustly verifies if an archived page is the correct accepted solution
  */
-async function verifyAndFetch(
+async function verifySolutionPage(
     timestamp: string,
     originalUrl: string,
     contestId: number,
-    problemIndex: string,
-    preferredLang?: string
+    problemIndex: string
 ): Promise<Solution | null> {
     const waybackUrl = `https://web.archive.org/web/${timestamp}/${originalUrl}`;
     try {
-        const pageRes = await fetch(waybackUrl, {
+        const res = await fetch(waybackUrl, {
             headers: { 'User-Agent': UA },
-            signal: AbortSignal.timeout(5000)
+            signal: AbortSignal.timeout(30000) // 30s timeout for sluggish Wayback Machine
         });
-        if (!pageRes.ok) return null;
+        if (!res.ok) return null;
 
-        const html = await pageRes.text();
-        const problemRegex = new RegExp(`/contest/${contestId}/problem/${problemIndex}`, 'i');
-        const isAccepted = html.includes('verdict-accepted') || html.includes('OK') || html.includes('Accepted');
+        const html = await res.text();
 
-        if (problemRegex.test(html) && isAccepted) {
-            const match = html.match(/id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/);
-            if (match) {
+        // Multi-pattern verification: Be extremely liberal
+        const patterns = [
+            new RegExp(`/contest/${contestId}/problem/${problemIndex}`, 'i'),
+            new RegExp(`/problemset/problem/${contestId}/${problemIndex}`, 'i'),
+            new RegExp(`>${problemIndex}\\s*-\\s*`, 'i'),
+            new RegExp(`${contestId}${problemIndex}`, 'i'),
+            new RegExp(`>\\s*${problemIndex}\\s*<`, 'i')
+        ];
+
+        const isAccepted = html.includes('verdict-accepted') || html.includes('OK') || html.includes('Accepted') || html.includes('Correct');
+        const matchesProblem = patterns.some(p => p.test(html)) || (html.includes(`${contestId}`) && html.includes(`${problemIndex}`));
+
+        if (matchesProblem && isAccepted) {
+            const sourceMatch = html.match(/id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/);
+            if (sourceMatch && sourceMatch[1].trim().length > 20) {
                 const authorMatch = html.match(/\/profile\/([^"]+)"/);
                 const langMatch = html.match(/<td>\s*Language:\s*<\/td>\s*<td>\s*([^<]+)\s*<\/td>/i);
 
-                let code = match[1]
+                let code = sourceMatch[1]
                     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
                     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'")
                     .replace(/&#10;/g, '\n').replace(/&#13;/g, '\r');
 
-                if (code.length > 5000) {
-                    code = code.substring(0, 5000) + '\n// ...[TRUNCATED for context window]';
-                }
+                if (code.length > 5000) code = code.substring(0, 5000) + '\n// ...[TRUNCATED]';
 
                 return {
                     code,
-                    language: langMatch ? normalizeLang(langMatch[1]) : (preferredLang || 'cpp'),
+                    language: langMatch ? normalizeLang(langMatch[1]) : 'cpp',
                     author: authorMatch ? authorMatch[1] : 'unknown'
                 };
             }
         }
-    } catch (e) {
-        // Silent fail for individual verification nodes
-    }
+    } catch (e) { /* silent skip */ }
     return null;
 }
 
 /**
- * Main Entry Point: 4-Tier Production Discovery Engine
+ * Super Discovery Engine
  */
 export async function fetchAcceptedSolution(
     contestId: number,
@@ -105,50 +111,47 @@ export async function fetchAcceptedSolution(
     const cacheKey = `${contestId}-${problemIndex}-${preferredLang || 'any'}`;
     if (solutionCache.has(cacheKey)) return solutionCache.get(cacheKey) || null;
 
-    console.log(`[DiscoveryEngine] Targeted fetch for ${contestId}${problemIndex}...`);
+    console.log(`[SuperEngine] SEARCHING: Contest ${contestId}, Problem ${problemIndex}`);
 
     try {
-        // Tier 1: Instant Availability Check for Elite Players (The "Legendary 20")
-        // Since elite players often have their submissions archived immediately, 
-        // we can find a high-quality solution without even checking the CF status API.
-        const tier1Potential = await fetchEliteSolutions(contestId, problemIndex, preferredLang);
-        if (tier1Potential) {
-            solutionCache.set(cacheKey, tier1Potential);
-            return tier1Potential;
+        // --- PHASE 1: MASSIVE ELITE PARALLEL SWEEP (The legendary "Top 20") ---
+        // We ping the status of 25 world-class players in parallel.
+        const eliteMatch = await fetchEliteSolutions(contestId, problemIndex, preferredLang);
+        if (eliteMatch) {
+            solutionCache.set(cacheKey, eliteMatch);
+            return eliteMatch;
         }
 
-        // Tier 2: Status API prioritized fetch
-        const submissions = await getSubmissionsForProblem(contestId, problemIndex);
-        if (submissions.length > 0) {
-            const tier2Potential = await findArchivedParallel(contestId, submissions, problemIndex, preferredLang);
-            if (tier2Potential) {
-                solutionCache.set(cacheKey, tier2Potential);
-                return tier2Potential;
+        // --- PHASE 2: DEEP STATUS HARVEST (5000+ entries) ---
+        const deepCandidates = await runDeepStatusSweep(contestId, problemIndex);
+        if (deepCandidates.length > 0) {
+            const match = await checkAvailabilityInParallel(contestId, deepCandidates, problemIndex);
+            if (match) {
+                solutionCache.set(cacheKey, match);
+                return match;
             }
         }
 
-        // Tier 3: Broad CDX contest search
-        const tier3Potential = await broadCDXSearch(contestId, problemIndex, preferredLang);
-        if (tier3Potential) {
-            solutionCache.set(cacheKey, tier3Potential);
-            return tier3Potential;
+        // --- PHASE 3: BROAD ARCHIVE BACKFILL (CDX Crawl) ---
+        const cdxMatch = await runCDXBackfill(contestId, problemIndex);
+        if (cdxMatch) {
+            solutionCache.set(cacheKey, cdxMatch);
+            return cdxMatch;
         }
 
         solutionCache.set(cacheKey, null);
         return null;
     } catch (err) {
-        console.error('[DiscoveryEngine] Critcal Failure:', err);
+        console.error('[SuperEngine] Search Aborted:', err);
         return null;
     }
 }
 
-/**
- * Tier 1 Helper: Fast availability check for top players
- */
 async function fetchEliteSolutions(contestId: number, problemIndex: string, preferredLang?: string): Promise<Solution | null> {
-    // We first check the status API for these players specifically to get their submission IDs
-    // Top players usually have < 100 submissions in a contest, so this is 1 fast API call.
-    const eliteCandidates = ELITE_AUTHORS.slice(0, 6); // Top 6 is enough for Tier 1
+    // We check the status API for these players specifically
+    const eliteCandidates = ELITE_AUTHORS.slice(0, 15); // Check top 15 legendary authors
+
+    console.log(`[SuperEngine] Tier 1: Checking elite handles...`);
 
     const results = await Promise.all(eliteCandidates.map(async handle => {
         try {
@@ -161,13 +164,14 @@ async function fetchEliteSolutions(contestId: number, problemIndex: string, pref
             );
             if (!sub) return null;
 
-            // Immediately check availability
+            console.log(`[SuperEngine] Tier 1 candidate found: ${sub.id} by ${handle}`);
             const availRes = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(`codeforces.com/contest/${contestId}/submission/${sub.id}`)}`);
             if (availRes.ok) {
                 const availData = await availRes.json();
                 const snap = availData?.archived_snapshots?.closest;
                 if (snap?.available) {
-                    return verifyAndFetch(snap.timestamp, snap.url, contestId, problemIndex, preferredLang);
+                    console.log(`[SuperEngine] Candidate ${sub.id} is available in Wayback!`);
+                    return verifySolutionPage(snap.timestamp, snap.url, contestId, problemIndex);
                 }
             }
         } catch (e) { /* ignore */ }
@@ -177,68 +181,106 @@ async function fetchEliteSolutions(contestId: number, problemIndex: string, pref
     return results.find(r => r !== null) || null;
 }
 
-/**
- * Tier 2 Helper: Get submissions from general status
- */
-async function getSubmissionsForProblem(contestId: number, problemIndex: string): Promise<number[]> {
-    try {
-        const res = await fetch(`https://codeforces.com/api/contest.status?contestId=${contestId}&from=1&count=2000`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        if (data.status !== 'OK') return [];
-        return data.result
-            .filter((s: CFSubmission) => s.problem.index.toUpperCase() === problemIndex.toUpperCase() && s.verdict === 'OK')
-            .map((s: CFSubmission) => s.id)
-            .slice(0, 20); // Top 20 candidates only for parallel check
-    } catch (e) {
-        return [];
-    }
-}
+async function runEliteSweep(contestId: number, problemIndex: string): Promise<number[]> {
+    const ids: number[] = [];
+    const seen = new Set<number>();
 
-/**
- * Tier 2 Helper: Ping archives in parallel
- */
-async function findArchivedParallel(contestId: number, ids: number[], problemIndex: string, preferredLang?: string): Promise<Solution | null> {
-    const promises = ids.map(async id => {
+    // Parallel fetch personal status for all 25 elite authors
+    const statusPromises = ELITE_AUTHORS.map(async handle => {
         try {
-            const url = `codeforces.com/contest/${contestId}/submission/${id}`;
-            const resp = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
-            if (!resp.ok) return null;
-            const data = await resp.json();
-            const snap = data?.archived_snapshots?.closest;
-            if (snap?.available) {
-                return verifyAndFetch(snap.timestamp, snap.url, contestId, problemIndex, preferredLang);
-            }
-        } catch (e) { /* ignore */ }
-        return null;
+            const res = await fetch(`https://codeforces.com/api/contest.status?contestId=${contestId}&handle=${handle}`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            if (data.status !== 'OK') return [];
+            return data.result
+                .filter((s: CFSubmission) => s.problem.index.toUpperCase() === problemIndex.toUpperCase() && s.verdict === 'OK')
+                .map((s: CFSubmission) => s.id);
+        } catch (e) { return []; }
     });
 
-    const results = await Promise.all(promises);
-    return results.find(r => r !== null) || null;
+    const results = await Promise.all(statusPromises);
+    for (const list of results) {
+        for (const id of list) {
+            if (!seen.has(id)) { ids.push(id); seen.add(id); }
+        }
+    }
+    return ids;
 }
 
-/**
- * Tier 3 Helper: Broad CDX search fallback
- */
-async function broadCDXSearch(contestId: number, problemIndex: string, preferredLang?: string): Promise<Solution | null> {
-    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=codeforces.com/contest/${contestId}/submission/*&output=json&limit=500&filter=statuscode:200`;
+async function runDeepStatusSweep(contestId: number, problemIndex: string): Promise<number[]> {
+    const ids: number[] = [];
+    // Fetch up to 5000 entries (2 calls of 2500)
+    const offsets = [1, 2501];
+    const fetchPromises = offsets.map(async from => {
+        try {
+            const res = await fetch(`https://codeforces.com/api/contest.status?contestId=${contestId}&from=${from}&count=2500`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            if (data.status !== 'OK') return [];
+            return data.result
+                .filter((s: CFSubmission) => s.problem.index.toUpperCase() === problemIndex.toUpperCase() && s.verdict === 'OK')
+                .map((s: CFSubmission) => s.id);
+        } catch (e) { return []; }
+    });
+
+    const results = await Promise.all(fetchPromises);
+    for (const list of results) ids.push(...list);
+    return ids.slice(0, 50); // Top 50 unique status candidates
+}
+
+async function checkAvailabilityInParallel(contestId: number, ids: number[], problemIndex: string): Promise<Solution | null> {
+    // Ping Wayback Availability for candidates in parallel batches of 10
+    for (let i = 0; i < ids.length; i += 10) {
+        const batch = ids.slice(i, i + 10);
+        const batchPromises = batch.map(async id => {
+            try {
+                const url = `codeforces.com/contest/${contestId}/submission/${id}`;
+                const resp = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                const snap = data?.archived_snapshots?.closest;
+                if (snap?.available) {
+                    return verifySolutionPage(snap.timestamp, snap.url, contestId, problemIndex);
+                }
+            } catch (e) { /* ignore */ }
+            return null;
+        });
+        const results = await Promise.all(batchPromises);
+        const find = results.find(r => r !== null);
+        if (find) return find;
+    }
+    return null;
+}
+
+async function runCDXBackfill(contestId: number, problemIndex: string): Promise<Solution | null> {
+    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=codeforces.com/contest/${contestId}/submission/*&output=json&limit=1000&filter=statuscode:200`;
     try {
         const res = await fetch(cdxUrl);
         if (!res.ok) return null;
         const data = await res.json();
         if (!data || data.length <= 1) return null;
 
-        const rows = data.slice(1).sort((a: string[], b: string[]) => {
+        const rows = data.slice(1);
+        // We want to check a mixture of old and new.
+        // Reverse ID order (recent) and Original order (old)
+        const recentRows = [...rows].sort((a: string[], b: string[]) => {
             const idA = parseInt(a[2].match(/\/submission\/(\d+)/)?.[1] || '0');
             const idB = parseInt(b[2].match(/\/submission\/(\d+)/)?.[1] || '0');
             return idB - idA;
         });
 
-        // We check top 15 from CDX
-        for (const row of rows.slice(0, 15)) {
-            const [, timestamp, originalUrl] = row;
-            const result = await verifyAndFetch(timestamp, originalUrl, contestId, problemIndex, preferredLang);
-            if (result) return result;
+        const candidates = [
+            ...recentRows.slice(0, 20),
+            ...rows.slice(0, 20) // Original order (likely older)
+        ];
+
+        for (let i = 0; i < candidates.length; i += 5) {
+            const batch = candidates.slice(i, i + 5);
+            const results = await Promise.all(batch.map(async row => {
+                return verifySolutionPage(row[1], row[2], contestId, problemIndex);
+            }));
+            const find = results.find(r => r !== null);
+            if (find) return find;
         }
     } catch (e) { /* ignore */ }
     return null;
