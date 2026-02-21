@@ -73,7 +73,7 @@ export default function ProblemHeader({
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 overflow-hidden">
                     <Link
-                        href="/contest"
+                        href="/"
                         className="p-1.5 -ml-1.5 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                         title="Back to Problems"
                     >

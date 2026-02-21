@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useLLM } from '@/lib/useLLM';
+import { extractAndParseJson } from '@/lib/json-utils';
 
 interface Concept {
     title: string;
@@ -156,9 +157,8 @@ export function useTutorSession({
 
         try {
             // ── Phase 2: Fetch reference solution FIRST ──────────────
-            updateMessage(thinkMsgId, '<think>\nReading the problem...\nSearching for reference solutions...\n</think>');
-
             let referenceBlock = '';
+            let referenceStatus = 'No archived solution found. I will solve this from scratch.';
             if (problemId) {
                 try {
                     const [contestIdStr, problemIndex] = problemId.split('-');
@@ -173,13 +173,14 @@ export function useTutorSession({
                             const solData = await solRes.json();
                             if (solData.found && solData.code) {
                                 referenceBlock = `\n\nIMPORTANT — Here is a VERIFIED ACCEPTED solution for this exact problem from a real user. Use it as your primary reference to understand the correct logic and edge-case handling. Adapt and rewrite it in your own style while ensuring correctness:\n--- REFERENCE CODE START ---\n${solData.code}\n--- REFERENCE CODE END ---`;
+                                referenceStatus = 'Verified reference solution found! Using it for guidance...';
                             }
                         }
                     }
                 } catch { /* reference fetch failed, proceed without it */ }
             }
 
-            updateMessage(thinkMsgId, '<think>\nReading the problem...\nIdentifying constraints and edge cases...\n</think>');
+            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\n</think>`);
             await new Promise(r => setTimeout(r, 400));
 
             const systemPrompt = `You are a competitive programming tutor helping a ${isSimple ? 'beginner' : 'skilled programmer'}.
@@ -199,7 +200,9 @@ The "solution" field must contain the FULL compilable code (with includes, main 
 The "solution" must have ZERO comments — no //, no /* */, no #comments. Pure code only.
 The code must be written in ${language}.
 The "explanation" is separate from the code — put ALL explanations there, NOT as code comments.
-CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping if current_product > 1000) unless absolutely necessary for performance, as it often leads to wrong answers for negative numbers or large results. Use robust 64-bit integers (long long in C++) and check for exact equality at the end.${referenceBlock}`;
+CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping if current_product > 1000) unless absolutely necessary for performance, as it often leads to wrong answers for negative numbers or large results. Use robust 64-bit integers (long long in C++) and check for exact equality at the end.
+
+SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid answers (e.g., "output any solution"), you MUST still prioritize matching the exact values provided in the example cases. This ensures you pass the strict judge checker. ${referenceBlock}`;
 
             const userPrompt = `Problem:\n${problemDescription}\n\nWrite a ${isSimple ? 'simple, beginner-friendly' : 'optimal'} solution in ${language}.${referenceBlock ? ' You have a verified reference solution — use it to ensure your logic is correct.' : ''} Return ONLY valid JSON. Remember: ZERO comments in the solution code.`;
 
@@ -219,13 +222,15 @@ CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping 
             let judgeResultLine = "";
             let data: any = {};
 
-            updateMessage(thinkMsgId, '<think>\nReading the problem...\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>');
+            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>`);
 
             while (attempt < maxAttempts) {
                 attempt++;
 
                 if (attempt > 1) {
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed.\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>`);
+                    const passCount = data.passCount || 0;
+                    const totalCount = testCases.length;
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed (${passCount}/${totalCount} tests passed).\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>`);
                 }
 
                 const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\//g, "$1"), {
@@ -251,16 +256,12 @@ CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping 
                 }
 
                 const chatObj = await response.json();
-                let rawContent = chatObj.choices?.[0]?.message?.content || '{}';
-
-                rawContent = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
-                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-                if (jsonMatch) rawContent = jsonMatch[0];
+                const rawContent = chatObj.choices?.[0]?.message?.content || '{}';
 
                 try {
-                    data = JSON.parse(rawContent);
-                } catch (parseErr) {
-                    throw new Error('Failed to parse AI response. The AI returned invalid JSON. Please try again.');
+                    data = extractAndParseJson(rawContent);
+                } catch (parseErr: any) {
+                    throw new Error(parseErr.message || 'Failed to parse AI response. The AI returned invalid JSON. Please try again.');
                 }
 
                 if (!data.solution) {
@@ -292,7 +293,7 @@ CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping 
                                 input: tc.input,
                                 output: tc.output || ''
                             })),
-                            timeLimit: 2000,
+                            timeLimit: 5000,
                             memoryLimit: 256
                         })
                     });
@@ -307,6 +308,7 @@ CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping 
                             const failedCase = judgeData.results?.find((r: any) => !r.passed);
                             let judgeDetails = failedCase ? ` (Test ${failedCase.testCase}: ${failedCase.verdict})` : '';
                             judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
+                            data.passCount = judgeData.passedCount;
                         }
                     } else {
                         judgePassed = false;

@@ -1,12 +1,16 @@
 /**
  * Fetches accepted Codeforces solutions via the Wayback Machine.
- * Pipeline: CF API → Wayback CDX → Wayback Web → Source Code
+ * Optimized for Production: 4-Tier Discovery Engine
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-// Simple in-memory cache to avoid repeated lookups
-const solutionCache = new Map<string, { code: string; language: string; author: string } | null>();
+// Legendary authors whose solutions are most likely to be archived
+const ELITE_AUTHORS = [
+    'tourist', 'Benq', 'mnbvmar', 'ecnerwala', 'radewoosh', 'ksun48',
+    'um_nik', 'Petr', 'neal', 'maroonrk', 'jiangly', 'scott_wu', 'eat_apple',
+    '300iq', 'Egor', 'V_O_V_A', 'W4utiful', 'Tle'
+];
 
 interface CFSubmission {
     id: number;
@@ -16,8 +20,16 @@ interface CFSubmission {
     author: { members: { handle: string }[] };
 }
 
+interface Solution {
+    code: string;
+    language: string;
+    author: string;
+}
+
+const solutionCache = new Map<string, Solution | null>();
+
 /**
- * Normalize CF language strings to match our language dropdown
+ * Tier 0: Simple utility to normalize languages
  */
 function normalizeLang(cfLang: string): string {
     const l = cfLang.toLowerCase();
@@ -33,172 +45,201 @@ function normalizeLang(cfLang: string): string {
 }
 
 /**
- * Step 1: Get accepted submission IDs from Codeforces API
+ * Core Helper: Verify and fetch code from a wayback snapshot
  */
-async function getAcceptedSubmissions(
+async function verifyAndFetch(
+    timestamp: string,
+    originalUrl: string,
     contestId: number,
     problemIndex: string,
     preferredLang?: string
-): Promise<{ id: number; language: string; author: string }[]> {
-    const url = `https://codeforces.com/api/contest.status?contestId=${contestId}&from=1&count=2000`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`CF API error: ${res.status}`);
-
-    const data = await res.json();
-    if (data.status !== 'OK') throw new Error(`CF API: ${data.comment || 'Unknown error'}`);
-
-    const accepted: CFSubmission[] = data.result.filter(
-        (s: CFSubmission) => s.problem.index === problemIndex && s.verdict === 'OK'
-    );
-
-    // Sort: preferred language first, then C++ (most common), then others
-    const sorted = accepted.sort((a, b) => {
-        const aLang = normalizeLang(a.programmingLanguage);
-        const bLang = normalizeLang(b.programmingLanguage);
-        if (preferredLang) {
-            if (aLang === preferredLang && bLang !== preferredLang) return -1;
-            if (bLang === preferredLang && aLang !== preferredLang) return 1;
-        }
-        if (aLang === 'cpp' && bLang !== 'cpp') return -1;
-        if (bLang === 'cpp' && aLang !== 'cpp') return 1;
-        return 0;
-    });
-
-    return sorted.slice(0, 50).map(s => ({
-        id: s.id,
-        language: normalizeLang(s.programmingLanguage),
-        author: s.author.members?.[0]?.handle || 'unknown'
-    }));
-}
-
-/**
- * Step 2: Find which submission URLs are archived in the Wayback Machine
- */
-async function findArchivedSubmissions(
-    contestId: number,
-    submissionIds: number[]
-): Promise<{ submissionId: number; timestamp: string; url: string }[]> {
-    // Query the CDX API for any archived submissions for this contest
-    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=codeforces.com/contest/${contestId}/submission/*&output=json&limit=200&filter=statuscode:200`;
-    const res = await fetch(cdxUrl);
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    if (!data || data.length <= 1) return [];
-
-    // data[0] is headers, data[1..] are results
-    const rows = data.slice(1);
-    const results: { submissionId: number; timestamp: string; url: string }[] = [];
-
-    const idSet = new Set(submissionIds.map(String));
-
-    for (const row of rows) {
-        const [, timestamp, originalUrl] = row;
-        // Extract submission ID from the URL
-        const match = originalUrl.match(/\/submission\/(\d+)/);
-        if (match && idSet.has(match[1])) {
-            results.push({
-                submissionId: parseInt(match[1], 10),
-                timestamp,
-                url: originalUrl
-            });
-        }
-    }
-
-    return results;
-}
-
-/**
- * Step 3: Fetch source code from a Wayback Machine archived page
- */
-async function fetchCodeFromWayback(
-    timestamp: string,
-    originalUrl: string
-): Promise<string | null> {
+): Promise<Solution | null> {
     const waybackUrl = `https://web.archive.org/web/${timestamp}/${originalUrl}`;
-    const res = await fetch(waybackUrl, {
-        headers: { 'User-Agent': UA, 'Accept': 'text/html' }
-    });
-    if (!res.ok) return null;
+    try {
+        const pageRes = await fetch(waybackUrl, {
+            headers: { 'User-Agent': UA },
+            signal: AbortSignal.timeout(5000)
+        });
+        if (!pageRes.ok) return null;
 
-    const html = await res.text();
+        const html = await pageRes.text();
+        const problemRegex = new RegExp(`/contest/${contestId}/problem/${problemIndex}`, 'i');
+        const isAccepted = html.includes('verdict-accepted') || html.includes('OK') || html.includes('Accepted');
 
-    // Extract source code from the #program-source-text element
-    const match = html.match(/id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/);
-    if (!match) return null;
+        if (problemRegex.test(html) && isAccepted) {
+            const match = html.match(/id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/);
+            if (match) {
+                const authorMatch = html.match(/\/profile\/([^"]+)"/);
+                const langMatch = html.match(/<td>\s*Language:\s*<\/td>\s*<td>\s*([^<]+)\s*<\/td>/i);
 
-    // Decode HTML entities
-    let code = match[1]
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&#x27;/g, "'")
-        .replace(/&#10;/g, '\n')
-        .replace(/&#13;/g, '\r');
+                let code = match[1]
+                    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'")
+                    .replace(/&#10;/g, '\n').replace(/&#13;/g, '\r');
 
-    // Truncate to prevent context window blowout
-    if (code.length > 3000) {
-        code = code.substring(0, 3000) + '\n// ...[TRUNCATED]';
+                if (code.length > 5000) {
+                    code = code.substring(0, 5000) + '\n// ...[TRUNCATED for context window]';
+                }
+
+                return {
+                    code,
+                    language: langMatch ? normalizeLang(langMatch[1]) : (preferredLang || 'cpp'),
+                    author: authorMatch ? authorMatch[1] : 'unknown'
+                };
+            }
+        }
+    } catch (e) {
+        // Silent fail for individual verification nodes
     }
-
-    return code;
+    return null;
 }
 
 /**
- * Main entry point: Fetch an accepted solution for a given CF problem.
+ * Main Entry Point: 4-Tier Production Discovery Engine
  */
 export async function fetchAcceptedSolution(
     contestId: number,
     problemIndex: string,
     preferredLang?: string
-): Promise<{ code: string; language: string; author: string } | null> {
+): Promise<Solution | null> {
     const cacheKey = `${contestId}-${problemIndex}-${preferredLang || 'any'}`;
+    if (solutionCache.has(cacheKey)) return solutionCache.get(cacheKey) || null;
 
-    if (solutionCache.has(cacheKey)) {
-        return solutionCache.get(cacheKey) || null;
-    }
+    console.log(`[DiscoveryEngine] Targeted fetch for ${contestId}${problemIndex}...`);
 
     try {
-        // Step 1: Get accepted submission IDs
-        const submissions = await getAcceptedSubmissions(contestId, problemIndex, preferredLang);
-        if (submissions.length === 0) {
-            solutionCache.set(cacheKey, null);
-            return null;
+        // Tier 1: Instant Availability Check for Elite Players (The "Legendary 20")
+        // Since elite players often have their submissions archived immediately, 
+        // we can find a high-quality solution without even checking the CF status API.
+        const tier1Potential = await fetchEliteSolutions(contestId, problemIndex, preferredLang);
+        if (tier1Potential) {
+            solutionCache.set(cacheKey, tier1Potential);
+            return tier1Potential;
         }
 
-        // Step 2: Check which are archived
-        const archived = await findArchivedSubmissions(
-            contestId,
-            submissions.map(s => s.id)
-        );
-
-        if (archived.length > 0) {
-            // Step 3: Fetch source code from the first archived match
-            for (const arch of archived) {
-                const sub = submissions.find(s => s.id === arch.submissionId);
-                const code = await fetchCodeFromWayback(arch.timestamp, arch.url);
-                if (code && code.trim().length > 10) {
-                    const result = {
-                        code,
-                        language: sub?.language || 'cpp',
-                        author: sub?.author || 'unknown'
-                    };
-                    solutionCache.set(cacheKey, result);
-                    return result;
-                }
+        // Tier 2: Status API prioritized fetch
+        const submissions = await getSubmissionsForProblem(contestId, problemIndex);
+        if (submissions.length > 0) {
+            const tier2Potential = await findArchivedParallel(contestId, submissions, problemIndex, preferredLang);
+            if (tier2Potential) {
+                solutionCache.set(cacheKey, tier2Potential);
+                return tier2Potential;
             }
         }
 
-        // No archived submission found for this specific problem
-        // Do NOT fallback to random contest submissions — they may be for different problems
+        // Tier 3: Broad CDX contest search
+        const tier3Potential = await broadCDXSearch(contestId, problemIndex, preferredLang);
+        if (tier3Potential) {
+            solutionCache.set(cacheKey, tier3Potential);
+            return tier3Potential;
+        }
 
         solutionCache.set(cacheKey, null);
         return null;
-    } catch (error: any) {
-        console.error('Solution fetch error:', error.message);
-        solutionCache.set(cacheKey, null);
+    } catch (err) {
+        console.error('[DiscoveryEngine] Critcal Failure:', err);
         return null;
     }
+}
+
+/**
+ * Tier 1 Helper: Fast availability check for top players
+ */
+async function fetchEliteSolutions(contestId: number, problemIndex: string, preferredLang?: string): Promise<Solution | null> {
+    // We first check the status API for these players specifically to get their submission IDs
+    // Top players usually have < 100 submissions in a contest, so this is 1 fast API call.
+    const eliteCandidates = ELITE_AUTHORS.slice(0, 6); // Top 6 is enough for Tier 1
+
+    const results = await Promise.all(eliteCandidates.map(async handle => {
+        try {
+            const res = await fetch(`https://codeforces.com/api/contest.status?contestId=${contestId}&handle=${handle}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data.status !== 'OK') return null;
+            const sub = data.result.find((s: CFSubmission) =>
+                s.problem.index.toUpperCase() === problemIndex.toUpperCase() && s.verdict === 'OK'
+            );
+            if (!sub) return null;
+
+            // Immediately check availability
+            const availRes = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(`codeforces.com/contest/${contestId}/submission/${sub.id}`)}`);
+            if (availRes.ok) {
+                const availData = await availRes.json();
+                const snap = availData?.archived_snapshots?.closest;
+                if (snap?.available) {
+                    return verifyAndFetch(snap.timestamp, snap.url, contestId, problemIndex, preferredLang);
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }));
+
+    return results.find(r => r !== null) || null;
+}
+
+/**
+ * Tier 2 Helper: Get submissions from general status
+ */
+async function getSubmissionsForProblem(contestId: number, problemIndex: string): Promise<number[]> {
+    try {
+        const res = await fetch(`https://codeforces.com/api/contest.status?contestId=${contestId}&from=1&count=2000`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (data.status !== 'OK') return [];
+        return data.result
+            .filter((s: CFSubmission) => s.problem.index.toUpperCase() === problemIndex.toUpperCase() && s.verdict === 'OK')
+            .map((s: CFSubmission) => s.id)
+            .slice(0, 20); // Top 20 candidates only for parallel check
+    } catch (e) {
+        return [];
+    }
+}
+
+/**
+ * Tier 2 Helper: Ping archives in parallel
+ */
+async function findArchivedParallel(contestId: number, ids: number[], problemIndex: string, preferredLang?: string): Promise<Solution | null> {
+    const promises = ids.map(async id => {
+        try {
+            const url = `codeforces.com/contest/${contestId}/submission/${id}`;
+            const resp = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            const snap = data?.archived_snapshots?.closest;
+            if (snap?.available) {
+                return verifyAndFetch(snap.timestamp, snap.url, contestId, problemIndex, preferredLang);
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    });
+
+    const results = await Promise.all(promises);
+    return results.find(r => r !== null) || null;
+}
+
+/**
+ * Tier 3 Helper: Broad CDX search fallback
+ */
+async function broadCDXSearch(contestId: number, problemIndex: string, preferredLang?: string): Promise<Solution | null> {
+    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=codeforces.com/contest/${contestId}/submission/*&output=json&limit=500&filter=statuscode:200`;
+    try {
+        const res = await fetch(cdxUrl);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || data.length <= 1) return null;
+
+        const rows = data.slice(1).sort((a: string[], b: string[]) => {
+            const idA = parseInt(a[2].match(/\/submission\/(\d+)/)?.[1] || '0');
+            const idB = parseInt(b[2].match(/\/submission\/(\d+)/)?.[1] || '0');
+            return idB - idA;
+        });
+
+        // We check top 15 from CDX
+        for (const row of rows.slice(0, 15)) {
+            const [, timestamp, originalUrl] = row;
+            const result = await verifyAndFetch(timestamp, originalUrl, contestId, problemIndex, preferredLang);
+            if (result) return result;
+        }
+    } catch (e) { /* ignore */ }
+    return null;
 }
