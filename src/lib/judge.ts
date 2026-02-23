@@ -142,10 +142,10 @@ export async function executeBatchOnJudge0(
 
     const batchPayload = {
         submissions: testCases.map(tc => ({
-            source_code: Buffer.from(sourceCode).toString('base64'),
+            source_code: Buffer.from(sourceCode || '').toString('base64'),
             language_id: judgeLanguageId,
-            stdin: Buffer.from(tc.input).toString('base64'),
-            expected_output: Buffer.from(tc.output).toString('base64'),
+            stdin: Buffer.from(String(tc.input ?? '')).toString('base64'),
+            expected_output: Buffer.from(String(tc.output ?? '')).toString('base64'),
             cpu_time_limit: timeLimit / 1000,
             memory_limit: memoryLimit * 1024,
         }))
@@ -211,11 +211,13 @@ export async function executeBatchOnJudge0(
             }
 
             const pollData = await resultsResponse.json();
-            submissions = pollData.submissions || [];
-
-            // Check if all completed (status_id >= 3 means finished)
-            const allDone = submissions.every((s: Judge0SubmissionResult) => s.status_id >= 3);
-            if (allDone) break;
+            if (pollData && Array.isArray(pollData.submissions)) {
+                submissions = pollData.submissions;
+                if (submissions.length > 0) {
+                    const allDone = submissions.every((s: Judge0SubmissionResult) => s.status_id >= 3);
+                    if (allDone) break;
+                }
+            }
         }
 
         // Process results

@@ -2,12 +2,17 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { Loader2, Wand2, Code, Settings, BrainCircuit, Globe, X, Youtube, BookOpen, ExternalLink, PlayCircle, Plus, MessageSquare } from 'lucide-react';
+import { Loader2, Wand2, Code, Settings, BrainCircuit, Globe, X, Youtube, BookOpen, ExternalLink, PlayCircle, Plus, MessageSquare, Github } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { loadAIPreferences, inferPreferencesFromProfile, AILearningPreferences } from '@/lib/ai-personalization';
 
 import AIPreferencesModal from './AIPreferencesModal';
+import SignInModal from '@/components/auth/SignInModal';
+import { Message } from '@/types/chat';
+import { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { useAIChatPersistence } from '@/hooks/contest/useAIChatPersistence';
 
 import { useLLM } from '@/lib/useLLM';
 import { trackInteraction, analyzeQuestion, loadBehaviorPatterns, inferPreferencesFromBehavior } from '@/lib/ai-behavior-learning';
@@ -72,7 +77,7 @@ export default function AIAgentPanel({
     problemId,
     isActive = false
 }: AIAgentPanelProps) {
-    const [messagesByTab, setMessagesByTab] = useState<Record<string, Message[]>>({ 'default': [] });
+    const { messagesByTab, setMessagesByTab, chatTabs, setChatTabs, isLoaded } = useAIChatPersistence(problemId || 'unknown');
     const [inputByTab, setInputByTab] = useState<Record<string, string>>({ 'default': initialQuestion || '' });
     const [conceptsByTab, setConceptsByTab] = useState<Record<string, any[]>>({ 'default': [] });
     const [tutorActiveByTab, setTutorActiveByTab] = useState<Record<string, boolean>>({ 'default': false });
@@ -83,8 +88,49 @@ export default function AIAgentPanel({
     const [isResourcesOpen, setIsResourcesOpen] = useState(false);
     const { settings } = useLLM();
 
-    // Chat tabs state
-    const [chatTabs, setChatTabs] = useState<{ id: string; label: string }[]>([{ id: 'default', label: 'Chat 1' }]);
+    // -- Auth State --
+    const [user, setUser] = useState<User | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [showSignInModal, setShowSignInModal] = useState(false);
+
+    const supabase = createClient();
+
+    useEffect(() => {
+        let mounted = true;
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (mounted) {
+                setUser(session?.user ?? null);
+                setAuthLoading(false);
+            }
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (mounted) {
+                setUser(session?.user ?? null);
+            }
+        });
+
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    const handleOAuth = async (provider: 'github' | 'google') => {
+        try {
+            const returnUrl = window.location.href;
+            await supabase.auth.signInWithOAuth({
+                provider,
+                options: {
+                    redirectTo: `${window.location.origin}/api/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`
+                }
+            });
+        } catch (err) {
+            console.error('OAuth failed', err);
+        }
+    };
+
+    // Chat tabs state is now managed by useAIChatPersistence hook
     const [activeChatTab, setActiveChatTab] = useState('default');
 
     const messages = messagesByTab[activeChatTab] || [];
@@ -227,55 +273,7 @@ export default function AIAgentPanel({
         }
     }, [initialQuestion]);
 
-    // Load messages from localStorage on mount
-    useEffect(() => {
-        if (!problemId) return;
-        try {
-            const tabsKey = `verdict_ai_tabs_${problemId}`;
-            const tabsStored = localStorage.getItem(tabsKey);
-            if (tabsStored) {
-                const parsedTabs = JSON.parse(tabsStored);
-                if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
-                    setChatTabs(parsedTabs);
-                    setActiveChatTab(parsedTabs[parsedTabs.length - 1].id);
-                }
-            }
-
-            const key = `verdict_ai_chat_${problemId}`;
-            const stored = localStorage.getItem(key);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) {
-                    const hydratedMessages = parsed.map((m: any) => ({
-                        ...m,
-                        timestamp: new Date(m.timestamp)
-                    }));
-                    setMessagesByTab({ 'default': hydratedMessages });
-                } else {
-                    const hydratedRecord: Record<string, Message[]> = {};
-                    for (const tabId in parsed) {
-                        hydratedRecord[tabId] = (parsed[tabId] || []).map((m: any) => ({
-                            ...m,
-                            timestamp: new Date(m.timestamp)
-                        }));
-                    }
-                    setMessagesByTab(hydratedRecord);
-                }
-            }
-        } catch (e) {
-            console.error('[AI History] Failed to load chat history from storage:', e);
-        }
-    }, [problemId]);
-
-    // Save messages to LocalStorage whenever they change
-    useEffect(() => {
-        if (!problemId) return;
-        const key = `verdict_ai_chat_${problemId}`;
-        localStorage.setItem(key, JSON.stringify(messagesByTab));
-
-        const tabsKey = `verdict_ai_tabs_${problemId}`;
-        localStorage.setItem(tabsKey, JSON.stringify(chatTabs));
-    }, [messagesByTab, chatTabs, problemId]);
+    // (removed local storage useEffect logic as it is now handled by useAIChatPersistence)
 
     // Message helpers for hook
     const addMessage = useCallback((msg: { id: string; role: 'assistant'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string } }) => {
@@ -929,7 +927,7 @@ export default function AIAgentPanel({
                     )}
 
                     {/* Configure LLM banner */}
-                    {(!settings.enabled || !settings.apiKey) && (
+                    {user && (!settings.enabled || !settings.apiKey) && (
                         <button
                             onClick={() => setShowPreferencesModal(true)}
                             className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.13] border border-emerald-500/20 rounded-2xl text-emerald-400 text-[12px] font-medium transition-all group"
@@ -940,25 +938,42 @@ export default function AIAgentPanel({
                     )}
 
                     {/* Chat input + action buttons */}
-                    <div className={`transition-opacity duration-200 ${(!settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
-                        <PromptInputBox
-                            value={input}
-                            onChange={setInput}
-                            isLoading={isLoadingMessage || tutorLoading}
-                            placeholder={
-                                !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
-                                    : selectedCode && selectedLineReference ? 'Ask about the selected code...'
-                                        : 'Ask anything...'
-                            }
-                            onSend={(msg) => handleSendMessage(msg)}
-                            onStop={stopGeneration}
-                            onOpenResources={() => setIsResourcesOpen(true)}
-                            onTeachMe={() => handleSendMessage('Teach me this problem')}
-                            isTutorLoading={tutorLoading}
-                            isTutorActive={isTutorActive}
-                            hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
-                        />
-                    </div>
+                    {!authLoading && !user ? (
+                        <div className="w-full mb-3 flex flex-col gap-3 p-4 bg-[#141419] border border-white/[0.08] rounded-2xl relative overflow-hidden">
+                            <div className="relative z-10 flex flex-col gap-1.5">
+                                <h4 className="text-[13px] font-semibold text-white/90">Sign in to use the AI Tutor</h4>
+                                <p className="text-[11px] text-white/50 mb-2">We ask you to sign in to prevent API abuse.</p>
+
+                                <button
+                                    onClick={() => setShowSignInModal(true)}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white font-medium rounded-lg text-[12px] transition-colors"
+                                >
+                                    <BrainCircuit size={14} strokeWidth={2} />
+                                    <span>Bring your own LLM</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`transition-opacity duration-200 ${(!settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+                            <PromptInputBox
+                                value={input}
+                                onChange={setInput}
+                                isLoading={isLoadingMessage || tutorLoading}
+                                placeholder={
+                                    !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
+                                        : selectedCode && selectedLineReference ? 'Ask about the selected code...'
+                                            : 'Ask anything...'
+                                }
+                                onSend={(msg) => handleSendMessage(msg)}
+                                onStop={stopGeneration}
+                                onOpenResources={() => setIsResourcesOpen(true)}
+                                onTeachMe={() => handleSendMessage('Teach me this problem')}
+                                isTutorLoading={tutorLoading}
+                                isTutorActive={isTutorActive}
+                                hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
+                            />
+                        </div>
+                    )}
 
                     {/* Bottom action row: Settings */}
                     <div className="flex items-center justify-end mt-2">
@@ -1094,6 +1109,11 @@ export default function AIAgentPanel({
                         const inferred = inferPreferencesFromProfile({ codeforcesRating });
                         setPreferences({ ...inferred, ...loaded });
                     }}
+                />
+
+                <SignInModal
+                    isOpen={showSignInModal}
+                    onClose={() => setShowSignInModal(false)}
                 />
             </div>
         </AIContextUsageProvider>

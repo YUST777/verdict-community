@@ -9,6 +9,8 @@ services:
       dockerfile: Dockerfile
     container_name: verdict-mirror
     restart: always
+    ports:
+      - "3099:3099"
     environment:
       - PORT=3099
     networks:

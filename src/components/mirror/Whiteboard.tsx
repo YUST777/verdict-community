@@ -7,7 +7,7 @@ import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types
 
 // Dynamically import Excalidraw to avoid SSR issues
 const Excalidraw = dynamic(
-    () => import('@/components/ExcalidrawWrapper'),
+    () => import('@/components/shared/ExcalidrawWrapper'),
     {
         ssr: false,
         loading: () => (
@@ -73,24 +73,95 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
                 }
             };
             localStorage.setItem(storageKey, JSON.stringify(data));
+            return data;
         } catch (e) {
             console.error('Failed to save whiteboard data:', e);
+            return null;
         }
     }, [storageKey]);
+
+    const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+    const isDbLoadedRef = React.useRef(false);
+
+    // Initial Database Sync
+    React.useEffect(() => {
+        if (!excalidrawAPI || isDbLoadedRef.current) return;
+
+        async function loadDb() {
+            try {
+                const res = await fetch(`/api/workspace/sync?problemId=${encodeURIComponent(contestId + '-' + problemIndex)}`);
+                if (res.ok) {
+                    const { data } = await res.json();
+                    if (data && data.whiteboard_data) {
+                        try {
+                            const wbData = typeof data.whiteboard_data === 'string' ? JSON.parse(data.whiteboard_data) : data.whiteboard_data;
+                            if (wbData && wbData.elements && wbData.elements.length > 0) {
+                                excalidrawAPI.updateScene(wbData);
+                            }
+                        } catch (e) {
+                            console.error('Failed to apply DB whiteboard data', e);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch DB whiteboard data', e);
+            }
+            isDbLoadedRef.current = true;
+        }
+
+        loadDb();
+    }, [excalidrawAPI, contestId, problemIndex]);
+
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, []);
 
     // Handle Excalidraw changes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleChange = useCallback((elements: readonly any[], appState: any) => {
-        saveData(elements, appState);
-    }, [saveData]);
+        const dataToSave = saveData(elements, appState);
+
+        // Don't trigger DB saves until initial load is done to avoid overwriting DB with local empty state
+        if (!isDbLoadedRef.current || !dataToSave) return;
+
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                await fetch('/api/workspace/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problemId: `${contestId}-${problemIndex}`,
+                        whiteboardData: dataToSave
+                    })
+                });
+            } catch (e) {
+                console.error('Failed to sync whiteboard to DB', e);
+            }
+        }, 1500);
+
+    }, [saveData, contestId, problemIndex]);
 
     // Clear the whiteboard
     const handleClear = useCallback(() => {
         if (excalidrawAPI) {
             excalidrawAPI.resetScene();
             localStorage.removeItem(storageKey);
+
+            // Also clear in DB
+            fetch('/api/workspace/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    problemId: `${contestId}-${problemIndex}`,
+                    whiteboardData: { elements: [], appState: {} }
+                })
+            }).catch(console.error);
         }
-    }, [excalidrawAPI, storageKey]);
+    }, [excalidrawAPI, storageKey, contestId, problemIndex]);
 
     // Open in new tab
     const handleOpenInNewTab = useCallback(() => {
@@ -99,7 +170,9 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
     }, [contestId, problemIndex]);
 
     // Get initial data
-    const savedData = loadSavedData();
+    // We only call this once during initial render because useMemo/useState would be better, but we leave it as is 
+    // to preserve excalidraw's component lifecycle which expects initialData only on mount.
+    const savedData = React.useMemo(() => loadSavedData(), [loadSavedData]);
 
     return (
         <div

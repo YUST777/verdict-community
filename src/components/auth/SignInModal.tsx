@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, LogIn, Mail, Lock, Eye, EyeOff, Loader2, Github } from 'lucide-react';
+import { X, Loader2, Github } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface SignInModalProps {
@@ -19,12 +19,8 @@ export default function SignInModal({
     title = 'Sign in to continue',
     subtitle = 'You need to sign in to use AI features'
 }: SignInModalProps) {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [mode, setMode] = useState<'signin' | 'signup'>('signin');
 
     const supabase = createClient();
 
@@ -51,36 +47,7 @@ export default function SignInModal({
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
 
-        try {
-            const endpoint = mode === 'signin' ? '/api/auth/login' : '/api/auth/register';
-
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Authentication failed');
-            }
-
-            // Success (Cookie is set by server)
-            onSuccess?.();
-            onClose();
-
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'An error occurred');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -133,101 +100,11 @@ export default function SignInModal({
                         </button>
                     </div>
 
-                    {/* Divider */}
-                    <div className="relative my-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/10" />
+                    {error && (
+                        <div className="text-sm px-4 py-3 mt-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+                            {error}
                         </div>
-                        <div className="relative flex justify-center text-xs">
-                            <span className="px-4 bg-[#1a1a1a] text-white/40">or continue with email</span>
-                        </div>
-                    </div>
-
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {error && (
-                            <div className="text-sm px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
-                                {error}
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <label className="text-sm text-white/70 font-medium">Email</label>
-                            <div className="relative">
-                                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" strokeWidth={2.5} />
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="you@example.com"
-                                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm text-white/70 font-medium">Password</label>
-                            <div className="relative">
-                                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" strokeWidth={2.5} />
-                                <input
-                                    type={showPassword ? 'text' : 'password'}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full pl-10 pr-12 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                                    required
-                                    minLength={6}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60 transition-colors"
-                                >
-                                    {showPassword ? <EyeOff size={16} strokeWidth={2.5} /> : <Eye size={16} strokeWidth={2.5} />}
-                                </button>
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-                        >
-                            {loading ? (
-                                <Loader2 size={18} className="animate-spin" strokeWidth={2.5} />
-                            ) : (
-                                <>
-                                    {mode === 'signin' ? 'Sign In' : 'Sign Up'}
-                                </>
-                            )}
-                        </button>
-                    </form>
-
-                    {/* Toggle mode */}
-                    <p className="text-center text-sm text-white/50 mt-6">
-                        {mode === 'signin' ? (
-                            <>
-                                Don&apos;t have an account?{' '}
-                                <button
-                                    onClick={() => setMode('signup')}
-                                    className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
-                                >
-                                    Sign up
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                Already have an account?{' '}
-                                <button
-                                    onClick={() => setMode('signin')}
-                                    className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
-                                >
-                                    Sign in
-                                </button>
-                            </>
-                        )}
-                    </p>
+                    )}
                 </div>
             </div>
         </div>

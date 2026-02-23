@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Example } from '@/components/mirror/shared/types';
 
 interface UseCustomTestCasesParams {
@@ -16,45 +16,103 @@ interface UseCustomTestCasesReturn {
 
 export function useCustomTestCases({ contestId, problemId, sampleTestCasesCount }: UseCustomTestCasesParams): UseCustomTestCasesReturn {
     const [customTestCases, setCustomTestCases] = useState<Example[]>([]);
+    const [isLoaded, setIsLoaded] = useState(false);
 
-    // Load custom test cases from localStorage
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isFirstLoad = useRef(true);
+
+    const safeContestId = Array.isArray(contestId) ? contestId[0] : contestId;
+    const safeProblemId = Array.isArray(problemId) ? problemId[0] : problemId;
+
+    const dbProblemId = `${safeContestId}-${safeProblemId}`;
+    const customTestKey = `verdict-custom-tests-${safeContestId}-${safeProblemId}`;
+
+    // Load custom test cases from localStorage and DB
     useEffect(() => {
         if (!contestId || !problemId) return;
 
-        const safeContestId = Array.isArray(contestId) ? contestId[0] : contestId;
-        const safeProblemId = Array.isArray(problemId) ? problemId[0] : problemId;
+        async function loadData() {
+            const savedLocal = localStorage.getItem(customTestKey);
+            let parsedLocal: Example[] = [];
 
-        const customTestKey = `verdict-custom-tests-${safeContestId}-${safeProblemId}`;
-        const saved = localStorage.getItem(customTestKey);
-
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) {
-                    setTimeout(() => {
-                        setCustomTestCases(parsed.map((tc: Example) => ({ ...tc, isCustom: true })));
-                    }, 0);
+            if (savedLocal) {
+                try {
+                    const parsed = JSON.parse(savedLocal);
+                    if (Array.isArray(parsed)) {
+                        parsedLocal = parsed.map((tc: Example) => ({ ...tc, isCustom: true }));
+                    }
+                } catch {
+                    // Ignore parsing error
                 }
-            } catch {
-                setCustomTestCases([]);
             }
-        } else {
-            // CRITICAL FIX: Explicitly clear custom test cases if none are found for this problem
-            // Otherwise, test cases from the previous problem will persist (leak).
-            setCustomTestCases([]);
-        }
-    }, [contestId, problemId]);
 
-    // Save custom test cases to localStorage
+            try {
+                const res = await fetch(`/api/workspace/sync?problemId=${encodeURIComponent(dbProblemId)}`);
+                if (res.ok) {
+                    const { data } = await res.json();
+                    if (data && data.custom_test_cases) {
+                        setCustomTestCases(data.custom_test_cases.map((tc: Example) => ({ ...tc, isCustom: true })));
+                    } else if (parsedLocal.length > 0) {
+                        setCustomTestCases(parsedLocal);
+                    } else {
+                        setCustomTestCases([]);
+                    }
+                } else if (parsedLocal.length > 0) {
+                    setCustomTestCases(parsedLocal);
+                } else {
+                    setCustomTestCases([]);
+                }
+            } catch (err) {
+                console.error('[workspace/sync] Failed to load DB test cases', err);
+                if (parsedLocal.length > 0) {
+                    setCustomTestCases(parsedLocal);
+                } else {
+                    setCustomTestCases([]);
+                }
+            }
+            setIsLoaded(true);
+        }
+
+        loadData();
+    }, [contestId, problemId, customTestKey, dbProblemId]);
+
+    // Save custom test cases to localStorage & Debounced upsert to Supabase
     useEffect(() => {
+        if (!isLoaded) return;
+        if (isFirstLoad.current) {
+            isFirstLoad.current = false;
+            return;
+        }
         if (!contestId || !problemId) return;
 
         const safeContestId = Array.isArray(contestId) ? contestId[0] : contestId;
         const safeProblemId = Array.isArray(problemId) ? problemId[0] : problemId;
-
         const customTestKey = `verdict-custom-tests-${safeContestId}-${safeProblemId}`;
+
+        // Save locally first
         localStorage.setItem(customTestKey, JSON.stringify(customTestCases));
-    }, [customTestCases, contestId, problemId]);
+
+        // Debounce DB upsert
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                await fetch('/api/workspace/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problemId: dbProblemId,
+                        customTestCases
+                    })
+                });
+            } catch (err) {
+                console.error('[workspace/sync] Failed to sync test cases to db', err);
+            }
+        }, 1000);
+
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, [customTestCases, contestId, problemId, dbProblemId, isLoaded]);
 
     const handleAdd = useCallback((testCase: Example) => {
         setCustomTestCases(prev => [...prev, { ...testCase, isCustom: true }]);
@@ -85,4 +143,3 @@ export function useCustomTestCases({ contestId, problemId, sampleTestCasesCount 
         handleUpdate
     };
 }
-

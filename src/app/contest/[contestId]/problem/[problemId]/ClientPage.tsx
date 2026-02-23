@@ -8,7 +8,7 @@ import { Submission, AnalyticsStats } from '@/components/mirror/shared/types';
 import { ProblemHeader } from '@/components/mirror/problem';
 import { CodeWorkspace, ComplexityModal } from '@/components/mirror/editor';
 import { ProblemLeftPanel } from '@/components/mirror/problem';
-import ExtensionGate from '@/components/ExtensionGate';
+import ExtensionGate from '@/components/core/ExtensionGate';
 import Link from 'next/link';
 import ExtensionOnboardingModal from '@/components/mirror/ExtensionOnboardingModal';
 

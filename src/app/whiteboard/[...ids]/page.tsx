@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Trash2, Download } from 'lucide-react';
 
 const Excalidraw = dynamic(
-    () => import('@/components/ExcalidrawWrapper'),
+    () => import('@/components/shared/ExcalidrawWrapper'),
     {
         ssr: false,
         loading: () => (
@@ -32,6 +32,7 @@ export default function WhiteboardPage() {
     // Interface for Excalidraw API
     interface ExcalidrawAPI {
         resetScene: () => void;
+        updateScene: (scene: any) => void;
         getSceneElements: () => unknown[];
         getAppState: () => Record<string, unknown>;
         getFiles: () => Record<string, unknown>;
@@ -48,7 +49,10 @@ export default function WhiteboardPage() {
     const { initialData, triggerSave } = useWhiteboardPersistence(
         storageKey,
         legacyKey,
-        whiteboardId === 'primary'
+        whiteboardId === 'primary',
+        contestId,
+        problemIndex,
+        excalidrawAPI
     );
 
     // Handle changes
@@ -61,6 +65,17 @@ export default function WhiteboardPage() {
         if (excalidrawAPI) {
             excalidrawAPI.resetScene();
             localStorage.removeItem(storageKey);
+
+            if (whiteboardId === 'primary') {
+                fetch('/api/workspace/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problemId: `${contestId}-${problemIndex}`,
+                        whiteboardData: { elements: [], appState: {} }
+                    })
+                }).catch(console.error);
+            }
         }
     }, [excalidrawAPI, storageKey]);
 
@@ -176,7 +191,14 @@ export default function WhiteboardPage() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WhiteboardData = any; // Excalidraw's internal data structure
 
-function useWhiteboardPersistence(storageKey: string, legacyKey: string, isPrimary: boolean) {
+function useWhiteboardPersistence(
+    storageKey: string,
+    legacyKey: string,
+    isPrimary: boolean,
+    contestId: string,
+    problemIndex: string,
+    excalidrawAPI: any
+) {
     const [initialData] = useState<WhiteboardData | null>(() => {
         if (typeof window === 'undefined') return null;
         try {
@@ -193,6 +215,8 @@ function useWhiteboardPersistence(storageKey: string, legacyKey: string, isPrima
         return null;
     });
 
+    const isDbLoadedRef = useRef(false);
+
     useEffect(() => {
         if (isPrimary) {
             const current = localStorage.getItem(storageKey);
@@ -205,13 +229,41 @@ function useWhiteboardPersistence(storageKey: string, legacyKey: string, isPrima
         }
     }, [isPrimary, storageKey, legacyKey]);
 
+    useEffect(() => {
+        if (!isPrimary || !excalidrawAPI || isDbLoadedRef.current) return;
+
+        async function loadDb() {
+            try {
+                const res = await fetch(`/api/workspace/sync?problemId=${encodeURIComponent(contestId + '-' + problemIndex)}`);
+                if (res.ok) {
+                    const { data } = await res.json();
+                    if (data && data.whiteboard_data) {
+                        try {
+                            const wbData = typeof data.whiteboard_data === 'string' ? JSON.parse(data.whiteboard_data) : data.whiteboard_data;
+                            if (wbData && wbData.elements && wbData.elements.length > 0) {
+                                excalidrawAPI.updateScene(wbData);
+                            }
+                        } catch (e) {
+                            console.error('Failed to apply DB whiteboard data', e);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch DB whiteboard data', e);
+            }
+            isDbLoadedRef.current = true;
+        }
+
+        loadDb();
+    }, [excalidrawAPI, isPrimary, contestId, problemIndex]);
+
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const triggerSave = useCallback((elements: readonly any[], appState: any) => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-        saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = setTimeout(async () => {
             try {
                 const data = {
                     elements: [...elements],
@@ -223,11 +275,26 @@ function useWhiteboardPersistence(storageKey: string, legacyKey: string, isPrima
                     }
                 };
                 localStorage.setItem(storageKey, JSON.stringify(data));
+
+                if (isPrimary && isDbLoadedRef.current) {
+                    try {
+                        await fetch('/api/workspace/sync', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                problemId: `${contestId}-${problemIndex}`,
+                                whiteboardData: data
+                            })
+                        });
+                    } catch (e) {
+                        console.error('Failed to sync whiteboard to DB', e);
+                    }
+                }
             } catch (e) {
                 console.error('Failed to save:', e);
             }
-        }, 1000);
-    }, [storageKey]);
+        }, 1500);
+    }, [storageKey, isPrimary, contestId, problemIndex]);
 
     return { initialData, triggerSave };
 }

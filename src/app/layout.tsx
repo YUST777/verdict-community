@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { SmoothScroll } from "@/components/smooth-scroll";
-import { Providers } from "@/components/providers";
+import { SmoothScroll } from "@/components/core/smooth-scroll";
+import { Providers } from "@/components/core/providers";
+import LocalToCloudSync from "@/components/auth/LocalToCloudSync";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -76,6 +77,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
+          <LocalToCloudSync />
           <SmoothScroll>
             {children}
           </SmoothScroll>

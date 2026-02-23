@@ -4,6 +4,7 @@
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const MIRROR_URL = process.env.MIRROR_SERVICE_URL || 'http://127.0.0.1:3099';
 
 // Legendary authors with extremely high archival probability
 const ELITE_AUTHORS = [
@@ -54,15 +55,20 @@ async function verifySolutionPage(
     contestId: number,
     problemIndex: string
 ): Promise<Solution | null> {
-    const waybackUrl = `https://web.archive.org/web/${timestamp}/${originalUrl}`;
+    const waybackUrl = originalUrl.startsWith('http') ? originalUrl : `https://web.archive.org/web/${timestamp}/${originalUrl}`;
     try {
+        console.log(`[SuperEngine] Verifying: ${waybackUrl}`);
         const res = await fetch(waybackUrl, {
             headers: { 'User-Agent': UA },
             signal: AbortSignal.timeout(30000) // 30s timeout for sluggish Wayback Machine
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+            console.log(`[SuperEngine] Verification Failed: HTTP ${res.status}`);
+            return null;
+        }
 
         const html = await res.text();
+        console.log(`[SuperEngine] Fetched HTML length: ${html.length}`);
 
         // Multi-pattern verification: Be extremely liberal
         const patterns = [
@@ -76,8 +82,27 @@ async function verifySolutionPage(
         const isAccepted = html.includes('verdict-accepted') || html.includes('OK') || html.includes('Accepted') || html.includes('Correct');
         const matchesProblem = patterns.some(p => p.test(html)) || (html.includes(`${contestId}`) && html.includes(`${problemIndex}`));
 
+        console.log(`[SuperEngine] Match Stats: Problem=${matchesProblem}, Accepted=${isAccepted}`);
+
         if (matchesProblem && isAccepted) {
-            const sourceMatch = html.match(/id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/);
+            // Robust source extraction: Try exact ID, then class, then largest <pre>
+            let sourceMatch = html.match(/id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/);
+
+            if (!sourceMatch) {
+                sourceMatch = html.match(/class="[^"]*program-source[^"]*"[^>]*>([\s\S]*?)<\/pre>/);
+            }
+
+            if (!sourceMatch) {
+                const allPres = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/g);
+                if (allPres) {
+                    const content = allPres.map(p => p.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)?.[1] || "")
+                        .sort((a, b) => b.length - a.length)[0];
+                    if (content.length > 50) {
+                        sourceMatch = [null, content] as any;
+                    }
+                }
+            }
+
             if (sourceMatch && sourceMatch[1].trim().length > 20) {
                 const authorMatch = html.match(/\/profile\/([^"]+)"/);
                 const langMatch = html.match(/<td>\s*Language:\s*<\/td>\s*<td>\s*([^<]+)\s*<\/td>/i);
@@ -114,15 +139,17 @@ export async function fetchAcceptedSolution(
     console.log(`[SuperEngine] SEARCHING: Contest ${contestId}, Problem ${problemIndex}`);
 
     try {
-        // --- PHASE 1: MASSIVE ELITE PARALLEL SWEEP (The legendary "Top 20") ---
-        // We ping the status of 25 world-class players in parallel.
-        const eliteMatch = await fetchEliteSolutions(contestId, problemIndex, preferredLang);
-        if (eliteMatch) {
-            solutionCache.set(cacheKey, eliteMatch);
-            return eliteMatch;
+        // --- PHASE 1: ELITE PARALLEL SWEEP ---
+        const eliteIds = await runEliteSweep(contestId, problemIndex);
+        if (eliteIds.length > 0) {
+            const match = await checkAvailabilityInParallel(contestId, eliteIds, problemIndex);
+            if (match) {
+                solutionCache.set(cacheKey, match);
+                return match;
+            }
         }
 
-        // --- PHASE 2: DEEP STATUS HARVEST (5000+ entries) ---
+        // --- PHASE 2: DEEP STATUS HARVEST ---
         const deepCandidates = await runDeepStatusSweep(contestId, problemIndex);
         if (deepCandidates.length > 0) {
             const match = await checkAvailabilityInParallel(contestId, deepCandidates, problemIndex);
@@ -133,10 +160,27 @@ export async function fetchAcceptedSolution(
         }
 
         // --- PHASE 3: BROAD ARCHIVE BACKFILL (CDX Crawl) ---
-        const cdxMatch = await runCDXBackfill(contestId, problemIndex);
-        if (cdxMatch) {
-            solutionCache.set(cacheKey, cdxMatch);
-            return cdxMatch;
+        const cdxCandidates = await runCDXBackfill(contestId, problemIndex);
+        if (cdxCandidates.length > 0) {
+            const match = await checkAvailabilityInParallel(contestId, cdxCandidates, problemIndex);
+            if (match) {
+                solutionCache.set(cacheKey, match);
+                return match;
+            }
+        }
+
+        // --- PHASE 4: LIVE STEALTH FALLBACK (Mirror Service) ---
+        // If we found IDs but archives failed, try a live stealth fetch
+        const allCandidates = [...eliteIds, ...deepCandidates];
+        if (allCandidates.length > 0) {
+            console.log(`[SuperEngine] Tier 4: Attempting live fallback for ${allCandidates.length} candidates...`);
+            for (const id of allCandidates.slice(0, 3)) { // Only try top 3 to be nice to CF
+                const liveMatch = await fetchLiveSubmission(contestId, id, problemIndex);
+                if (liveMatch) {
+                    solutionCache.set(cacheKey, liveMatch);
+                    return liveMatch;
+                }
+            }
         }
 
         solutionCache.set(cacheKey, null);
@@ -229,9 +273,10 @@ async function runDeepStatusSweep(contestId: number, problemIndex: string): Prom
 }
 
 async function checkAvailabilityInParallel(contestId: number, ids: number[], problemIndex: string): Promise<Solution | null> {
-    // Ping Wayback Availability for candidates in parallel batches of 10
-    for (let i = 0; i < ids.length; i += 10) {
-        const batch = ids.slice(i, i + 10);
+    // Ping Wayback Availability for candidates in parallel batches of 5 (slower but safer)
+    for (let i = 0; i < ids.length; i += 5) {
+        if (i > 0) await new Promise(r => setTimeout(r, 1000)); // 1s delay
+        const batch = ids.slice(i, i + 5);
         const batchPromises = batch.map(async id => {
             try {
                 const url = `codeforces.com/contest/${contestId}/submission/${id}`;
@@ -252,36 +297,34 @@ async function checkAvailabilityInParallel(contestId: number, ids: number[], pro
     return null;
 }
 
-async function runCDXBackfill(contestId: number, problemIndex: string): Promise<Solution | null> {
-    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=codeforces.com/contest/${contestId}/submission/*&output=json&limit=1000&filter=statuscode:200`;
+async function fetchLiveSubmission(contestId: number, id: number, problemIndex: string): Promise<Solution | null> {
     try {
-        const res = await fetch(cdxUrl);
+        const url = `https://codeforces.com/contest/${contestId}/submission/${id}`;
+        console.log(`[SuperEngine] Live Fetch via Mirror: ${url}`);
+        const res = await fetch(`${MIRROR_URL}/submission?url=${encodeURIComponent(url)}`);
         if (!res.ok) return null;
         const data = await res.json();
-        if (!data || data.length <= 1) return null;
-
-        const rows = data.slice(1);
-        // We want to check a mixture of old and new.
-        // Reverse ID order (recent) and Original order (old)
-        const recentRows = [...rows].sort((a: string[], b: string[]) => {
-            const idA = parseInt(a[2].match(/\/submission\/(\d+)/)?.[1] || '0');
-            const idB = parseInt(b[2].match(/\/submission\/(\d+)/)?.[1] || '0');
-            return idB - idA;
-        });
-
-        const candidates = [
-            ...recentRows.slice(0, 20),
-            ...rows.slice(0, 20) // Original order (likely older)
-        ];
-
-        for (let i = 0; i < candidates.length; i += 5) {
-            const batch = candidates.slice(i, i + 5);
-            const results = await Promise.all(batch.map(async row => {
-                return verifySolutionPage(row[1], row[2], contestId, problemIndex);
-            }));
-            const find = results.find(r => r !== null);
-            if (find) return find;
+        if (data && data.code) {
+            return {
+                code: data.code,
+                language: normalizeLang(data.language),
+                author: data.author
+            };
         }
     } catch (e) { /* ignore */ }
     return null;
+}
+
+async function runCDXBackfill(contestId: number, problemIndex: string): Promise<number[]> {
+    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=codeforces.com/contest/${contestId}/submission/*&output=json&limit=1000&filter=statuscode:200`;
+    try {
+        const res = await fetch(cdxUrl);
+        if (!res.ok) return [];
+        const data = await res.json();
+        if (!data || data.length <= 1) return [];
+
+        const rows = data.slice(1);
+        const ids: number[] = rows.map((r: any) => parseInt(r[2].match(/\/submission\/(\d+)/)?.[1] || '0')).filter((id: number) => id > 0);
+        return Array.from(new Set(ids)).sort((a: number, b: number) => b - a);
+    } catch (e) { return []; }
 }

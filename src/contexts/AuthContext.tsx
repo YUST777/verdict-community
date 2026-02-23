@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 interface User {
     id: string;
@@ -37,26 +38,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState<boolean>(true);
     const router = useRouter();
 
+    const supabase = createClient();
+
     const refreshSession = React.useCallback(async () => {
         try {
-            const res = await fetch('/api/auth/me');
-            if (res.ok) {
-                const data = await res.json();
-                if (data.authenticated && data.user) {
-                    setUser({
-                        id: data.user.id.toString(),
-                        email: data.user.email,
-                        isVerified: true,
-                        role: 'user',
-                        lastLogin: new Date().toISOString(),
-                        createdAt: data.user.createdAt || new Date().toISOString(),
-                        profile_picture: data.user.profilePicture
-                    });
-                    setProfile({ id: 0, name: data.user.email.split('@')[0] });
-                } else {
-                    setUser(null);
-                    setProfile(null);
-                }
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error) throw error;
+
+            if (session?.user) {
+                setUser({
+                    id: session.user.id,
+                    email: session.user.email || '',
+                    isVerified: true,
+                    role: 'user',
+                    lastLogin: session.user.last_sign_in_at || new Date().toISOString(),
+                    createdAt: session.user.created_at || new Date().toISOString(),
+                    profile_picture: session.user.user_metadata?.avatar_url
+                });
+                setProfile({ id: 0, name: session.user.email?.split('@')[0] || 'User' });
             } else {
                 setUser(null);
                 setProfile(null);
@@ -68,14 +67,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [supabase]);
 
     useEffect(() => {
         refreshSession();
-    }, [refreshSession]);
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+            refreshSession();
+        });
+
+        return () => subscription.unsubscribe();
+    }, [refreshSession, supabase]);
 
     const login = (token: string, redirectUrl = '/problemsets') => {
-        void token; // Cookie is set server-side
+        void token;
         refreshSession().then(() => {
             router.push(redirectUrl);
         });
@@ -83,7 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = async () => {
         try {
-            await fetch('/api/auth/logout', { method: 'POST' });
+            await supabase.auth.signOut();
+            // Also notify legacy API to clear its cookie if still around (safe to keep for transition)
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { }
         } catch (e) {
             console.error('Logout error', e);
         }
