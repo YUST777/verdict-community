@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { query } from '@/lib/db';
 import { createBlindIndex, encrypt } from '@/lib/encryption';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY;
-const JWT_EXPIRES_IN = '24h';
 
 export async function GET(req: NextRequest) {
     const requestUrl = new URL(req.url);
@@ -14,7 +10,7 @@ export async function GET(req: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
 
     if (!code) {
-        return NextResponse.redirect(new URL('/login?error=no_code', baseUrl));
+        return NextResponse.redirect(new URL('/?error=no_code', baseUrl));
     }
 
     try {
@@ -23,7 +19,7 @@ export async function GET(req: NextRequest) {
 
         if (error || !data.user || !data.user.email) {
             console.error('[Auth-Callback] Supabase Error:', error);
-            return NextResponse.redirect(new URL('/login?error=auth_failed', baseUrl));
+            return NextResponse.redirect(new URL('/?error=auth_failed', baseUrl));
         }
 
         const email = data.user.email;
@@ -63,18 +59,6 @@ export async function GET(req: NextRequest) {
             userId = newUserResult.rows[0].id;
         }
 
-        // Generate JWT
-        if (!JWT_SECRET) {
-            console.error('JWT_SECRET missing');
-            return NextResponse.redirect(new URL('/login?error=server_config', baseUrl));
-        }
-
-        const token = jwt.sign(
-            { id: userId, email: normalizedEmail },
-            JWT_SECRET,
-            { expiresIn: JWT_EXPIRES_IN }
-        );
-
         // Redirect to return URL or problemsets
         let redirectPath = '/problemsets';
 
@@ -92,22 +76,10 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        const response = NextResponse.redirect(new URL(redirectPath, baseUrl));
-
-        // Set cookie
-        response.cookies.set('authToken', token, {
-            path: '/',
-            maxAge: 60 * 60 * 24 * 30, // 30 days
-            sameSite: 'lax',
-            httpOnly: false,
-            secure: process.env.NODE_ENV === 'production',
-            domain: process.env.NODE_ENV === 'production' ? '.verdict.run' : undefined
-        });
-
-        return response;
+        return NextResponse.redirect(new URL(redirectPath, baseUrl));
 
     } catch (err) {
         console.error('Callback Error:', err);
-        return NextResponse.redirect(new URL('/login?error=processing_failed', baseUrl));
+        return NextResponse.redirect(new URL('/?error=processing_failed', baseUrl));
     }
 }

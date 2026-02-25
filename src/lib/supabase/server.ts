@@ -15,7 +15,11 @@ export async function createClient() {
                 setAll(cookiesToSet) {
                     try {
                         cookiesToSet.forEach(({ name, value, options }) =>
-                            cookieStore.set(name, value, options)
+                            cookieStore.set(name, value, {
+                                ...options,
+                                // Support cross-subdomain sessions in production
+                                domain: process.env.NODE_ENV === 'production' ? '.verdict.run' : undefined
+                            })
                         )
                     } catch {
                         // The `setAll` method was called from a Server Component.

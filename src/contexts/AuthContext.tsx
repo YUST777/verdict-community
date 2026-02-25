@@ -89,14 +89,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const logout = async () => {
         try {
             await supabase.auth.signOut();
-            // Also notify legacy API to clear its cookie if still around (safe to keep for transition)
-            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { }
         } catch (e) {
             console.error('Logout error', e);
         }
         setUser(null);
         setProfile(null);
-        router.push('/login');
+        // No redirect to /login here; handled by UI state or sign-in modal
     };
 
     return (

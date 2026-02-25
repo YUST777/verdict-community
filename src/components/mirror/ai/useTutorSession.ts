@@ -193,7 +193,7 @@ You MUST respond with ONLY valid JSON (no markdown, no backticks wrapping). You 
 **OPTION 1: Standard Solution (Use this 95% of the time)**
 If the algorithm is clear or you are confident in your logic, return the full solution:
 {
-  "thinking": "Your detailed, chatty internal monologue. Talk through your thought process like a passionate expert: reading the problem, exploring the approach, checking edge cases, and anticipating Judge0 testing. Be expressive and talk about what's happening!",
+  "thinking": "A strictly technical, straightforward, and concise analysis. Detail the core algorithm, time and space complexity, and specific edge case considerations (e.g., negative integers, large inputs, empty sets). Omit all conversational filler, personality, or metaphors. Focus purely on engineering logic.",
   "solution": "The complete, compilable source code as a single string WITH ABSOLUTELY ZERO COMMENTS. MUST be valid C++ with semicolons after structs/classes.",
   "approach": "Brief explanation of the approach (1-2 sentences).",
   "explanation": "A conversational explanation directed at the user outside the thinking block. Start with an engaging intro (e.g., 'Alright, let's cook up this solution!' or something similar), explain the core logic clearly, and talk about how it works.",
@@ -258,7 +258,8 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         model: settings.model,
                         response_format: { type: "json_object" },
                         max_tokens: 4096,
-                        messages: currentMessages
+                        messages: currentMessages,
+                        stream: true
                     }),
                     signal
                 });
@@ -271,9 +272,66 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     throw new Error(`LLM request failed (${response.status}): ${errText}`);
                 }
 
-                const chatObj = await response.json();
-                const rawContent = chatObj.choices?.[0]?.message?.content || '{}';
-                const finishReason = chatObj.choices?.[0]?.finish_reason;
+                const reader = response.body?.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let rawContent = '';
+                let finishReason = null;
+
+                let buffer = '';
+                if (reader) {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\\n');
+                        buffer = lines.pop() || '';
+                        for (const line of lines) {
+                            const trimmedLine = line.trim();
+                            if (!trimmedLine || trimmedLine === 'data: [DONE]') continue;
+
+                            if (trimmedLine.startsWith('data: ')) {
+                                try {
+                                    const parsedChunk = JSON.parse(trimmedLine.slice(6));
+                                    const delta = parsedChunk.choices?.[0]?.delta?.content || parsedChunk.choices?.[0]?.message?.content || '';
+                                    if (delta) {
+                                        rawContent += delta;
+                                        // Dynamically stream "thinking" field value
+                                        const thinkMatch = rawContent.match(/"thinking"\s*:\s*"((?:[^"\\\\]|\\.)*)/);
+                                        if (thinkMatch && thinkMatch[1]) {
+                                            const partialThink = thinkMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                            updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n🤔 *Thinking...*`);
+                                        }
+                                    }
+                                    if (parsedChunk.choices?.[0]?.finish_reason) {
+                                        finishReason = parsedChunk.choices[0].finish_reason;
+                                    }
+                                } catch (e) {
+                                    console.warn('[SSE] Failed to parse chunk:', trimmedLine, e);
+                                }
+                            }
+                        }
+                    }
+                    // ── FALLBACK: Handle non-streamed (one-shot) JSON response ──────
+                    if (!rawContent && buffer.trim().startsWith('{')) {
+                        try {
+                            const fullObj = JSON.parse(buffer.trim());
+                            const messageContent = fullObj.choices?.[0]?.message?.content || fullObj.choices?.[0]?.delta?.content || fullObj.message?.content || fullObj.content || '';
+                            if (messageContent) {
+                                rawContent = messageContent;
+                                if (fullObj.choices?.[0]?.finish_reason) {
+                                    finishReason = fullObj.choices[0].finish_reason;
+                                }
+                            } else {
+                                console.warn('[SSE] Fallback triggered but no content found in JSON:', fullObj);
+                            }
+                        } catch (e) {
+                            console.warn('[SSE] Fallback parse failed:', e);
+                        }
+                    }
+                }
+                console.log('[SSE] Stream ended. Total rawContent length:', rawContent.length);
+                console.log('[SSE] Buffer state snapshot:', buffer.slice(0, 100) + (buffer.length > 100 ? '...' : ''));
+
 
                 if (finishReason === 'length' || finishReason === 'max_tokens') {
                     currentMessages.push({ role: 'assistant', content: rawContent });
@@ -285,6 +343,10 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
                     updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Ran out of tokens. Retrying more concisely...*`);
                     continue;
+                }
+
+                if (!rawContent) {
+                    throw new Error('The AI provided an empty response. This can happen if the AI provider is experiencing high latency or if the request was blocked.');
                 }
 
                 try {
@@ -515,12 +577,9 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
 
 
             // ── Phase 3: Stream thinking ────────────────────────────
-            await streamTextToMessage(
-                thinkMsgId,
-                '<think>\n',
-                finalThinkingText + (finalApproachText ? '\n\n**Approach:** ' + finalApproachText : '') + '\n</think>\n\nWriting solution...',
-                20
-            );
+            // The thinking stream has already been rendered natively during the SSE loop.
+            // But we will re-render the final compiled thinking + approach block cleanly here.
+            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\nWriting solution...`);
 
             // ── Phase 4: Stream code into editor ────────────────────
             await new Promise(r => setTimeout(r, 300));
@@ -569,19 +628,24 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 setConcepts(finalConcepts);
             }
 
-        } catch (error: any) {
-            if (error.name === 'AbortError') {
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
                 updateMessage(thinkMsgId, `Tutor session was stopped.`);
             } else {
-                console.error('[Tutor] Error:', error);
-                updateMessage(thinkMsgId, `Something went wrong: ${error.message || 'Unknown error'}. Please try again.`);
+                console.error('[Tutor Error]', err);
+                setIsLoading(false);
+                setIsTutorActive(false);
+                addMessage({
+                    id: `err-${Date.now()}`,
+                    role: 'assistant',
+                    content: `⚠️ Error: ${err.message || 'Failed to generate solution'}. Please try again.`,
+                    timestamp: new Date()
+                });
             }
-            setIsTutorActive(false);
-            tutorActiveRef.current = false;
         } finally {
             setIsLoading(false);
         }
-    }, [isLoading, problemDescription, language, testCases, settings, onSwitchToAiTab, onAiCodeUpdate, addMessage, updateMessage, streamTextToMessage, streamCodeToEditor]);
+    }, [problemId, language, problemDescription, testCases, getHeaders, onAiCodeUpdate, onSwitchToAiTab, addMessage, updateMessage, setConcepts, setIsTutorActive, streamCodeToEditor]);
 
     const changeLevel = useCallback(async (level: number) => {
         setSelectedLevel(level);

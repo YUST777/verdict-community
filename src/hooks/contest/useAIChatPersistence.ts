@@ -3,13 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 
 // We reuse the basic shape of messages and tabs from AIAgentPanel
-export function useAIChatPersistence(problemId: string, initialTabs: any[] = [{ id: 'default', label: 'Chat 1' }]) {
+export function useAIChatPersistence(problemId: string, isAuthenticated: boolean = false, initialTabs: any[] = [{ id: 'default', label: 'Chat 1' }], onAuthError?: () => void) {
     const [messagesByTab, setMessagesByTab] = useState<Record<string, any[]>>({ 'default': [] });
+    const [conceptsByTab, setConceptsByTab] = useState<Record<string, any[]>>({ 'default': [] });
+    const [inputByTab, setInputByTab] = useState<Record<string, string>>({ 'default': '' });
     const [chatTabs, setChatTabs] = useState<any[]>(initialTabs);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // We use refs to avoid triggering effect cycles and track latest values for debouncing
     const messagesRef = useRef(messagesByTab);
+    const conceptsRef = useRef(conceptsByTab);
+    const inputRef = useRef(inputByTab);
     const tabsRef = useRef(chatTabs);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isFirstLoad = useRef(true);
@@ -17,8 +21,10 @@ export function useAIChatPersistence(problemId: string, initialTabs: any[] = [{ 
     // Sync refs
     useEffect(() => {
         messagesRef.current = messagesByTab;
+        conceptsRef.current = conceptsByTab;
+        inputRef.current = inputByTab;
         tabsRef.current = chatTabs;
-    }, [messagesByTab, chatTabs]);
+    }, [messagesByTab, conceptsByTab, inputByTab, chatTabs]);
 
     // Initial load from cloud (fallback to local storage for guest mode)
     useEffect(() => {
@@ -28,74 +34,51 @@ export function useAIChatPersistence(problemId: string, initialTabs: any[] = [{ 
 
         const loadData = async () => {
             try {
-                // 1. Try to load from Supabase
-                const response = await fetch(`/api/workspace/sync?problemId=${problemId}`);
-                if (response.ok) {
-                    const json = await response.json();
-                    if (json.data && (json.data.ai_chat_messages || json.data.ai_chat_tabs)) {
-                        if (isMounted) {
-                            if (json.data.ai_chat_tabs) {
-                                setChatTabs(json.data.ai_chat_tabs);
-                            }
-                            if (json.data.ai_chat_messages) {
-                                // Hydrate dates manually
-                                const parsedMsgs = json.data.ai_chat_messages;
-                                const hydratedRecord: Record<string, any[]> = {};
-                                for (const tabId in parsedMsgs) {
-                                    hydratedRecord[tabId] = (parsedMsgs[tabId] || []).map((m: any) => ({
-                                        ...m,
-                                        timestamp: new Date(m.timestamp)
-                                    }));
+                // 1. Try to load from Supabase ONLY if authenticated
+                if (isAuthenticated) {
+                    const response = await fetch(`/api/workspace/sync?problemId=${problemId}`);
+                    if (response.ok) {
+                        const json = await response.json();
+                        if (json.data) {
+                            if (isMounted) {
+                                if (json.data.ai_chat_tabs) {
+                                    setChatTabs(json.data.ai_chat_tabs);
                                 }
-                                setMessagesByTab(hydratedRecord);
+                                if (json.data.ai_chat_messages) {
+                                    // Hydrate dates manually
+                                    const parsedMsgs = json.data.ai_chat_messages;
+                                    const hydratedRecord: Record<string, any[]> = {};
+                                    for (const tabId in parsedMsgs) {
+                                        hydratedRecord[tabId] = (parsedMsgs[tabId] || []).map((m: any) => ({
+                                            ...m,
+                                            timestamp: new Date(m.timestamp)
+                                        }));
+                                    }
+                                    setMessagesByTab(hydratedRecord);
+                                }
+                                if (json.data.ai_chat_concepts) {
+                                    setConceptsByTab(json.data.ai_chat_concepts);
+                                }
+                                if (json.data.ai_chat_inputs) {
+                                    setInputByTab(json.data.ai_chat_inputs);
+                                }
+                                setIsLoaded(true);
+                                return; // Successfully loaded from cloud
                             }
-                            setIsLoaded(true);
-                            return; // Successfully loaded from cloud
                         }
+                    } else if (response.status === 401) {
+                        // Session might have expired but Main Auth context hasn't reacted yet
+                        // We don't trigger onAuthError here to avoid loops during mount, 
+                        // we just let it fall back to local storage.
+                        console.warn('[AIChat Sync] 401 during initial load, falling back to local');
                     }
                 }
             } catch (err) {
                 console.error('[AIChat Sync] Load error:', err);
             }
 
-            // 2. Fallback to local storage (unauthenticated or cloud failed)
+            // 2. Default fallback for unauthenticated or first-time cloud users
             if (isMounted) {
-                try {
-                    const tabsKey = `verdict_ai_tabs_${problemId}`;
-                    const tabsStored = localStorage.getItem(tabsKey);
-                    if (tabsStored) {
-                        const parsedTabs = JSON.parse(tabsStored);
-                        if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
-                            setChatTabs(parsedTabs);
-                        }
-                    }
-
-                    const key = `verdict_ai_chat_${problemId}`;
-                    const stored = localStorage.getItem(key);
-                    if (stored) {
-                        const parsed = JSON.parse(stored);
-                        if (Array.isArray(parsed)) {
-                            // Legacy Array Format (shouldnt be reached if tabs are used, but strictly supporting it)
-                            const hydratedMessages = parsed.map((m: any) => ({
-                                ...m,
-                                timestamp: new Date(m.timestamp)
-                            }));
-                            setMessagesByTab({ 'default': hydratedMessages });
-                        } else {
-                            const hydratedRecord: Record<string, any[]> = {};
-                            for (const tabId in parsed) {
-                                hydratedRecord[tabId] = (parsed[tabId] || []).map((m: any) => ({
-                                    ...m,
-                                    timestamp: new Date(m.timestamp)
-                                }));
-                            }
-                            setMessagesByTab(hydratedRecord);
-                        }
-                    }
-                } catch (e) {
-                    console.error('[AI Chat] Failed to load local fallback:', e);
-                }
-
                 setIsLoaded(true);
             }
         };
@@ -106,9 +89,9 @@ export function useAIChatPersistence(problemId: string, initialTabs: any[] = [{ 
             isMounted = false;
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         };
-    }, [problemId]);
+    }, [problemId, isAuthenticated]);
 
-    // Save changes to cloud (debounced) and local storage (immediate)
+    // Save changes to cloud (debounced)
     useEffect(() => {
         if (!isLoaded || !problemId) return;
         if (isFirstLoad.current) {
@@ -116,38 +99,47 @@ export function useAIChatPersistence(problemId: string, initialTabs: any[] = [{ 
             return;
         }
 
-        // Immediate Local Storage save (for guests and smooth transitions)
-        localStorage.setItem(`verdict_ai_chat_${problemId}`, JSON.stringify(messagesByTab));
-        localStorage.setItem(`verdict_ai_tabs_${problemId}`, JSON.stringify(chatTabs));
+        // Skip cloud sync if not authenticated
+        if (!isAuthenticated) return;
 
         // Debounced Cloud Save
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
         saveTimeoutRef.current = setTimeout(async () => {
             try {
-                const res = await fetch('/api/workspace/sync', {
+                const body = {
+                    problemId,
+                    aiChatMessages: messagesByTab,
+                    aiChatTabs: chatTabs,
+                    aiChatConcepts: conceptsByTab,
+                    aiChatInput: inputByTab
+                };
+
+                const response = await fetch('/api/workspace/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        problemId,
-                        aiChatMessages: messagesRef.current,
-                        aiChatTabs: tabsRef.current
-                    })
+                    body: JSON.stringify(body)
                 });
 
-                if (!res.ok && res.status !== 401) { // 401 just means they are not logged in, which is fine to ignore
-                    console.error('[AIChat Sync] Save failed:', await res.text());
+                if (response.status === 401) {
+                    onAuthError?.();
+                } else if (!response.ok) {
+                    console.error('[AIChat Sync] Save failed:', await response.text());
                 }
             } catch (err) {
                 console.error('[AIChat Sync] Save exception:', err);
             }
         }, 1500); // 1.5s debounce to batch character streams optimally
 
-    }, [messagesByTab, chatTabs, problemId, isLoaded]);
+    }, [messagesByTab, chatTabs, conceptsByTab, inputByTab, problemId, isLoaded, isAuthenticated]);
 
     return {
         messagesByTab,
         setMessagesByTab,
+        conceptsByTab,
+        setConceptsByTab,
+        inputByTab,
+        setInputByTab,
         chatTabs,
         setChatTabs,
         isLoaded

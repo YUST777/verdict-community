@@ -8,10 +8,12 @@ import {
     Menu, User, X, ArrowUpRight, Github
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import SignInModal from '@/components/auth/SignInModal';
 
 function Navbar() {
     const [open, setOpen] = useState(false);
-    const { isAuthenticated, loading } = useAuth();
+    const [isSignInOpen, setIsSignInOpen] = useState(false);
+    const { isAuthenticated, loading, logout } = useAuth();
     const [stars, setStars] = useState<number | null>(null);
 
     useEffect(() => {
@@ -81,18 +83,18 @@ function Navbar() {
                                 {loading ? (
                                     <div className="bg-white/10 animate-pulse px-8 py-3 rounded-2xl w-[120px] h-[48px]" />
                                 ) : isAuthenticated ? (
-                                    <button onClick={() => { localStorage.clear(); window.location.href = '/' }} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-xl shadow-emerald-500/20">
+                                    <button onClick={() => logout()} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-xl shadow-emerald-500/20">
                                         <User {...iconProps} size={18} strokeWidth={2} />
                                         <span>Sign Out</span>
                                     </button>
                                 ) : (
-                                    <Link
-                                        href="/login"
+                                    <button
+                                        onClick={() => setIsSignInOpen(true)}
                                         className="group flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-8 py-3 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
                                     >
                                         <span>Sign In</span>
                                         <ArrowUpRight size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                                    </Link>
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -153,20 +155,20 @@ function Navbar() {
                                         <div className="w-full h-[68px] bg-white/10 animate-pulse rounded-[24px]" />
                                     ) : isAuthenticated ? (
                                         <button
-                                            onClick={() => { localStorage.clear(); window.location.href = '/' }}
+                                            onClick={() => { logout(); setOpen(false); }}
                                             className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white p-5 rounded-[24px] font-black uppercase tracking-tighter text-lg"
                                         >
                                             <User size={20} strokeWidth={2.5} />
                                             Sign Out
                                         </button>
                                     ) : (
-                                        <Link
-                                            href="/login"
+                                        <button
+                                            onClick={() => { setIsSignInOpen(true); setOpen(false); }}
                                             className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white p-5 rounded-[24px] font-black uppercase tracking-tighter text-lg"
                                         >
                                             <User size={20} strokeWidth={2.5} />
                                             Sign In
-                                        </Link>
+                                        </button>
                                     )}
                                 </div>
                             </motion.div>
@@ -174,6 +176,10 @@ function Navbar() {
                     </AnimatePresence>
                 </div>
             </div>
+            <SignInModal
+                isOpen={isSignInOpen}
+                onClose={() => setIsSignInOpen(false)}
+            />
         </header>
     );
 }

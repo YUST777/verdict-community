@@ -1,25 +1,15 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
 
 // Simple in-memory rate limiter (per instance)
 const rateLimitMap = new Map<string, { count: number, resetTime: number }>();
 const WINDOW_SIZE = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 100; // 100 requests per minute per IP
 
-// Clean up old entries periodically
-if (typeof setInterval !== 'undefined') {
-    setInterval(() => {
-        const now = Date.now();
-        for (const [ip, data] of rateLimitMap.entries()) {
-            if (now > data.resetTime) {
-                rateLimitMap.delete(ip);
-            }
-        }
-    }, 30000);
-}
-
-export function middleware(request: NextRequest) {
-    const response = NextResponse.next();
+export async function middleware(request: NextRequest) {
+    const supabaseResponse = await updateSession(request);
+    const response = supabaseResponse;
     const headers = response.headers;
 
     // --- 1. Security Headers ---
@@ -69,5 +59,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.svg|.*\\.webp|.*\\.glb).*)'],
+    matcher: [
+        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|pdf|glb|woff2?|map|css|js)).*)',
+    ],
 };

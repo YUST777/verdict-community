@@ -9,9 +9,8 @@ import { loadAIPreferences, inferPreferencesFromProfile, AILearningPreferences }
 
 import AIPreferencesModal from './AIPreferencesModal';
 import SignInModal from '@/components/auth/SignInModal';
-import { Message } from '@/types/chat';
-import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAIChatPersistence } from '@/hooks/contest/useAIChatPersistence';
 
 import { useLLM } from '@/lib/useLLM';
@@ -77,9 +76,38 @@ export default function AIAgentPanel({
     problemId,
     isActive = false
 }: AIAgentPanelProps) {
-    const { messagesByTab, setMessagesByTab, chatTabs, setChatTabs, isLoaded } = useAIChatPersistence(problemId || 'unknown');
-    const [inputByTab, setInputByTab] = useState<Record<string, string>>({ 'default': initialQuestion || '' });
-    const [conceptsByTab, setConceptsByTab] = useState<Record<string, any[]>>({ 'default': [] });
+    const { logout: globalLogout, user, loading: authLoading } = useAuth();
+    const [showSignInModal, setShowSignInModal] = useState(false);
+
+    const handleAuthError = useCallback(() => {
+        console.warn('[AIAgentPanel] Auth session potentially expired or invalid (401).');
+
+        // If we have a user in context, maybe it was a transient DB error (like the missing column issue)
+        // We only show the modal if we're reasonably sure the session is actually gone.
+        if (!user) {
+            console.warn('[AIAgentPanel] No user in context. Showing SignInModal.');
+            setShowSignInModal(true);
+        } else {
+            console.log('[AIAgentPanel] User still in context, ignoring potential transient 401.');
+        }
+    }, [user]);
+
+    const {
+        messagesByTab,
+        setMessagesByTab,
+        conceptsByTab,
+        setConceptsByTab,
+        inputByTab,
+        setInputByTab,
+        chatTabs,
+        setChatTabs,
+        isLoaded
+    } = useAIChatPersistence(
+        problemId || 'unknown',
+        !!user,
+        [{ id: 'default', label: 'Chat 1' }],
+        handleAuthError
+    );
     const [tutorActiveByTab, setTutorActiveByTab] = useState<Record<string, boolean>>({ 'default': false });
     const [isLoadingByTab, setIsLoadingByTab] = useState<Record<string, boolean>>({ 'default': false });
     const [aiStatusByTab, setAiStatusByTab] = useState<Record<string, string>>({ 'default': 'Thinking...' });
@@ -88,36 +116,9 @@ export default function AIAgentPanel({
     const [isResourcesOpen, setIsResourcesOpen] = useState(false);
     const { settings } = useLLM();
 
-    // -- Auth State --
-    const [user, setUser] = useState<User | null>(null);
-    const [authLoading, setAuthLoading] = useState(true);
-    const [showSignInModal, setShowSignInModal] = useState(false);
-
-    const supabase = createClient();
-
-    useEffect(() => {
-        let mounted = true;
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (mounted) {
-                setUser(session?.user ?? null);
-                setAuthLoading(false);
-            }
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (mounted) {
-                setUser(session?.user ?? null);
-            }
-        });
-
-        return () => {
-            mounted = false;
-            subscription.unsubscribe();
-        };
-    }, []);
-
     const handleOAuth = async (provider: 'github' | 'google') => {
         try {
+            const supabase = createClient();
             const returnUrl = window.location.href;
             await supabase.auth.signInWithOAuth({
                 provider,
@@ -162,11 +163,11 @@ export default function AIAgentPanel({
     }, [activeChatTab]);
 
     const setIsLoadingMessage = useCallback((loading: boolean) => {
-        setIsLoadingByTab(prev => ({ ...prev, [activeChatTab]: loading }));
+        setIsLoadingByTab((prev: Record<string, boolean>) => ({ ...prev, [activeChatTab]: loading }));
     }, [activeChatTab]);
 
     const setAiStatus = useCallback((status: string) => {
-        setAiStatusByTab(prev => ({ ...prev, [activeChatTab]: status }));
+        setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [activeChatTab]: status }));
     }, [activeChatTab]);
 
     const addNewChat = useCallback(() => {
@@ -182,14 +183,14 @@ export default function AIAgentPanel({
         const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : chatTabs.length + 1;
         const newLabel = `Chat ${nextNum}`;
 
-        setChatTabs(prev => [...prev, { id: newId, label: newLabel }]);
+        setChatTabs((prev: any[]) => [...prev, { id: newId, label: newLabel }]);
         setActiveChatTab(newId);
-        setMessagesByTab(prev => ({ ...prev, [newId]: [] }));
-        setInputByTab(prev => ({ ...prev, [newId]: '' }));
-        setConceptsByTab(prev => ({ ...prev, [newId]: [] }));
-        setTutorActiveByTab(prev => ({ ...prev, [newId]: false }));
-        setIsLoadingByTab(prev => ({ ...prev, [newId]: false }));
-        setAiStatusByTab(prev => ({ ...prev, [newId]: 'Thinking...' }));
+        setMessagesByTab((prev: Record<string, any[]>) => ({ ...prev, [newId]: [] }));
+        setInputByTab((prev: Record<string, string>) => ({ ...prev, [newId]: '' }));
+        setConceptsByTab((prev: Record<string, any[]>) => ({ ...prev, [newId]: [] }));
+        setTutorActiveByTab((prev: Record<string, boolean>) => ({ ...prev, [newId]: false }));
+        setIsLoadingByTab((prev: Record<string, boolean>) => ({ ...prev, [newId]: false }));
+        setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [newId]: 'Thinking...' }));
     }, [chatTabs]);
 
     const deleteChat = useCallback((tabId: string) => {
@@ -197,12 +198,12 @@ export default function AIAgentPanel({
             if (prev.length <= 1) {
                 // Reset the last tab instead of deleting the whole array
                 const newId = `chat-${Date.now()}`;
-                setMessagesByTab(p => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
-                setInputByTab(p => { const d = { ...p, [newId]: '' }; delete d[tabId]; return d; });
-                setConceptsByTab(p => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
-                setTutorActiveByTab(p => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
-                setIsLoadingByTab(p => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
-                setAiStatusByTab(p => { const d = { ...p, [newId]: 'Thinking...' }; delete d[tabId]; return d; });
+                setMessagesByTab((p: Record<string, any[]>) => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
+                setInputByTab((p: Record<string, string>) => { const d = { ...p, [newId]: '' }; delete d[tabId]; return d; });
+                setConceptsByTab((p: Record<string, any[]>) => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
+                setTutorActiveByTab((p: Record<string, boolean>) => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
+                setIsLoadingByTab((p: Record<string, boolean>) => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
+                setAiStatusByTab((p: Record<string, string>) => { const d = { ...p, [newId]: 'Thinking...' }; delete d[tabId]; return d; });
                 return [{ id: newId, label: 'Chat 1' }];
             }
             const filtered = prev.filter(t => t.id !== tabId);
@@ -211,12 +212,12 @@ export default function AIAgentPanel({
                 const newActive = filtered[Math.min(deletedIndex, filtered.length - 1)];
                 setActiveChatTab(newActive.id);
             }
-            setMessagesByTab(p => {
+            setMessagesByTab((p: Record<string, any[]>) => {
                 const newDict = { ...p };
                 delete newDict[tabId];
                 return newDict;
             });
-            setInputByTab(p => {
+            setInputByTab((p: Record<string, string>) => {
                 const newDict = { ...p };
                 delete newDict[tabId];
                 return newDict;
@@ -855,7 +856,7 @@ export default function AIAgentPanel({
                                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25">Sources</span>
                                             </div>
                                             <div className="flex flex-col gap-1.5">
-                                                {message.sources.map((src, i) => {
+                                                {message.sources.map((src: any, i: number) => {
                                                     let domain = '';
                                                     try { domain = new URL(src.url).hostname.replace('www.', ''); } catch { }
                                                     const isYT = src.type === 'youtube' || domain.includes('youtube');
@@ -1028,14 +1029,14 @@ export default function AIAgentPanel({
                                     )}
 
                                     {/* Video Tutorials */}
-                                    {concepts.filter(c => c.type === 'video').length > 0 && (
+                                    {concepts.filter((c: any) => c.type === 'video').length > 0 && (
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 tracking-wider">
                                                 <PlayCircle size={14} />
                                                 VIDEO TUTORIALS
                                             </div>
                                             <div className="flex flex-col gap-3">
-                                                {concepts.filter(c => c.type === 'video').map((c, i) => (
+                                                {concepts.filter((c: any) => c.type === 'video').map((c: any, i: number) => (
                                                     <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex gap-3 text-left transition-colors hover:bg-white/5 p-2 rounded-xl -m-2">
                                                         <div className="relative w-28 h-16 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-black/50">
                                                             <div className="absolute inset-0 flex items-center justify-center">
@@ -1054,14 +1055,14 @@ export default function AIAgentPanel({
                                     )}
 
                                     {/* Articles & Wikis */}
-                                    {concepts.filter(c => c.type === 'article').length > 0 && (
+                                    {concepts.filter((c: any) => c.type === 'article').length > 0 && (
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-2 text-[10px] font-bold text-white/40 tracking-wider">
                                                 <Globe size={14} />
                                                 ARTICLES & WIKIS
                                             </div>
                                             <div className="flex flex-col gap-3">
-                                                {concepts.filter(c => c.type === 'article').map((c, i) => {
+                                                {concepts.filter((c: any) => c.type === 'article').map((c: any, i: number) => {
                                                     let domain = 'Website';
                                                     try {
                                                         domain = new URL(c.url).hostname.replace('www.', '');
