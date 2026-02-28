@@ -72,8 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(null);
                 setProfile(null);
             }
-        } catch (error) {
-            console.error('Session check failed', error);
+        } catch (error: any) {
+            console.error('Session check failed', error?.message || error);
             setUser(null);
             setProfile(null);
         } finally {
@@ -101,8 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const logout = async () => {
         try {
             await supabase.auth.signOut();
-        } catch (e) {
-            console.error('Logout error', e);
+        } catch (e: any) {
+            console.error('Logout error', e?.message || e);
         }
         setUser(null);
         setProfile(null);

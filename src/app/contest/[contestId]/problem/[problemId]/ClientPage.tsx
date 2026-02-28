@@ -8,9 +8,12 @@ import { Submission, AnalyticsStats } from '@/components/mirror/shared/types';
 import { ProblemHeader } from '@/components/mirror/problem';
 import { CodeWorkspace, ComplexityModal } from '@/components/mirror/editor';
 import { ProblemLeftPanel } from '@/components/mirror/problem';
+import { SidebarTabs, TabData } from '@/components/mirror/problem/SidebarTabs';
 import ExtensionGate from '@/components/core/ExtensionGate';
 import Link from 'next/link';
 import ExtensionOnboardingModal from '@/components/mirror/ExtensionOnboardingModal';
+import { useAuth } from '@/contexts/AuthContext';
+import { TestCasesLoader } from '@/components/ui/TestCasesLoader';
 
 // Custom Hooks
 import { useProblemData } from '@/hooks/contest/useProblemData';
@@ -79,6 +82,58 @@ export default function CodeforcesMirrorPage({ forcedType }: CodeforcesMirrorPag
     const [mobileView, setMobileView] = useState<'problem' | 'code'>('problem');
     const [isTestPanelVisible, setIsTestPanelVisible] = useState(true);
     const [testPanelActiveTab, setTestPanelActiveTab] = useState<'testcase' | 'result' | 'codeforces'>('testcase');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const { user } = useAuth();
+
+    // Track tab navigation in session storage
+    useEffect(() => {
+        if (!user || !contestId || !problemId) return;
+        const currentUrl = `/contest/${contestId}/problem/${problemId}`;
+        const title = cfData?.meta?.title || `CF ${contestId}${problemId}`;
+
+        (async () => {
+            try {
+                const res = await fetch('/api/user/tabs');
+                if (!res.ok) return;
+                const data = await res.json();
+                const existing: TabData[] = data.data || [];
+
+                const activeTabId = sessionStorage.getItem('activeVerdictTabId');
+
+                if (activeTabId) {
+                    const tabIndex = existing.findIndex(t => t.id === activeTabId);
+                    if (tabIndex !== -1 && existing[tabIndex].url !== currentUrl) {
+                        // We came from a known tab. Update that tab's URL to our new location.
+                        existing[tabIndex] = { ...existing[tabIndex], title, url: currentUrl };
+                        await fetch('/api/user/tabs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tabs: existing })
+                        });
+                        return;
+                    } else if (tabIndex !== -1) {
+                        // Tab already matches our current URL
+                        return;
+                    }
+                }
+
+                // If there's no activeTabId, or it wasn't found, we should see if this URL is already open
+                const existingTab = existing.find(t => t.url === currentUrl);
+                if (existingTab) {
+                    sessionStorage.setItem('activeVerdictTabId', existingTab.id);
+                } else {
+                    // Create a brand new tab
+                    const newTabId = `tab-${contestId}-${problemId}-${Date.now()}`;
+                    await fetch('/api/user/tabs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tabs: [...existing, { id: newTabId, title, url: currentUrl }] })
+                    });
+                    sessionStorage.setItem('activeVerdictTabId', newTabId);
+                }
+            } catch { }
+        })();
+    }, [user, contestId, problemId, cfData]);
 
     // Submissions & Analytics State
     const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -351,8 +406,8 @@ export default function CodeforcesMirrorPage({ forcedType }: CodeforcesMirrorPag
                 setStats(null);
             }
 
-        } catch (error) {
-            console.error('Failed to load submissions', error);
+        } catch (error: any) {
+            console.error('Failed to load submissions', error?.message || error);
             setSubmissions([]);
             setStats(null);
         } finally {
@@ -374,8 +429,7 @@ export default function CodeforcesMirrorPage({ forcedType }: CodeforcesMirrorPag
     if (loading) {
         return (
             <div className="fixed inset-0 bg-[#0B0B0C] flex flex-col items-center justify-center z-50 gap-4">
-                <Loader2 className="animate-spin text-[#10B981]" size={48} />
-                <p className="text-[#A0A0A0] text-sm animate-pulse">Mirroring from Codeforces...</p>
+                <TestCasesLoader customText="Mirroring from Codeforces..." />
             </div>
         );
     }
@@ -398,124 +452,133 @@ export default function CodeforcesMirrorPage({ forcedType }: CodeforcesMirrorPag
     return (
         <ExtensionGate>
             <ExtensionOnboardingModal />
-            <div className="fixed inset-0 bg-[#0B0B0C] text-[#DCDCDC] z-50 flex flex-col">
-                <ProblemHeader
-                    sheetId={contestId as string}
-                    problem={cfData}
-                    mobileView={mobileView}
-                    setMobileView={setMobileView}
-                    navigationBaseUrl={navigationBaseUrl}
-                    problemId={problemId}
+            <div className="fixed inset-0 bg-[#0B0B0C] text-[#DCDCDC] z-50 flex flex-row">
+                <SidebarTabs
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                    currentUrl={`/contest/${contestId as string}/problem/${problemId}`}
                 />
 
-                <div ref={containerRef} className="flex-1 flex overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'auto' }}>
-                    {/* Left Panel */}
-                    <ProblemLeftPanel
-                        activeTab={activeTab}
-                        setActiveTab={setActiveTab}
-                        isWhiteboardExpanded={isWhiteboardExpanded}
-                        setIsWhiteboardExpanded={setIsWhiteboardExpanded}
-                        cfData={cfData}
-                        submissions={submissions}
-                        submissionsLoading={submissionsLoading}
-                        stats={stats}
-                        cfStats={cfStats}
-                        contestId={contestId}
-                        problemId={problemId}
-                        whiteboardHeight={whiteboardHeight}
-                        handleWhiteboardResizeStart={handleWhiteboardResizeStart}
-                        analyzeComplexity={analyzeComplexity}
-                        complexityLoading={complexityLoading}
-                        leftPanelRef={leftPanelRef as any}
-                        lastWidth={lastWidth}
+                <div className="flex-1 flex flex-col min-w-0">
+                    <ProblemHeader
+                        sheetId={contestId as string}
+                        problem={cfData}
                         mobileView={mobileView}
-                        cfHandle={cfHandle}
-                        handleLoading={handleLoading}
-                        onHandleSave={(handle) => {
-                            setCfHandle(handle);
-                            setTimeout(() => fetchSubmissions(), 100);
-                        }}
-                        userCode={code}
-                        language={language}
-                        // Deprecated: onSolveProblem={handleSolveProblem}
-                        // New handlers for AI Tutor
-                        onAiCodeUpdate={(newCode) => {
-                            setAiCode(newCode);
-                        }}
-                        onSwitchToAiTab={() => {
-                            setCodeTab('ai');
-                            if (window.innerWidth < 768) {
-                                setMobileView('code');
-                            }
-                        }}
-                        isGeneratingSolution={isGeneratingSolution}
-                        selectedCode={selectedCode}
-                        aiInitialQuestion={aiInitialQuestion}
-                        onClearSelection={handleClearSelection}
-                        selectedLineReference={selectedLineReference}
+                        setMobileView={setMobileView}
+                        navigationBaseUrl={navigationBaseUrl}
+                        problemId={problemId}
+                        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                     />
 
-                    {/* Resizer */}
-                    <div
-                        className="hidden md:block w-1 bg-white/5 hover:bg-[#10B981]/50 cursor-col-resize transition-colors relative group shrink-0"
-                        onMouseDown={handleMouseDown}
-                    >
-                        <div className="absolute inset-y-0 -left-1 -right-1" />
+                    <div ref={containerRef} className="flex-1 flex overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'auto' }}>
+                        {/* Left Panel */}
+                        <ProblemLeftPanel
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            isWhiteboardExpanded={isWhiteboardExpanded}
+                            setIsWhiteboardExpanded={setIsWhiteboardExpanded}
+                            cfData={cfData}
+                            submissions={submissions}
+                            submissionsLoading={submissionsLoading}
+                            stats={stats}
+                            cfStats={cfStats}
+                            contestId={contestId}
+                            problemId={problemId}
+                            whiteboardHeight={whiteboardHeight}
+                            handleWhiteboardResizeStart={handleWhiteboardResizeStart}
+                            analyzeComplexity={analyzeComplexity}
+                            complexityLoading={complexityLoading}
+                            leftPanelRef={leftPanelRef as any}
+                            lastWidth={lastWidth}
+                            mobileView={mobileView}
+                            cfHandle={cfHandle}
+                            handleLoading={handleLoading}
+                            onHandleSave={(handle) => {
+                                setCfHandle(handle);
+                                setTimeout(() => fetchSubmissions(), 100);
+                            }}
+                            userCode={code}
+                            language={language}
+                            // Deprecated: onSolveProblem={handleSolveProblem}
+                            // New handlers for AI Tutor
+                            onAiCodeUpdate={(newCode) => {
+                                setAiCode(newCode);
+                            }}
+                            onSwitchToAiTab={() => {
+                                setCodeTab('ai');
+                                if (window.innerWidth < 768) {
+                                    setMobileView('code');
+                                }
+                            }}
+                            isGeneratingSolution={isGeneratingSolution}
+                            selectedCode={selectedCode}
+                            aiInitialQuestion={aiInitialQuestion}
+                            onClearSelection={handleClearSelection}
+                            selectedLineReference={selectedLineReference}
+                        />
+
+                        {/* Resizer */}
+                        <div
+                            className="hidden md:block w-1 bg-white/5 hover:bg-[#10B981]/50 cursor-col-resize transition-colors relative group shrink-0"
+                            onMouseDown={handleMouseDown}
+                        >
+                            <div className="absolute inset-y-0 -left-1 -right-1" />
+                        </div>
+
+                        {/* Right Panel (Workspace) */}
+                        <CodeWorkspace
+                            code={code}
+                            setCode={setCode}
+                            submitting={submitting}
+                            onSubmit={handleSubmit}
+                            onRunTests={runTests}
+                            handleEditorDidMount={handleEditorDidMount}
+                            isTestPanelVisible={isTestPanelVisible}
+                            setIsTestPanelVisible={setIsTestPanelVisible}
+                            testCases={testCases}
+                            result={result}
+                            cfStatus={cfStatus}
+                            mobileView={mobileView}
+                            language={language}
+                            setLanguage={setLanguage}
+                            contestId={contestId}
+                            problemId={problemId}
+                            testPanelActiveTab={testPanelActiveTab}
+                            setTestPanelActiveTab={setTestPanelActiveTab}
+                            onAddTestCase={handleAddTestCase}
+                            onDeleteTestCase={handleDeleteTestCase}
+                            onUpdateTestCase={handleUpdateTestCase}
+                            sampleTestCasesCount={sampleTestCasesCount}
+                            aiCode={aiCode}
+                            activeTab={codeTab}
+                            setActiveTab={setCodeTab}
+                            onAskAboutCode={handleAskAboutCode}
+                            onExplainLine={handleExplainLine}
+                            onExplainFunction={handleExplainFunction}
+                            onOptimizeCode={handleOptimizeCode}
+                            onFindBugs={handleFindBugs}
+                            activeLeftPanelTab={activeTab}
+                        />
                     </div>
 
-                    {/* Right Panel (Workspace) */}
-                    <CodeWorkspace
-                        code={code}
-                        setCode={setCode}
-                        submitting={submitting}
-                        onSubmit={handleSubmit}
-                        onRunTests={runTests}
-                        handleEditorDidMount={handleEditorDidMount}
-                        isTestPanelVisible={isTestPanelVisible}
-                        setIsTestPanelVisible={setIsTestPanelVisible}
-                        testCases={testCases}
-                        result={result}
-                        cfStatus={cfStatus}
-                        mobileView={mobileView}
-                        language={language}
-                        setLanguage={setLanguage}
-                        contestId={contestId}
-                        problemId={problemId}
-                        testPanelActiveTab={testPanelActiveTab}
-                        setTestPanelActiveTab={setTestPanelActiveTab}
-                        onAddTestCase={handleAddTestCase}
-                        onDeleteTestCase={handleDeleteTestCase}
-                        onUpdateTestCase={handleUpdateTestCase}
-                        sampleTestCasesCount={sampleTestCasesCount}
-                        aiCode={aiCode}
-                        activeTab={codeTab}
-                        setActiveTab={setCodeTab}
-                        onAskAboutCode={handleAskAboutCode}
-                        onExplainLine={handleExplainLine}
-                        onExplainFunction={handleExplainFunction}
-                        onOptimizeCode={handleOptimizeCode}
-                        onFindBugs={handleFindBugs}
-                        activeLeftPanelTab={activeTab}
+                    {/* Complexity Modal */}
+                    <ComplexityModal
+                        isOpen={showComplexityModal}
+                        onClose={() => setShowComplexityModal(false)}
+                        loading={complexityLoading}
+                        result={complexityResult}
                     />
+
+                    {!isTestPanelVisible && (
+                        <button
+                            onClick={() => setIsTestPanelVisible(true)}
+                            className="fixed bottom-3 right-3 w-10 h-10 bg-[#10B981]/90 hover:bg-[#10B981] backdrop-blur-sm text-white rounded-full shadow-lg shadow-[#10B981]/10 hover:shadow-[#10B981]/20 active:scale-95 transition-all duration-200 flex items-center justify-center z-50 touch-manipulation border border-[#10B981]/20"
+                            title="Show Test Cases"
+                        >
+                            <FlaskConical size={16} strokeWidth={2} />
+                        </button>
+                    )}
                 </div>
-
-                {/* Complexity Modal */}
-                <ComplexityModal
-                    isOpen={showComplexityModal}
-                    onClose={() => setShowComplexityModal(false)}
-                    loading={complexityLoading}
-                    result={complexityResult}
-                />
-
-                {!isTestPanelVisible && (
-                    <button
-                        onClick={() => setIsTestPanelVisible(true)}
-                        className="fixed bottom-3 right-3 w-10 h-10 bg-[#10B981]/90 hover:bg-[#10B981] backdrop-blur-sm text-white rounded-full shadow-lg shadow-[#10B981]/10 hover:shadow-[#10B981]/20 active:scale-95 transition-all duration-200 flex items-center justify-center z-50 touch-manipulation border border-[#10B981]/20"
-                        title="Show Test Cases"
-                    >
-                        <FlaskConical size={16} strokeWidth={2} />
-                    </button>
-                )}
             </div>
         </ExtensionGate>
     );

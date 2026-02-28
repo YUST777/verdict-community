@@ -16,7 +16,8 @@ import { useAIChatPersistence } from '@/hooks/contest/useAIChatPersistence';
 import { useLLM } from '@/lib/useLLM';
 import { trackInteraction, analyzeQuestion, loadBehaviorPatterns, inferPreferencesFromBehavior } from '@/lib/ai-behavior-learning';
 import ChatMessage from './ChatMessage';
-import { useTutorSession } from './useTutorSession';
+import { useTutor } from './tutor/useTutor';
+import { useVideoTutor } from './video/useVideoTutor';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { AIContextUsageProvider, useAIContextUsage } from '@/components/ui/ai-context-usage';
@@ -112,7 +113,7 @@ export default function AIAgentPanel({
     );
     const [tutorActiveByTab, setTutorActiveByTab] = useState<Record<string, boolean>>({ 'default': false });
     const [isLoadingByTab, setIsLoadingByTab] = useState<Record<string, boolean>>({ 'default': false });
-    const [aiStatusByTab, setAiStatusByTab] = useState<Record<string, string>>({ 'default': 'Thinking...' });
+    const [aiStatusByTab, setAiStatusByTab] = useState<Record<string, string>>({ 'default': '' });
     const [preferences, setPreferences] = useState<Partial<AILearningPreferences>>({});
     const [showPreferencesModal, setShowPreferencesModal] = useState(false);
     const [isResourcesOpen, setIsResourcesOpen] = useState(false);
@@ -131,8 +132,8 @@ export default function AIAgentPanel({
                     redirectTo: `${window.location.origin}/api/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`
                 }
             });
-        } catch (err) {
-            console.error('OAuth failed', err);
+        } catch (err: any) {
+            console.error('OAuth failed', err?.message || err);
         }
     };
 
@@ -144,7 +145,8 @@ export default function AIAgentPanel({
     const concepts = conceptsByTab[activeChatTab] || [];
     const isTutorActive = tutorActiveByTab[activeChatTab] || false;
     const isLoadingMessage = isLoadingByTab[activeChatTab] || false;
-    const aiStatus = aiStatusByTab[activeChatTab] || 'Thinking...';
+    const isArabic = settings?.language === 'ar';
+    const aiStatus = aiStatusByTab[activeChatTab] || (isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...');
 
     const setMessages = useCallback((updater: React.SetStateAction<Message[]>, tabId: string = activeChatTab) => {
         setMessagesByTab(prev => {
@@ -193,7 +195,7 @@ export default function AIAgentPanel({
         setConceptsByTab((prev: Record<string, any[]>) => ({ ...prev, [newId]: [] }));
         setTutorActiveByTab((prev: Record<string, boolean>) => ({ ...prev, [newId]: false }));
         setIsLoadingByTab((prev: Record<string, boolean>) => ({ ...prev, [newId]: false }));
-        setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [newId]: 'Thinking...' }));
+        setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [newId]: settings?.language === 'ar' ? 'بجهز أطبخ...' : 'Getting ready to cook...' }));
     }, [chatTabs]);
 
     const deleteChat = useCallback((tabId: string) => {
@@ -206,8 +208,9 @@ export default function AIAgentPanel({
                 setConceptsByTab((p: Record<string, any[]>) => { const d = { ...p, [newId]: [] }; delete d[tabId]; return d; });
                 setTutorActiveByTab((p: Record<string, boolean>) => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
                 setIsLoadingByTab((p: Record<string, boolean>) => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
-                setAiStatusByTab((p: Record<string, string>) => { const d = { ...p, [newId]: 'Thinking...' }; delete d[tabId]; return d; });
+                setAiStatusByTab((p: Record<string, string>) => { const d = { ...p, [newId]: settings?.language === 'ar' ? 'بجهز أطبخ...' : 'Getting ready to cook...' }; delete d[tabId]; return d; });
                 stopTutor(tabId);
+                stopVideoTutor(tabId);
                 return [{ id: newId, label: 'Chat 1' }];
             }
             const filtered = prev.filter(t => t.id !== tabId);
@@ -217,6 +220,7 @@ export default function AIAgentPanel({
                 setActiveChatTab(newActive.id);
             }
             stopTutor(tabId);
+            stopVideoTutor(tabId);
             setMessagesByTab((p: Record<string, any[]>) => {
                 const newDict = { ...p };
                 delete newDict[tabId];
@@ -302,8 +306,20 @@ export default function AIAgentPanel({
         });
     }, [activeChatTab]);
 
-    // Tutor hook
-    const { startTutor, stopTutor, startVideoTutor, variants, selectedLevel, changeLevel } = useTutorSession({
+    // AI Hooks
+    const sharedHookProps = {
+        addMessage,
+        updateMessage,
+        setIsTutorActive: (active: boolean, tabId = activeChatTab) => {
+            setTutorActiveByTab(prev => ({ ...prev, [tabId]: active }));
+        },
+        setIsLoading: (loading: boolean, tabId = activeChatTab) => {
+            setIsLoadingByTab(prev => ({ ...prev, [tabId]: loading }));
+        }
+    };
+
+    const { startTutor, stopTutor, variants, selectedLevel, changeLevel } = useTutor({
+        ...sharedHookProps,
         problemId,
         language,
         problemDescription,
@@ -311,8 +327,6 @@ export default function AIAgentPanel({
         getHeaders: () => ({}),
         onAiCodeUpdate,
         onSwitchToAiTab,
-        addMessage,
-        updateMessage,
         setConcepts: (updater, tabId = activeChatTab) => {
             setConceptsByTab(prev => {
                 const prevVal = prev[tabId] || [];
@@ -320,11 +334,14 @@ export default function AIAgentPanel({
                 return { ...prev, [tabId]: nextVal };
             });
         },
-        setIsTutorActive: (active, tabId = activeChatTab) => {
-            setTutorActiveByTab(prev => ({ ...prev, [tabId]: active }));
-        },
-        setIsLoading: (loading, tabId = activeChatTab) => {
-            setIsLoadingByTab(prev => ({ ...prev, [tabId]: loading }));
+    });
+
+    const { startVideoTutor, stopVideoTutor } = useVideoTutor({
+        ...sharedHookProps,
+        language,
+        problemDescription,
+        setIsVideoLoading: (loading, tabId = activeChatTab) => {
+            setIsVideoLoading(loading); // This one is still local state
         }
     });
 
@@ -381,8 +398,8 @@ export default function AIAgentPanel({
                     localStorage.setItem('ai-interactions:v1', JSON.stringify(interactions));
                 }
             }
-        } catch (error) {
-            console.error('[Behavior Tracking] Failed to update response length:', error);
+        } catch (error: any) {
+            console.error('[Behavior Tracking] Failed to update response length:', error?.message || error);
         }
     };
 
@@ -402,8 +419,8 @@ export default function AIAgentPanel({
                         loadedServer = data;
                     }
                 }
-            } catch (e) {
-                console.error('Failed to load server preferences:', e);
+            } catch (e: any) {
+                console.error('Failed to load server preferences:', e?.message || e);
             }
 
             // 3. Infer
@@ -432,7 +449,7 @@ export default function AIAgentPanel({
         if (selectedCode && selectedCode.trim()) {
             // Pre-fill input with a simple prompt if input is empty
             if (!input.trim() && !initialQuestion) {
-                setInput('Explain this code');
+                setInput(isArabic ? 'اشرح لي هذا الكود' : 'Explain this code');
             }
         } else if (initialQuestion && !input.trim()) {
             setInput(initialQuestion);
@@ -454,7 +471,7 @@ export default function AIAgentPanel({
             chatAbortControllerRef.current = null;
         }
         setIsLoadingByTab(prev => ({ ...prev, [activeChatTab]: false }));
-        setAiStatusByTab(prev => ({ ...prev, [activeChatTab]: 'Thinking...' }));
+        setAiStatusByTab(prev => ({ ...prev, [activeChatTab]: settings?.language === 'ar' ? 'بجهز أطبخ...' : 'Getting ready to cook...' }));
     }, [isLoadingMessage, isTutorActive, stopTutor, activeChatTab]);
 
     useEffect(() => {
@@ -467,7 +484,7 @@ export default function AIAgentPanel({
         if (!promptToSend || isLoadingByTab[tabId]) return;
 
         // Detect "teach me" to auto-trigger tutor
-        if (promptToSend.toLowerCase().includes('teach me') && !hasUsedTutor && (onSolveProblem || onAiCodeUpdate)) {
+        if (promptToSend.toLowerCase().includes('teach me') && (onSolveProblem || onAiCodeUpdate)) {
             // Still show the user message in chat
             const userMsg: Message = {
                 id: Date.now().toString(),
@@ -557,28 +574,28 @@ export default function AIAgentPanel({
                 ? 'When writing code solutions, prefer the most optimal time/space complexity. Show the most efficient approach even if it requires advanced data structures or algorithms.'
                 : 'When writing code solutions, prefer simple and readable code that is easy to understand. Avoid over-optimizing — a clean O(n²) solution is fine if it fits the constraints. Focus on clear logic over performance tricks.';
 
-            const thinkInstruction = 'Always enclose your detailed, step-by-step thinking process inside <think>...</think> tags. After your thought process, provide a concise final summary and explanation as your main response.';
-
             const isArabic = settings.language === 'ar';
             const baseSystemPrompt = isArabic
-                ? 'أنت مساعد بالذكاء الاصطناعي متخصص في البرمجة التنافسية. اشرح بوضوح وبإيجاز. تحدث بالعربية الطبيعية (لهجة مصرية/تقنية مقبولة). عند شرح الأكواد، اهتم بتحليل التعقيد (الوقت والذاكرة). اكتب الكود بالانجليزي لكن كل الشروحات والتعليقات بالعربي.'
+                ? 'أنت مساعد بالذكاء الاصطناعي متخصص في البرمجة التنافسية. اشرح بوضوح وبإيجاز. تحدث بالعربية الطبيعية (لهجة مصرية/تقنية مقبولة). عند شرح الأكواد، اهتم بتحليل التعقيد (الوقت والذاكرة). اكتب الكود بالانجليزي لكن كل الشروحات والتعليقات بالعربي. قاعدة تنسيق هامة جداً: عند كتابة أي مصطلحات إنجليزية، أو أرقام، أو معادلات رياضية، أو متغيرات برمجية داخل النص العربي، يجب عليك وضعها داخل علامات التنصيص البرمجية (backticks) مثل `O(N)` أو `dp[i]` لمنع انعكاس اتجاه الجملة.'
                 : 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.';
+
+            const thinkInstruction = 'Always enclose your detailed, step-by-step thinking process inside <think>...</think> tags. After your thought process, provide a concise final summary and explanation as your main response.';
 
             let currentMessages = [
                 { role: 'system', content: baseSystemPrompt + '\n\n' + styleInstruction + '\n\n' + thinkInstruction },
                 ...chatMessages
             ];
 
-            setAiStatus('Thinking...', tabId);
+            setAiStatusByTab(prev => ({ ...prev, [tabId]: settings?.language === 'ar' ? 'بجهز أطبخ...' : 'Getting ready to cook...' }));
 
             // Create streaming assistant message (uses streamMsgId from outer scope)
             addMessage({
                 id: streamMsgId,
                 role: 'assistant',
-                content: '<think>\nThinking...\n</think>',
+                content: '',
                 timestamp: new Date()
             }, tabId);
-            setIsLoadingMessage(false, tabId); // Hide loading dots, we have a message now
+            // Hide loading dots ONLY when we start streaming the actual response!
 
             const tools = [
                 {
@@ -790,6 +807,8 @@ export default function AIAgentPanel({
 
             if (!finalAiResponse) finalAiResponse = 'I apologize, but I couldn\'t generate a response. Please try again.';
 
+            setIsLoadingMessage(false, tabId); // Hide the interactive loader, about to show real bubble
+
             // Stream the response word-by-word into the existing message
             const words = finalAiResponse.split(' ');
             let streamed = '';
@@ -804,7 +823,11 @@ export default function AIAgentPanel({
             // Update last interaction with response length for learning
             updateLastInteractionResponse(finalAiResponse.length);
 
-        } catch (error) {
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                // Ignore intentional aborts to prevent Next.js from throwing an unhandled exception overlay
+                return;
+            }
             console.error('[AI Chat Error]', error);
             updateMessage(streamMsgId, 'Sorry, I encountered an error. Please try again or check your connection.', undefined, tabId);
         } finally {
@@ -831,7 +854,8 @@ export default function AIAgentPanel({
 
         setIsVideoLoading(true);
         try {
-            await startVideoTutor(userCode, tabId);
+            const videoPrompt = isArabic ? 'اشرح الكود الخاص بي سطر بسطر بالفيديو' : 'Explain my code line-by-line with video';
+            await startVideoTutor(videoPrompt, userCode, tabId);
         } finally {
             setIsVideoLoading(false);
         }
@@ -887,9 +911,11 @@ export default function AIAgentPanel({
                                 <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
                                     <Image src="/icons/logo.webp" alt="Verdict" fill sizes="56px" className="object-contain p-2.5 opacity-80" />
                                 </div>
-                                <h3 className="text-base font-semibold text-white/80 mb-1.5">How can I help?</h3>
+                                <h3 className="text-base font-semibold text-white/80 mb-1.5">{isArabic ? 'كيف يمكنني مساعدتك؟' : 'How can I help?'}</h3>
                                 <p className="text-xs text-white/35 max-w-[220px] leading-relaxed">
-                                    Ask about algorithms, debug your code, or get problem-solving hints.
+                                    {isArabic
+                                        ? 'اسأل عن الخوارزميات، صحح كودك، أو احصل على تلميحات لحل المسائل.'
+                                        : 'Ask about algorithms, debug your code, or get problem-solving hints.'}
                                 </p>
                             </div>
                         )}
@@ -901,7 +927,7 @@ export default function AIAgentPanel({
                                         <div key={message.id} className="px-1 py-2">
                                             <div className="flex items-center gap-1.5 mb-2">
                                                 <Globe size={10} className="text-white/25" />
-                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25">Sources</span>
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/25">{isArabic ? 'المصادر' : 'Sources'}</span>
                                             </div>
                                             <div className="flex flex-col gap-1.5">
                                                 {message.sources.map((src: any, i: number) => {
@@ -936,24 +962,13 @@ export default function AIAgentPanel({
                                         </div>
                                     );
                                 }
+                                if (!message.content && !message.codeBlock && (!message.sources || message.sources.length === 0)) {
+                                    return null;
+                                }
                                 return <ChatMessage key={message.id} message={message as any} isAuthenticated={true} userEmail="You" />;
                             })}
 
-                            {isLoadingMessage && (
-                                <div className="flex items-center gap-3 py-3">
-                                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center shrink-0 relative overflow-hidden">
-                                        <Image src="/icons/logo.webp" alt="AI" fill sizes="28px" className="object-contain p-1.5 opacity-60" />
-                                    </div>
-                                    <div className="flex flex-col gap-0.5">
-                                        <div className="flex gap-1 items-center">
-                                            {[0, 1, 2].map(i => (
-                                                <div key={i} className="w-1 h-1 rounded-full bg-emerald-400/60 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                                            ))}
-                                        </div>
-                                        <span className="text-[10px] text-white/30 animate-pulse">{aiStatus}</span>
-                                    </div>
-                                </div>
-                            )}
+
                             <div ref={messagesEndRef} />
                         </div>
                     </ConversationContent>
@@ -982,7 +997,7 @@ export default function AIAgentPanel({
                             className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.13] border border-emerald-500/20 rounded-2xl text-emerald-400 text-[12px] font-medium transition-all group"
                         >
                             <BrainCircuit size={14} strokeWidth={2} />
-                            Configure Bring Your Own LLM
+                            {isArabic ? 'إعداد الـ LLM الخاص بك' : 'Configure Bring Your Own LLM'}
                         </button>
                     )}
 
@@ -990,15 +1005,15 @@ export default function AIAgentPanel({
                     {!authLoading && !user ? (
                         <div className="w-full mb-3 flex flex-col gap-3 p-4 bg-[#141419] border border-white/[0.08] rounded-2xl relative overflow-hidden">
                             <div className="relative z-10 flex flex-col gap-1.5">
-                                <h4 className="text-[13px] font-semibold text-white/90">Sign in to use the AI Tutor</h4>
-                                <p className="text-[11px] text-white/50 mb-2">We ask you to sign in to prevent API abuse.</p>
+                                <h4 className="text-[13px] font-semibold text-white/90">{isArabic ? 'سجل دخول لاستخدام مساعد الذكاء الاصطناعي' : 'Sign in to use the AI Tutor'}</h4>
+                                <p className="text-[11px] text-white/50 mb-2">{isArabic ? 'نطلب منك تسجيل الدخول لمنع إساءة استخدام الخدمة.' : 'We ask you to sign in to prevent API abuse.'}</p>
 
                                 <button
                                     onClick={() => setShowSignInModal(true)}
                                     className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white font-medium rounded-lg text-[12px] transition-colors"
                                 >
                                     <BrainCircuit size={14} strokeWidth={2} />
-                                    <span>Bring your own LLM</span>
+                                    <span>{isArabic ? 'استخدم الـ LLM الخاص بك' : 'Bring your own LLM'}</span>
                                 </button>
                             </div>
                         </div>
@@ -1009,14 +1024,14 @@ export default function AIAgentPanel({
                                 onChange={setInput}
                                 isLoading={isLoadingMessage}
                                 placeholder={
-                                    !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
-                                        : selectedCode && selectedLineReference ? 'Ask about the selected code...'
-                                            : 'Ask anything...'
+                                    !settings.enabled || !settings.apiKey ? (isArabic ? 'برجاء إعداد الـ LLM أولاً...' : 'Configure LLM first...')
+                                        : selectedCode && selectedLineReference ? (isArabic ? 'اسأل عن الكود المحدد...' : 'Ask about the selected code...')
+                                            : (isArabic ? 'اسأل أي شيء...' : 'Ask anything...')
                                 }
                                 onSend={(msg) => handleSendMessage(msg)}
                                 onStop={stopGeneration}
                                 onOpenResources={() => setIsResourcesOpen(true)}
-                                onTeachMe={() => handleSendMessage('Teach me this problem')}
+                                onTeachMe={() => handleStartTutor(activeChatTab)}
                                 onExplainVideo={handleExplainVideo}
                                 isVideoLoading={isVideoLoading}
                                 isTutorLoading={isLoadingMessage}
@@ -1232,7 +1247,7 @@ function AIContextUsageTracker({ messages, modelName, problemDescription, userCo
                 maxTokens: maxTokens,
                 totalTokens: tokens
             });
-        }).catch(err => console.error('[Token Count Error]', err));
+        }).catch((err: any) => console.error('[Token Count Error]', err?.message || err));
 
         return () => { isMounted = false; };
     }, [messages, modelName, problemDescription, userCode, ctx.setUsageData]);

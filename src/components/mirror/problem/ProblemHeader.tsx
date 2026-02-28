@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, HardDrive, FileText, Code } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, HardDrive, FileText, Code, PanelLeft } from 'lucide-react';
+import { SidebarToggleIcon } from '@/components/ui/icons/SidebarToggleIcon';
 import { CFProblemData } from '../shared/types';
 
 interface ProblemHeaderProps {
@@ -12,6 +13,7 @@ interface ProblemHeaderProps {
     setMobileView: (view: 'problem' | 'code') => void;
     navigationBaseUrl: string;
     problemId: string;
+    onToggleSidebar: () => void;
 }
 
 export default function ProblemHeader({
@@ -20,7 +22,8 @@ export default function ProblemHeader({
     mobileView,
     setMobileView,
     navigationBaseUrl,
-    problemId
+    problemId,
+    onToggleSidebar
 }: ProblemHeaderProps) {
     // Navigation Heuristics
     const currentId = problemId || '';
@@ -72,18 +75,15 @@ export default function ProblemHeader({
             {/* Top Row: Navigation & Title */}
             <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 overflow-hidden">
-                    <Link
-                        href="/"
-                        className="p-1.5 -ml-1.5 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                        title="Back to Problems"
-                    >
-                        <ArrowLeft size={18} strokeWidth={2} />
-                    </Link>
-
-                    <div className="h-4 w-[1px] bg-white/10 shrink-0" />
-
                     <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2">
+                            <button
+                                onClick={onToggleSidebar}
+                                className={`p-1.5 -ml-1.5 text-white/50 hover:text-white hover:bg-white/5 rounded-md transition-colors ${!onToggleSidebar ? 'hidden' : ''}`}
+                                title="Toggle Sidebar"
+                            >
+                                <SidebarToggleIcon size={20} />
+                            </button>
                             <h1 className="text-sm font-semibold text-white/90 truncate flex items-center gap-2">
                                 {showIdPrefix && (
                                     <span className="text-xs font-mono text-[#10B981]/80 bg-[#10B981]/10 px-1.5 py-0.5 rounded border border-[#10B981]/20">

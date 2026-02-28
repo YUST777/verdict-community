@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useLLM } from '@/lib/useLLM';
 import { extractAndParseJson } from '@/lib/json-utils';
-import { VideoScript } from '../video';
 
 interface Concept {
     title: string;
@@ -11,7 +10,7 @@ interface Concept {
     type: 'video' | 'article';
 }
 
-interface UseTutorSessionProps {
+interface UseTutorProps {
     problemId?: string;
     language: string;
     problemDescription?: string;
@@ -20,13 +19,12 @@ interface UseTutorSessionProps {
     onAiCodeUpdate?: (code: string) => void;
     onSwitchToAiTab?: () => void;
     addMessage: (message: any, tabId?: string) => void;
-    updateMessage: (id: string, content: string, videoScript?: VideoScript, tabId?: string) => void;
+    updateMessage: (id: string, content: string, videoScript?: any, tabId?: string) => void;
     setConcepts: (concepts: Concept[] | ((prev: Concept[]) => Concept[]), tabId?: string) => void;
     setIsTutorActive: (active: boolean, tabId?: string) => void;
     setIsLoading: (loading: boolean, tabId?: string) => void;
 }
 
-// ─── Simple mode banned constructs ──────────────────────────────────────
 const SIMPLE_MODE_RULES = `STRICT RULES — Use an ADAPTIVE TEACHING approach for this learner:
 1. **Easy Problems** (Rating < 1400 or basic concepts): Use ONLY plain arrays (int arr[N]), basic loops (for/while), if/else, and standard variables. Avoid STL containers like vector/map to keep it as simple as possible.
 2. **Hard Problems** (Rating >= 1400 or complex constraints): You ARE authorized and encouraged to use "all weapons" necessary (e.g., #include <vector>, <map>, <set>, <queue>, <stack>, <algorithm>) to ensure the solution is both CORRECT and EFFICIENT.
@@ -46,7 +44,7 @@ const SMART_MODE_RULES = `STRICT RULES — Use an EXPERT TEACHING approach:
 
 CRITICAL: The "solution" must contain ZERO comments. No // comments, no /* */ comments, no # comments. Not a single comment anywhere. Pure code only.`;
 
-export function useTutorSession({
+export function useTutor({
     problemId,
     language,
     problemDescription,
@@ -59,33 +57,13 @@ export function useTutorSession({
     setConcepts,
     setIsTutorActive,
     setIsLoading: setIsLoadingInParent
-}: UseTutorSessionProps) {
+}: UseTutorProps) {
     const [variants, setVariants] = useState<any[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
-    // Maps tab ID to active status/abort controller
     const tutorActiveRefs = useRef<Record<string, boolean>>({});
     const abortControllers = useRef<Record<string, AbortController | null>>({});
     const { settings } = useLLM();
 
-    // ─── Stream text word-by-word into a message ────────────────────────
-    const streamTextToMessage = useCallback(async (
-        msgId: string,
-        prefix: string,
-        text: string,
-        tabId: string,
-        delayMs: number = 25
-    ) => {
-        const words = text.split(' ');
-        let revealed = '';
-        for (let i = 0; i < words.length; i++) {
-            if (!tutorActiveRefs.current[tabId]) break;
-            revealed += (i > 0 ? ' ' : '') + words[i];
-            updateMessage(msgId, prefix + revealed, undefined, tabId);
-            await new Promise(r => setTimeout(r, delayMs));
-        }
-    }, [updateMessage]);
-
-    // ─── Stream code character-by-character into the editor ──────────
     const streamCodeToEditor = useCallback(async (code: string, tabId: string) => {
         if (!onAiCodeUpdate) return;
         const chunkSize = 3;
@@ -94,18 +72,12 @@ export function useTutorSession({
             onAiCodeUpdate(code.substring(0, Math.min(i + chunkSize, code.length)));
             await new Promise(r => setTimeout(r, 12));
         }
-        // Ensure full code is set
         if (tutorActiveRefs.current[tabId]) onAiCodeUpdate(code);
     }, [onAiCodeUpdate]);
 
-    // ─── Main tutor flow ────────────────────────────────────────────
     const startTutor = useCallback(async (tabId: string = 'default') => {
-        if (tutorActiveRefs.current[tabId]) {
-            console.warn(`[Tutor] Tab ${tabId} already has an active tutor session.`);
-            return;
-        }
+        if (tutorActiveRefs.current[tabId]) return;
 
-        // Validate
         if (!testCases || testCases.length === 0) {
             addMessage({
                 id: Date.now().toString(),
@@ -126,14 +98,12 @@ export function useTutorSession({
             return;
         }
 
-        // Abort previous fetch for this tab if running
         if (abortControllers.current[tabId]) {
             abortControllers.current[tabId]?.abort();
         }
         abortControllers.current[tabId] = new AbortController();
         const signal = abortControllers.current[tabId]?.signal;
 
-        // Reset state for this tab
         setConcepts([], tabId);
         setVariants([]);
         setSelectedLevel(2);
@@ -142,12 +112,10 @@ export function useTutorSession({
         setIsLoadingInParent(true, tabId);
         if (onSwitchToAiTab) onSwitchToAiTab();
 
-        // Detect solution style
         const solutionStyle = (typeof window !== 'undefined' ? localStorage.getItem('verdict_solution_style') : 'simple') || 'simple';
         const isSimple = solutionStyle !== 'smart';
         const styleRules = isSimple ? SIMPLE_MODE_RULES : SMART_MODE_RULES;
 
-        // ── Phase 1: Show "Reading problem..." ──────────────────────
         const thinkMsgId = `tutor-${Date.now()}`;
         addMessage({
             id: thinkMsgId,
@@ -161,7 +129,6 @@ export function useTutorSession({
         }
 
         try {
-            // ── Phase 2: Fetch reference solution FIRST ──────────────
             let referenceBlock = '';
             let referenceCode = '';
             let referenceStatus = 'No archived solution found. I will solve this from scratch.';
@@ -184,12 +151,12 @@ export function useTutorSession({
                             }
                         }
                     }
-                } catch { /* reference fetch failed, proceed without it */ }
+                } catch { }
             }
 
             const isArabic = settings.language === 'ar';
             const languageInstruction = isArabic
-                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Arabic (العربية). Use natural Arabic (Egyptian/tech dialect is fine). The "solution" code itself stays in the programming language (C++/etc), but the "explanation" and "thinking" fields MUST be in Arabic.'
+                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Arabic (العربية). Use natural Arabic (Egyptian/tech dialect is fine). The "solution" code itself stays in the programming language (C++/etc), but the "explanation" and "thinking" fields MUST be in Arabic. CRITICAL FORMATTING: Whenever you mix English variables, numbers, mathematical formulas, or code constructs (e.g. O(N), vector, 10^5) inside the Arabic text, you MUST enclose them in markdown backticks (e.g. `O(N)` or `dp[i]`) across ALL fields. This forces Left-To-Right rendering for English interspersed in Right-To-Left Arabic.'
                 : '';
 
             updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\n</think>\n\n*${isArabic ? 'بقرا المسألة وبجهز المكونات...' : 'Reading the problem and gathering ingredients...'}*`, undefined, tabId);
@@ -248,7 +215,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             let judgeResultLine = "";
             let data: any = {};
 
-            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n🤔 *Thinking about the approach...*`, undefined, tabId);
+            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n� *${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
 
             while (attempt < maxAttempts) {
                 attempt++;
@@ -306,23 +273,19 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                     const delta = parsedChunk.choices?.[0]?.delta?.content || parsedChunk.choices?.[0]?.message?.content || '';
                                     if (delta) {
                                         rawContent += delta;
-                                        // Dynamically stream "thinking" field value
                                         const thinkMatch = rawContent.match(/"thinking"\s*:\s*"((?:[^"\\\\]|\\.)*)/);
                                         if (thinkMatch && thinkMatch[1]) {
                                             const partialThink = thinkMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                                            updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n🤔 *Thinking...*`, undefined, tabId);
+                                            updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n*${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
                                         }
                                     }
                                     if (parsedChunk.choices?.[0]?.finish_reason) {
                                         finishReason = parsedChunk.choices[0].finish_reason;
                                     }
-                                } catch (e) {
-                                    console.warn('[SSE] Failed to parse chunk:', trimmedLine, e);
-                                }
+                                } catch (e) { }
                             }
                         }
                     }
-                    // ── FALLBACK: Handle non-streamed (one-shot) JSON response ──────
                     if (!rawContent && buffer.trim().startsWith('{')) {
                         try {
                             const fullObj = JSON.parse(buffer.trim());
@@ -332,17 +295,10 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                 if (fullObj.choices?.[0]?.finish_reason) {
                                     finishReason = fullObj.choices[0].finish_reason;
                                 }
-                            } else {
-                                console.warn('[SSE] Fallback triggered but no content found in JSON:', fullObj);
                             }
-                        } catch (e) {
-                            console.warn('[SSE] Fallback parse failed:', e);
-                        }
+                        } catch (e) { }
                     }
                 }
-                console.log('[SSE] Stream ended. Total rawContent length:', rawContent.length);
-                console.log('[SSE] Buffer state snapshot:', buffer.slice(0, 100) + (buffer.length > 100 ? '...' : ''));
-
 
                 if (finishReason === 'length' || finishReason === 'max_tokens') {
                     currentMessages.push({ role: 'assistant', content: rawContent });
@@ -350,14 +306,16 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         role: 'user',
                         content: `Your response was cut off because you hit the maximum token limit. Your "thinking" section was too long, preventing you from finishing the solution. Please try again. Keep your "thinking" strictly under 250 words so you have space to write the full C++ solution.`
                     });
-                    const latestThink = "Error: Hit maximum token limit. The output was cut off mid-sentence. Retrying with a more concise thought process...";
-                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Ran out of tokens. Retrying more concisely...*`, undefined, tabId);
+                    const latestThink = isArabic
+                        ? "خطأ: تم الوصول للحد الأقصى للكلمات المسموحة. الإجابة اتقطعت. هحاول تاني بتفكير أوجز..."
+                        : "Error: Hit maximum token limit. The output was cut off mid-sentence. Retrying with a more concise thought process...";
+                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'خلصت الكلمات المسموحة. بحاول تاني باختصار' : 'Ran out of tokens. Retrying more concisely'}...*`, undefined, tabId);
                     continue;
                 }
 
                 if (!rawContent) {
-                    throw new Error('The AI provided an empty response. This can happen if the AI provider is experiencing high latency or if the request was blocked.');
+                    throw new Error('The AI provided an empty response.');
                 }
 
                 try {
@@ -366,15 +324,14 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     currentMessages.push({ role: 'assistant', content: rawContent });
                     currentMessages.push({
                         role: 'user',
-                        content: `Your response was invalid JSON or truncated: ${parseErr.message}. Please try again and ensure you close all JSON brackets and provide the full solution. Keep your thinking concise if you ran out of tokens.`
+                        content: `Your response was invalid JSON or truncated: ${parseErr.message}. Please try again and ensure you close all JSON brackets and provide the full solution.`
                     });
-                    const latestThink = "Error parsing response: " + parseErr.message;
-                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *JSON Truncated. Retrying...*`, undefined, tabId);
+                    const latestThink = isArabic ? "خطأ في قراءة رد الذكاء الاصطناعي: " + parseErr.message : "Error parsing response: " + parseErr.message;
+                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'النص اتقطع. بحاول تاني' : 'JSON Truncated. Retrying'}...*`, undefined, tabId);
                     continue;
                 }
 
-                // ─── Handle Python Scratchpad (Option 2) ────────────────
                 if (data.python_scratchpad && !data.solution) {
                     scratchpadCount++;
                     if (scratchpadCount > 3) {
@@ -383,16 +340,16 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             role: 'user',
                             content: `You have reached the maximum number of Python Scratchpad executions (3) for this problem. You MUST now proceed with the final Option 1 JSON schema and provide your C++ solution.`
                         });
-                        const latestThink = "Error: Maximum scratchpad limit reached. Retrying with final C++ solution...";
-                        finalThinkingText += `\n\n**-- Max Scratchpads Reached --**\n` + latestThink;
-                        updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Scratchpad limit reached. Proceeding with solution...*`, undefined, tabId);
-                        attempt--; // Do not count scratchpad limit bump as a code attempt
+                        const latestThink = isArabic ? "خطأ: وصلت للحد الأقصى للتجارب. بكتب الحل النهائي..." : "Error: Maximum scratchpad limit reached. Retrying with final C++ solution...";
+                        finalThinkingText += `\n\n**-- ${isArabic ? 'وصلت للحد الأقصى للتجارب' : 'Max Scratchpads Reached'} --**\n` + latestThink;
+                        updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'خلصت محاولات التجربة. هكتب الحل النهائي' : 'Scratchpad limit reached. Proceeding with solution'}...*`, undefined, tabId);
+                        attempt--;
                         continue;
                     }
 
-                    const scratchpadThink = data.thinking || 'Using Python scratchpad to find a pattern...';
+                    const scratchpadThink = data.thinking || (isArabic ? 'بستخدم بايثون عشان أجرب وألاقي نمط للحل...' : 'Using Python scratchpad to find a pattern...');
                     finalThinkingText += (attempt === 1 && scratchpadCount === 1 ? '' : '\n\n') + scratchpadThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n🐍 *Running Python scratchpad on local Judge0 to find a pattern...*`, undefined, tabId);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n🐍 *${isArabic ? 'بجرب الكود على بايثون عشان أكتشف الحل...' : 'Running Python scratchpad on local Judge0 to find a pattern...'}*`, undefined, tabId);
 
                     try {
                         const scratchRes = await fetch('/api/judge/test', {
@@ -420,16 +377,16 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         currentMessages.push({ role: 'assistant', content: rawContent });
                         currentMessages.push({
                             role: 'user',
-                            content: `Your Python scratchpad executed successfully. Output:\n\n${scratchOutput}\n\nPlease use this insight to write the final optimal C++ solution using the Option 1 standard JSON schema.`
+                            content: `Your Python scratchpad executed successfully. Output:\n\n${scratchOutput}\n\nPlease use this insight to write the final optimal C++ solution.`
                         });
                     } catch (e: any) {
                         currentMessages.push({ role: 'assistant', content: rawContent });
                         currentMessages.push({
                             role: 'user',
-                            content: `Your Python scratchpad encountered an error communicating with the judge system. Please proceed with Option 1 based on your best theoretical logic.`
+                            content: `Your Python scratchpad encountered an error. Please proceed with Option 1.`
                         });
                     }
-                    attempt--; // Do not count scratchpad against max attempts
+                    attempt--;
                     continue;
                 }
 
@@ -437,11 +394,11 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     currentMessages.push({ role: 'assistant', content: rawContent });
                     currentMessages.push({
                         role: 'user',
-                        content: `Your response did not include a valid "solution" string field, or it was truncated. Please provide the final JSON with the "solution" code formatted strictly as a single string. Keep your thinking concise if you ran out of tokens.`
+                        content: `Your response did not include a valid "solution" string field.`
                     });
-                    const latestThink = "Error: Invalid or missing solution field. Retrying...";
-                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Invalid solution format. Retrying...*`, undefined, tabId);
+                    const latestThink = isArabic ? "خطأ: مفيش حل أو الحل مش مكتوب صح. بحاول تاني..." : "Error: Invalid or missing solution field. Retrying...";
+                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'تنسيق الحل غير صحيح. بحاول تاني' : 'Invalid solution format. Retrying'}...*`, undefined, tabId);
                     continue;
                 }
 
@@ -450,11 +407,11 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     .replace(/\/\*[\s\S]*?\*\//g, '')
                     .replace(/^\s*\n/gm, '');
 
-                const latestThink = data.thinking || 'Analyzing the problem and formulating a solution.';
+                const latestThink = data.thinking || (isArabic ? 'بحلل المشكلة وبكتب الحل.' : 'Analyzing the problem and formulating a solution.');
                 if (attempt === 1) {
                     finalThinkingText = latestThink;
                 } else {
-                    finalThinkingText += `\n\n**-- Fixing Attempt ${attempt} --**\n` + latestThink;
+                    finalThinkingText += `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n` + latestThink;
                 }
 
                 finalApproachText = data.approach || '';
@@ -462,8 +419,8 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 finalSolution = cleanSolution;
 
                 const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
-
-                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n⚙️ *Testing solution against Judge0 test cases (Attempt ${attempt}/${maxAttempts})...*`, undefined, tabId);
+                const testMsgInternal = isArabic ? `بجرب الحل على منصة التحكيم (محاولة ${attempt}/${maxAttempts})...` : `Testing attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})...`;
+                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${testMsgInternal}\n</think>\n\n⚙️ *${testMsgInternal}*`, undefined, tabId);
 
                 try {
                     const judgeResponse = await fetch('/api/judge/test', {
@@ -487,37 +444,33 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         judgePassed = judgeData.passed;
                         const judgeVerdict = judgeData.verdict;
                         if (judgePassed) {
-                            judgeResultLine = `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
+                            judgeResultLine = isArabic ? `**${judgeVerdict}** — كل التيستات (${testCases.length}) نجحت` : `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
                         } else {
                             const failedCase = judgeData.results?.find((r: any) => !r.passed);
                             let judgeDetails = failedCase ? ` (Test ${failedCase.testCase}: ${failedCase.verdict})` : '';
-
-                            // Feed rich error output back to AI context
                             if (failedCase?.compileError) {
                                 judgeDetails += `\n\nCompiler Output:\n${failedCase.compileError.substring(0, 1000)}`;
                             } else if (failedCase?.runtimeError) {
                                 judgeDetails += `\n\nRuntime Error Output:\n${failedCase.runtimeError.substring(0, 1000)}`;
                             }
-
                             judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
                             data.passCount = judgeData.passedCount;
                         }
                     } else {
                         judgePassed = false;
-                        judgeResultLine = `**Judge Error** — Could not reach the judge service`;
+                        judgeResultLine = isArabic ? `**خطأ في منصة التحكيم**` : `**Judge Error**`;
                     }
                 } catch (err) {
                     judgePassed = false;
-                    judgeResultLine = `**Judge unavailable** — Could not connect to the testing service`;
+                    judgeResultLine = isArabic ? `**منصة التحكيم غير متاحة**` : `**Judge unavailable**`;
                 }
 
                 if (judgePassed && referenceCode && finalSolution && attempt < maxAttempts) {
-                    updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})... Passed sample tests!\n\nGenerating 5 tricky edge cases for stress-testing...\n</think>\n\n🕵️ *Wait, I'm not done! Stress-testing my solution against hidden edge cases...*`, undefined, tabId);
+                    const passWaitInternal = isArabic ? `${testMsgInternal} نجح في التيستات العادية!\n\nبنشئ 5 حالات اختبار معقدة عشان أختصم الحل...` : `${testMsgInternal} Passed sample tests!\n\nGenerating 5 tricky edge cases for stress-testing...`;
+                    updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${passWaitInternal}\n</think>\n\n🕵️ *${isArabic ? "استنى، مخلصتش تقييم!" : "Wait, I'm not done!"}*`, undefined, tabId);
 
                     try {
-                        const edgeCasePrompt = `Your solution passed the basic examples! Now, imagine you are a competitive programming judge trying to break your own code. Generate exactly 5 tricky edge-case inputs for this problem (e.g., minimum/maximum constraints, all elements equal, n=1, empty arrays if allowed, etc.).
-                        Return ONLY a JSON object containing an "inputs" array of 5 strings. Each string must be the exact text that would be passed to standard input (stdin). No markdown, no explanations. Example: { "inputs": ["1\\n1\\n", "10\\n1 2 3 4 5 6 7 8 9 10\\n"] }`;
-
+                        const edgeCasePrompt = `Generate exactly 5 tricky edge-case inputs for this problem. Return ONLY a JSON object containing an "inputs" array of 5 strings.`;
                         const edgeRes = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
                             method: 'POST',
                             headers: {
@@ -540,7 +493,8 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             const edgeContent = edgeData.choices?.[0]?.message?.content || '{}';
                             const edgeObj = extractAndParseJson(edgeContent);
                             if (edgeObj && edgeObj.inputs && Array.isArray(edgeObj.inputs)) {
-                                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})... Passed sample tests!\n\nGenerated 5 edge cases. Fuzzing against verified reference solution...\n</think>\n\n🏎️ *Fuzzing my code against the verified solution with 5 hidden test cases...*`, undefined, tabId);
+                                const passFuzzInternal = isArabic ? `${testMsgInternal} نجح!\n\nتم استخراج 5 حالات صعبة.` : `${testMsgInternal} Passed sample tests!\n\nGenerated 5 edge cases.`;
+                                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${passFuzzInternal}\n</think>\n\n🏎️ *${isArabic ? "بقارن نواتج الكود بتاعي مع الحل المرجعي..." : "Fuzzing my code against the verified solution..."}*`, undefined, tabId);
 
                                 const fuzzRes = await fetch('/api/judge/fuzz', {
                                     method: 'POST',
@@ -558,20 +512,19 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                     const fuzzData = await fuzzRes.json();
                                     if (!fuzzData.passed && fuzzData.failingCase) {
                                         judgePassed = false;
-                                        judgeResultLine = `**Wrong Answer on hidden edge case** — Mismatch with verified solution`;
-                                        data.passCount = testCases.length; // Passed samples, but failed fuzz
-
+                                        judgeResultLine = isArabic ? `**إجابة خاطئة على حالة اختبار صعبة (Edge Case)**` : `**Wrong Answer on hidden edge case**`;
+                                        data.passCount = testCases.length;
                                         currentMessages.push({ role: 'assistant', content: rawContent });
                                         currentMessages.push({
                                             role: 'user',
-                                            content: `Your solution passed the sample tests, but failed on a generated edge case during stress-testing against the verified reference solution.\n\n**Input:**\n${fuzzData.failingCase.input}\n\n**Expected Output (from verified reference):**\n${fuzzData.failingCase.expected}\n\n**Your Output:**\n${fuzzData.failingCase.actual}\n\nPlease fix the logical error. Return ONLY valid JSON with the exact same structure.`
+                                            content: `Your solution failed on a generated edge case during stress-testing.\n\n**Input:**\n${fuzzData.failingCase.input}\n\n**Expected:**\n${fuzzData.failingCase.expected}\n\n**Result:**\n${fuzzData.failingCase.actual}`
                                         });
-                                        continue; // Proceed to the next attempt to fix the edge case
+                                        continue;
                                     }
                                 }
                             }
                         }
-                    } catch (e) { console.error('[Fuzzer] Err:', e); }
+                    } catch (e) { }
                 }
 
                 if (judgePassed || attempt === maxAttempts) {
@@ -580,35 +533,27 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     currentMessages.push({ role: 'assistant', content: rawContent });
                     currentMessages.push({
                         role: 'user',
-                        content: `Your solution failed the tests. Judge verdict: ${judgeResultLine}. Please fix the logical errors, edge cases, or syntax errors, and try again. Return ONLY valid JSON with the exact same structure.`
+                        content: `Your solution failed the tests. Judge verdict: ${judgeResultLine}. Please fix the errors and try again.`
                     });
                 }
             }
 
+            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\n*${isArabic ? 'بكتب الحل...' : 'Writing solution...'}*`, undefined, tabId);
 
-
-            // ── Phase 3: Stream thinking ────────────────────────────
-            // The thinking stream has already been rendered natively during the SSE loop.
-            // But we will re-render the final compiled thinking + approach block cleanly here.
-            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\nWriting solution...`, undefined, tabId);
-
-            // ── Phase 4: Stream code into editor ────────────────────
             await new Promise(r => setTimeout(r, 300));
             updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nWriting code...\n</think>\n\n*${isArabic ? 'بكتب الكود في المحرر...' : 'Writing solution code to editor...'}*`, undefined, tabId);
 
             await streamCodeToEditor(finalSolution, tabId);
 
-            // ── Phase 5: Final Result ───────────────────────────────
             const thinkBaseFinal = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
-            const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\nCode written successfully\n\n${judgeResultLine}\n</think>`;
+            const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\n${isArabic ? 'تم تأليف الكود بنجاح' : 'Code written successfully'}\n\n${judgeResultLine}\n</think>`;
 
             if (judgePassed) {
-                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.\n\n**عايز شرح أعمق؟** أقدر أعملك فيديو يشرحلك الحل سطر بسطر!' : 'The solution has been written to the editor and passes all test cases.\n\n**Want a deeper breakdown?** I can generate a video walkthrough for this solution if you\'d like!'}`, undefined, tabId);
+                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.' : 'The solution has been written to the editor and passes all test cases.'}`, undefined, tabId);
             } else {
-                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\nThe solution might need adjustments. Try asking me to fix it in the chat.`, undefined, tabId);
+                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل ممكن يكون محتاج شوية تعديلات. اطلب مني أصلحه في الشات لو حابب.' : 'The solution might need adjustments. Try asking me to fix it in the chat.'}`, undefined, tabId);
             }
 
-            // Save concepts & inject real youtube video dynamically
             let finalConcepts = data.concepts || [];
             try {
                 const searchQ = finalConcepts[0]?.title ? `${finalConcepts[0].title} algorithm tutorial` : "competitive programming tutorial";
@@ -631,25 +576,22 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         ];
                     }
                 }
-            } catch (e) {
-                console.error('[Tutor] Failed to fetch youtube concept', e);
-            }
+            } catch (e) { }
 
             if (finalConcepts.length > 0) {
                 setConcepts(finalConcepts, tabId);
             }
 
         } catch (err: any) {
-            if (err.name === 'AbortError') {
-                updateMessage(thinkMsgId, `Tutor session was stopped.`, undefined, tabId);
+            if (err.name === 'AbortError' || err.message === 'signal is aborted without reason') {
+                updateMessage(thinkMsgId, settings.language === 'ar' ? 'تم إيقاف جلسة التعليم.' : `Tutor session was stopped.`, undefined, tabId);
             } else {
-                console.error('[Tutor Error]', err);
                 setIsLoadingInParent(false, tabId);
                 setIsTutorActive(false, tabId);
                 addMessage({
                     id: `err-${Date.now()}`,
                     role: 'assistant',
-                    content: `${settings.language === 'ar' ? 'حصل خطأ' : 'Error'}: ${err.message || (settings.language === 'ar' ? 'فشل في إنشاء الحل' : 'Failed to generate solution')}. ${settings.language === 'ar' ? 'حاول تاني.' : 'Please try again.'}`,
+                    content: `${settings.language === 'ar' ? 'حصل خطأ' : 'Error'}: ${err.message}.`,
                     timestamp: new Date()
                 }, tabId);
             }
@@ -658,7 +600,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             setIsTutorActive(false, tabId);
             tutorActiveRefs.current[tabId] = false;
         }
-    }, [problemId, language, problemDescription, testCases, settings, getHeaders, onAiCodeUpdate, onSwitchToAiTab, addMessage, updateMessage, setConcepts, setIsTutorActive, streamCodeToEditor, setIsLoadingInParent, streamTextToMessage]);
+    }, [problemId, language, problemDescription, testCases, settings, getHeaders, onAiCodeUpdate, onSwitchToAiTab, addMessage, updateMessage, setConcepts, setIsTutorActive, streamCodeToEditor, setIsLoadingInParent]);
 
     const changeLevel = useCallback(async (level: number) => {
         setSelectedLevel(level);
@@ -670,121 +612,33 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             setIsTutorActive(false, tabId);
             setIsLoadingInParent(false, tabId);
             if (abortControllers.current[tabId]) {
-                abortControllers.current[tabId]?.abort();
+                try {
+                    abortControllers.current[tabId]?.abort();
+                } catch (e) {
+                    // Ignore already aborted or restricted signals
+                }
                 abortControllers.current[tabId] = null;
             }
         } else {
-            // Stop all tabs
             Object.keys(tutorActiveRefs.current).forEach(id => {
                 tutorActiveRefs.current[id] = false;
                 setIsTutorActive(false, id);
                 setIsLoadingInParent(false, id);
                 if (abortControllers.current[id]) {
-                    abortControllers.current[id]?.abort();
+                    try {
+                        abortControllers.current[id]?.abort();
+                    } catch (e) { }
                     abortControllers.current[id] = null;
                 }
             });
         }
     }, [setIsTutorActive, setIsLoadingInParent]);
 
-    const startVideoTutor = useCallback(async (currentSolution?: string, tabId: string = 'default') => {
-        // Abort previous video tutor if running for this tab
-        if (abortControllers.current[tabId]) {
-            abortControllers.current[tabId]?.abort();
-        }
-        abortControllers.current[tabId] = new AbortController();
-        const signal = abortControllers.current[tabId]?.signal;
-
-        setIsLoadingInParent(true, tabId);
-        if (onSwitchToAiTab) onSwitchToAiTab();
-
-        const videoMsgId = `video-tutor-${Date.now()}`;
-        addMessage({
-            id: videoMsgId,
-            role: 'assistant',
-            content: `<think>\nAnalyzing problem and searching for best solution...\n</think>\n\n*${settings.language === 'ar' ? 'بدور على أحسن طريقة أشرحلك بيها...' : 'Searching for the best way to explain this...'}*`,
-            timestamp: new Date()
-        }, tabId);
-
-        try {
-            let solutionToExplain = currentSolution || '';
-
-            // If no solution provided, try to find one in the DB (archived)
-            if (!solutionToExplain && problemId) {
-                updateMessage(videoMsgId, `<think>\nNo local code found. Searching for a verified solution in our archives...\n</think>\n\n*${settings.language === 'ar' ? 'بدور على حل متحقق منه...' : 'Searching for a verified solution to explain...'}*`, undefined, tabId);
-                try {
-                    const [contestIdStr, problemIndex] = problemId.split('-');
-                    const solRes = await fetch('/api/solutions/fetch', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contestId: contestIdStr, problemIndex, language }),
-                        signal
-                    });
-                    if (solRes.ok) {
-                        const solData = await solRes.json();
-                        if (solData.found && solData.code) {
-                            solutionToExplain = solData.code;
-                            updateMessage(videoMsgId, `<think>\nVerified solution found in archives! Proceeding to video generation...\n</think>\n\n*${settings.language === 'ar' ? 'لقيت حل متحقق منه! بجهز الفيديو...' : 'Found a verified solution! Crafting your video walkthrough...'}*`, undefined, tabId);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[Video Tutor] Solution discovery failed', e);
-                }
-            }
-
-            // If still no solution, we MUST generate one first (just like teach me flow)
-            if (!solutionToExplain) {
-                updateMessage(videoMsgId, `<think>\nNo solution found. I need to solve the problem first to explain it accurately.\n</think>\n\n*${settings.language === 'ar' ? 'مفيش حل. بحل المسألة الأول عشان أقدر أشرحها...' : 'No solution found. Solving the problem first so I can explain it...'}*`, undefined, tabId);
-                // Note: Normally we'd call startTutor here, but for simplicity we'll tell the user to use Teach Me or provide code.
-                updateMessage(videoMsgId, settings.language === 'ar' ? 'ملقيتش حل أشرحه. جرب **علمني** الأول عشان يتعمل حل، وبعدين أقدر أعملك فيديو!' : `I couldn't find a solution to explain. Try using **Teach Me** first to generate a solution, then I can walk you through it with a video!`, undefined, tabId);
-                setIsLoadingInParent(false, tabId);
-                return;
-            }
-
-            // Phase 2: Call the Video API
-            updateMessage(videoMsgId, `<think>\nSolution confirmed. Calling Video Generation API...\nBreaking down code into scenes...\nAdding meticulous line-by-line narration...\n</think>\n\n*${settings.language === 'ar' ? 'بجهز الفيديو... ممكن ياخد ثواني.' : 'Crafting your video walkthrough... This might take a few seconds.'}*`, undefined, tabId);
-
-            const response = await fetch('/api/ai/video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    problemDescription,
-                    solution: solutionToExplain,
-                    language,
-                    settings
-                }),
-                signal
-            });
-
-            if (response.ok) {
-                const scriptData = await response.json();
-
-                // We update the message with the video script data
-                updateMessage(videoMsgId, settings.language === 'ar' ? '**الفيديو جاهز!** شوف الشرح سطر بسطر تحت:' : '**Video walkthrough ready!** Watch the line-by-line breakdown below:', scriptData, tabId);
-            } else {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to generate video script');
-            }
-
-        } catch (err: any) {
-            if (err.name === 'AbortError') {
-                updateMessage(videoMsgId, `Video generation was cancelled.`, undefined, tabId);
-            } else {
-                console.error('[Video Tutor Error]', err);
-                updateMessage(videoMsgId, `⚠️ Sorry, I failed to generate the video: ${err.message}`, undefined, tabId);
-            }
-        } finally {
-            setIsLoadingInParent(false, tabId);
-            abortControllers.current[tabId] = null;
-        }
-    }, [problemId, language, problemDescription, settings, addMessage, updateMessage, onSwitchToAiTab, setIsLoadingInParent]);
-
     return {
         variants,
         selectedLevel,
         changeLevel,
         startTutor,
-        stopTutor,
-        startVideoTutor
+        stopTutor
     };
 }

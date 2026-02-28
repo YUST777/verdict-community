@@ -69,7 +69,7 @@ const CodeBlock = ({ className, children, ...props }: any) => {
         return escaped
             .replace(/\b(int|long|double|float|char|string|void|bool|if|else|for|while|return|main|using|namespace|include|std|vector|map|set|pair|push_back|size|length)\b/g, '<span class="text-blue-400 font-bold">$1</span>')
             .replace(/(&quot;.*?&quot;|'.*?')/g, '<span class="text-orange-300">$1</span>')
-            .replace(/([-+*\/%&|^!<>]=?|[<>])/g, '<span class="text-white/40">$1</span>')
+            .replace(/([-+*\/%&|^!=]+|&lt;|&gt;)/g, '<span class="text-white/40">$1</span>')
             .replace(/(&#47;&#47;.*)/g, '<span class="text-zinc-500 italic">$1</span>');
     };
 

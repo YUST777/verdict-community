@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { Player } from '@remotion/player';
+import React, { useMemo, useEffect, useRef } from 'react';
+import { Player, PlayerRef } from '@remotion/player';
 import { X, Play, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExplainerComposition, VideoScript } from './ExplainerComposition';
@@ -14,9 +14,25 @@ interface VideoExplainerModalProps {
 }
 
 export default function VideoExplainerModal({ isOpen, onClose, script, isLoading }: VideoExplainerModalProps) {
-    if (!isOpen) return null;
+    const playerRef = useRef<PlayerRef>(null);
 
-    const totalDuration = script?.scenes.reduce((acc, s) => acc + s.duration, 0) || 5;
+    useEffect(() => {
+        if (isOpen && !isLoading && script) {
+            // Focus the player so spacebar works for play/pause immediately
+            setTimeout(() => {
+                const el = document.querySelector('.remotion-player-container');
+                if (el instanceof HTMLElement) {
+                    el.focus();
+                }
+            }, 500);
+        }
+    }, [isOpen, isLoading, script]);
+    const totalDuration = useMemo(
+        () => script?.scenes.reduce((acc, s) => acc + s.duration, 0) || 5,
+        [script]
+    );
+
+    if (!isOpen) return null;
 
     return (
         <AnimatePresence>
@@ -48,6 +64,14 @@ export default function VideoExplainerModal({ isOpen, onClose, script, isLoading
                         </div>
                         <button
                             onClick={onClose}
+                            onKeyDown={(e) => {
+                                // Prevent space from triggering the close button if it has focus
+                                if (e.key === ' ' || e.key === 'Spacebar') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }
+                            }}
+                            tabIndex={-1}
                             className="p-2 rounded-xl hover:bg-white/5 text-white/25 hover:text-white transition-colors"
                         >
                             <X size={18} />
@@ -64,7 +88,8 @@ export default function VideoExplainerModal({ isOpen, onClose, script, isLoading
                             </div>
                         ) : script ? (
                             <Player
-                                component={ExplainerComposition}
+                                ref={playerRef}
+                                component={ExplainerComposition as any}
                                 inputProps={script}
                                 durationInFrames={Math.round(totalDuration * 30)}
                                 fps={30}

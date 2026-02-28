@@ -107,8 +107,8 @@ export default function WhiteboardPage() {
                 a.click();
                 window.URL.revokeObjectURL(url);
             }
-        } catch (e) {
-            console.error('Failed to export:', e);
+        } catch (e: any) {
+            console.error('Failed to export:', e?.message || e);
         }
     }, [excalidrawAPI, contestId, problemIndex, whiteboardId]);
 
@@ -214,8 +214,8 @@ function useWhiteboardPersistence(
                 const legacy = localStorage.getItem(legacyKey);
                 if (legacy) return JSON.parse(legacy);
             }
-        } catch (e) {
-            console.error('Failed to load whiteboard:', e);
+        } catch (e: any) {
+            console.error('Failed to load whiteboard:', e?.message || e);
         }
         return null;
     });
@@ -251,13 +251,13 @@ function useWhiteboardPersistence(
                             if (wbData && wbData.elements && wbData.elements.length > 0) {
                                 excalidrawAPI.updateScene(wbData);
                             }
-                        } catch (e) {
-                            console.error('Failed to apply DB whiteboard data', e);
+                        } catch (e: any) {
+                            console.error('Failed to apply DB whiteboard data', e?.message || e);
                         }
                     }
                 }
-            } catch (e) {
-                console.error('Failed to fetch DB whiteboard data', e);
+            } catch (e: any) {
+                console.error('Failed to fetch DB whiteboard data', e?.message || e);
             }
             isDbLoadedRef.current = true;
         }
@@ -294,12 +294,12 @@ function useWhiteboardPersistence(
                                 whiteboardData: data
                             })
                         });
-                    } catch (e) {
-                        console.error('Failed to sync whiteboard to DB', e);
+                    } catch (e: any) {
+                        console.error('Failed to sync whiteboard to DB', e?.message || e);
                     }
                 }
-            } catch (e) {
-                console.error('Failed to save:', e);
+            } catch (e: any) {
+                console.error('Failed to save:', e?.message || e);
             }
         }, 1500);
     }, [storageKey, isPrimary, contestId, problemIndex]);

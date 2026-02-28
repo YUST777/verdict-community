@@ -26,6 +26,7 @@ interface ChatMessageData {
         lineReference?: string;
     };
     sources?: any[];
+    videoScript?: any;
 }
 
 interface ChatMessageProps {
@@ -89,7 +90,7 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                                             const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                                             return escaped
                                                 .replace(/\b(int|long|double|float|char|string|void|bool|if|else|for|while|return|main|using|namespace|include|std|vector|map|set|pair)\b/g, '<span class="text-blue-400 font-bold">$1</span>')
-                                                .replace(/([-+*\/%&|^!<>]=?|[<>])/g, '<span class="text-white/40">$1</span>')
+                                                .replace(/([-+*\/%&|^!=]+|&lt;|&gt;)/g, '<span class="text-white/40">$1</span>')
                                                 .replace(/(&#47;&#47;.*)/g, '<span class="text-zinc-500 italic">$1</span>');
                                         })(message.codeBlock.code)
                                     }}
@@ -101,7 +102,7 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                     <div className="text-[13px] sm:text-sm leading-relaxed break-words markdown-body" style={{ unicodeBidi: 'plaintext' }}>
                         {thinkSteps.length > 0 && (
                             <ChainOfThought>
-                                <ChainOfThoughtHeader title="Analyzed reasoning process" />
+                                <ChainOfThoughtHeader title={thinkSteps[0].includes('cooking') || thinkSteps[0].includes('بجهز') ? "Tutoring Session" : "Analyzed reasoning process"} />
                                 <ChainOfThoughtContent>
                                     {thinkSteps.map((stepContent, idx) => (
                                         <ChainOfThoughtStep key={idx} status={mainContent ? "completed" : (idx === thinkSteps.length - 1 ? "in-progress" : "completed")}>

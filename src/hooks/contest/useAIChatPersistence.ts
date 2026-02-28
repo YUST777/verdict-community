@@ -73,8 +73,8 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
                         console.warn('[AIChat Sync] 401 during initial load, falling back to local');
                     }
                 }
-            } catch (err) {
-                console.error('[AIChat Sync] Load error:', err);
+            } catch (err: any) {
+                console.error('[AIChat Sync] Load error:', err?.message || err);
             }
 
             // 2. Default fallback for unauthenticated or first-time cloud users
@@ -127,8 +127,8 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
                     const body = await response.text().catch(() => '');
                     console.warn(`[AIChat Sync] Save failed (${response.status}):`, body || 'empty response');
                 }
-            } catch (err) {
-                console.error('[AIChat Sync] Save exception:', err);
+            } catch (err: any) {
+                console.error('[AIChat Sync] Save exception:', err?.message || err);
             }
         }, 1500); // 1.5s debounce to batch character streams optimally
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractAndParseJson } from '@/lib/json-utils';
+import { getSvgForKeywords } from '@/lib/svg-templates';
 
 export async function POST(req: NextRequest) {
     try {
@@ -18,87 +19,166 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing problem description or solution' }, { status: 400 });
         }
 
-        let systemPrompt = `You are a world-class Competitive Programming video creator (like NeetCode, Errichto, or 3Blue1Brown for CP). Your goal: generate a PERFECT video script that teaches the viewer how to solve a competitive programming problem.
+        let systemPrompt = `You are a senior competitive programming educator with 10+ years of experience creating educational video walkthroughs (like NeetCode, Errichto, or 3Blue1Brown for CP). You produce PERFECT, structured video scripts that teach viewers how to solve competitive programming problems.
 
-## STRICT SCENE FLOW (follow this EXACT order)
+## YOUR TASK
+Generate a video script as a JSON object with a "title" string and a "scenes" array. Follow the EXACT phase order below.
 
-### Phase 1 — Title (1 scene)
-- type: "title"
-- duration: 3 (seconds)
-- text: The problem name (short, punchy, max 6 words)
-- script: A 1-sentence hook. Example: "Let's break down this classic problem step by step."
+## PHASE ORDER (follow this STRICTLY)
 
-### Phase 2 — Problem Statement (2-4 scenes)
-Read the problem to the viewer. Break it into digestible chunks:
-- type: "problem"
-- duration: 5-8 each
-- text: A SHORT visual summary of what this part says (max 15 words). NOT the full problem text.
-- script: A natural, conversational explanation of what the problem is asking. Read it like you're explaining to a friend. Cover: what the input looks like, what the output should be, any key constraints (like N ≤ 10^5).
-- svg: (Optional) A raw SVG string to visually illustrate the problem. Use viewBox="0 0 400 300". Use dark-mode friendly colors (white/gray strokes, no background, #10b981 for highlights). NO text in SVG, only shapes/lines.
+### Phase 1 — Title (exactly 1 scene)
+1. type: "title"
+2. duration: 3
+3. text: Problem name (max 6 words)
+4. script: 1-sentence hook
 
-### Phase 3 — Strategy / Key Insight (1-3 scenes)
-Explain the algorithmic approach BEFORE showing code:
-- type: "concept"
-- duration: 5-8 each
-- text: The core idea in a short phrase (max 12 words). Example: "Use a sliding window of size K"
-- script: Explain WHY this approach works. What is the key insight? Why is brute force too slow? What data structure helps?
-- svg: (Optional) A raw SVG string to visually illustrate the algorithm (e.g., an array, a graph, a tree). Use dark-mode friendly colors (#3b82f6 or #10b981).
+### Phase 2 — Problem Statement (2-3 scenes)
+1. type: "problem"
+2. duration: 6-10
+3. text: Short visual summary (MAX 6 WORDS). NOT the full problem text.
+4. script: Conversational explanation of what the problem asks
+5. svg: A raw SVG illustration (see SVG RULES below). REQUIRED for at least 1 problem scene.
 
-### Phase 4 — Code Walkthrough (5-12 scenes)
-Walk through the solution code section by section. NOT line-by-line for trivial lines — group logically related lines together:
-- type: "code"
-- duration: 5-10 each
-- text: What this code section does (max 10 words). Example: "Reading input and initializing arrays"
-- script: Explain what the highlighted lines do and WHY. Connect back to the strategy.
-- code: The FULL source code (IDENTICAL across ALL code scenes — the viewer sees the same file, with different highlights)
-- highlight: [startLine, endLine] — 1-indexed, inclusive. MUST match the lines you're explaining. Be PRECISE.
+### Phase 3 — Strategy / Key Insight (1-2 scenes)
+1. type: "concept"
+2. duration: 6-10
+3. text: Core idea (MAX 8 WORDS — this renders at 56px and WILL OVERFLOW if longer)
+4. script: Explain WHY this approach works
+5. svg: A raw SVG illustration. REQUIRED for at least 1 concept scene.
 
-Guidelines for code scenes:
-- First code scene: highlight the includes/boilerplate (lines 1-4 typically)
-- Group related lines (e.g., "input reading" = lines 5-9)
-- For the core algorithm, you may use 1-3 lines per scene for precision
-- Last code scene: highlight the output section
-- NEVER have a code scene without a highlight
+### Phase 4 — Code Walkthrough (4-8 scenes)
+1. type: "code"
+2. duration: 5-10
+3. text: What this section does (max 8 words)
+4. script: Explain the highlighted lines
+5. code: The FULL source code (IDENTICAL in every code scene)
+6. highlight: [startLine, endLine] — 1-indexed, inclusive, PRECISE
 
-### Phase 5 — Complexity & Summary (1 scene)
-- type: "summary"
-- duration: 5
-- text: "Time: O(...) | Space: O(...)" — the complexity
-- script: Summarize why the solution is efficient and correct. End on a high note.
+### Phase 5 — Complexity & Summary (exactly 1 scene)
+1. type: "summary"
+2. duration: 5
+3. text: "Time: O(...) | Space: O(...)"
+4. script: Summarize efficiency. End on a high note.
 
-## RULES
+## SVG RULES (CRITICAL — follow these EXACTLY)
+- Use viewBox="0 0 400 300"
+- Dark-mode: white strokes (#ffffff), #10b981 for highlights
+- NO background fill on root <svg>
+- ULTRA-MINIMALIST: use only 2-6 SVG elements. One or two shapes max.
+- You MAY use <text> for SHORT labels (single letters/numbers like "N", "M", "A"). Style: fill="#ffffff" fill-opacity="0.6" font-size="16" font-family="monospace"
+- Think: one clean rectangle with dimension labels. That's it. NO grids, NO dashed lines, NO complex patterns.
 
-1. **script** field = what the narrator SAYS (natural, educational, conversational). This becomes TTS audio AND on-screen captions.
-2. **text** field = what appears as the VISUAL headline on screen. Keep it SHORT and punchy.
-3. Code scenes MUST have the COMPLETE source code in the "code" field. Every code scene shares the SAME full code — only the highlight changes.
-4. highlight ranges MUST be precise 1-indexed [start, end] inclusive line numbers.
-5. Total video should be 60-120 seconds (aim for ~90s).
-6. Scene durations should vary (3-10s) for natural pacing.
-7. IDs must be unique strings (e.g., "title-1", "problem-1", "concept-1", "code-1", etc.)
-8. Do NOT use emojis in the script field.
-9. The script should sound natural when read aloud by a TTS engine.
+## TEXT LENGTH RULES (CRITICAL — strictly enforce these)
+- title text: max 6 words
+- problem text: MAX 6 WORDS (renders at 52px, overflows if longer!)
+- concept text: MAX 6 WORDS (renders at 56px, overflows if longer!)
+- code text: max 6 words
+- summary text: max 8 words
+
+## DURATION RULES
+- Estimate ~3 words per second for script narration
+- duration MUST be >= ceil(wordCount(script) / 3) + 2
+- Never set duration shorter than what the script needs
+
+## CODE SCENE RULES
+- code field = COMPLETE source code, identical across ALL code scenes
+- highlight = [start, end] 1-indexed inclusive line range you are explaining
+- First code scene: highlight boilerplate/includes
+- Last code scene: highlight output section
+- Group related lines (e.g., input reading = lines 5-9)
 
 ## OUTPUT FORMAT
-Return ONLY valid JSON. No markdown, no backticks, no explanation outside JSON.
+Return ONLY valid JSON. No markdown, no backticks, no commentary.
 {
-  "title": "Problem Title",
+  "title": "string",
   "scenes": [
     {
-      "id": "unique-string-id",
+      "id": "string",
       "type": "title" | "problem" | "concept" | "code" | "summary",
       "duration": number,
-      "text": "Short visual headline",
-      "script": "Natural narration text for TTS",
-      "svg": "<svg viewBox=\"0 0 400 300\">...</svg> (optional, only for problem/concept)",
-      "code": "Full source code (only for code scenes)",
-      "highlight": [startLine, endLine] (only for code scenes)
+      "text": "string (SHORT!)",
+      "script": "string (narration)",
+      "svg": "string (raw SVG, for problem/concept only)",
+      "code": "string (full source, for code only)",
+      "highlight": [number, number] (for code only)
     }
   ]
-}`;
+}
+
+## COMPLETE EXAMPLE
+Here is a COMPLETE, CORRECT example for a simple "Two Sum" problem:
+
+{
+  "title": "Two Sum",
+  "scenes": [
+    {
+      "id": "title-1",
+      "type": "title",
+      "duration": 3,
+      "text": "Two Sum",
+      "script": "Let's solve the classic Two Sum problem step by step."
+    },
+    {
+      "id": "problem-1",
+      "type": "problem",
+      "duration": 7,
+      "text": "Find pair summing to target",
+      "script": "Given an array of integers and a target value, we need to find two numbers that add up to the target and return their indices.",
+      "svg": "<svg viewBox=\\"0 0 400 300\\" xmlns=\\"http://www.w3.org/2000/svg\"><rect x=\\"100\\" y=\\"80\\" width=\\"200\\" height=\\"140\\" fill=\\"none\\" stroke=\\"#ffffff\\" stroke-width=\\"1.5\\"/><text x=\\"200\\" y=\\"65\\" text-anchor=\\"middle\\" fill=\\"#ffffff\\" fill-opacity=\\"0.6\\" font-size=\\"16\\" font-family=\\"monospace\\">N</text><text x=\\"85\\" y=\\"155\\" text-anchor=\\"middle\\" fill=\\"#ffffff\\" fill-opacity=\\"0.6\\" font-size=\\"16\\" font-family=\\"monospace\\">M</text></svg>"
+    },
+    {
+      "id": "concept-1",
+      "type": "concept",
+      "duration": 8,
+      "text": "Hash map gives O(N)",
+      "script": "Instead of checking every pair which would take O of N squared, we use a hash map. For each number, we check if the complement exists in the map. This gives us O of N time.",
+      "svg": "<svg viewBox=\\"0 0 400 300\\" xmlns=\\"http://www.w3.org/2000/svg\"><rect x=\\"120\\" y=\\"80\\" width=\\"160\\" height=\\"140\\" fill=\\"none\\" stroke=\\"#10b981\\" stroke-width=\\"1.5\\" rx=\\"6\\"/><line x1=\\"120\\" y1=\\"120\\" x2=\\"280\\" y2=\\"120\\" stroke=\\"#ffffff\\" stroke-opacity=\\"0.15\\"/><line x1=\\"120\\" y1=\\"160\\" x2=\\"280\\" y2=\\"160\\" stroke=\\"#ffffff\\" stroke-opacity=\\"0.15\\"/></svg>"
+    },
+    {
+      "id": "code-1",
+      "type": "code",
+      "duration": 6,
+      "text": "Include headers and main",
+      "script": "We start with the standard includes and the main function setup.",
+      "code": "#include <bits/stdc++.h>\\nusing namespace std;\\nint main() {\\n    int n, target;\\n    cin >> n >> target;\\n    vector<int> a(n);\\n    for (int i = 0; i < n; i++) cin >> a[i];\\n    unordered_map<int,int> mp;\\n    for (int i = 0; i < n; i++) {\\n        int comp = target - a[i];\\n        if (mp.count(comp)) {\\n            cout << mp[comp] << \\" \\" << i << endl;\\n            return 0;\\n        }\\n        mp[a[i]] = i;\\n    }\\n    return 0;\\n}",
+      "highlight": [1, 3]
+    },
+    {
+      "id": "code-2",
+      "type": "code",
+      "duration": 8,
+      "text": "Hash map lookup logic",
+      "script": "For each element, we compute the complement by subtracting it from the target. If the complement exists in our hash map, we found our answer. Otherwise, we store the current element and its index.",
+      "code": "#include <bits/stdc++.h>\\nusing namespace std;\\nint main() {\\n    int n, target;\\n    cin >> n >> target;\\n    vector<int> a(n);\\n    for (int i = 0; i < n; i++) cin >> a[i];\\n    unordered_map<int,int> mp;\\n    for (int i = 0; i < n; i++) {\\n        int comp = target - a[i];\\n        if (mp.count(comp)) {\\n            cout << mp[comp] << \\" \\" << i << endl;\\n            return 0;\\n        }\\n        mp[a[i]] = i;\\n    }\\n    return 0;\\n}",
+      "highlight": [9, 16]
+    },
+    {
+      "id": "summary-1",
+      "type": "summary",
+      "duration": 5,
+      "text": "Time: O(N) | Space: O(N)",
+      "script": "The hash map gives us O of N time and O of N space. One pass through the array is all we need."
+    }
+  ]
+}
+
+## FINAL REMINDERS (READ THESE CAREFULLY)
+1. text fields MUST be SHORT. Concept text MAX 8 words. If you write more, the UI breaks.
+2. Every problem and concept scene SHOULD have an svg field with a proper SVG illustration.
+3. duration must be long enough for the script to be fully read (~3 words/sec + 2s buffer).`;
 
         const isArabic = settings.language === 'ar';
         if (isArabic) {
-            systemPrompt += `\n\n## LANGUAGE RULE\nYou MUST write ALL "text" and "script" fields in Arabic (العربية). Use natural Arabic. The "code" field stays in the programming language. Field names ("id", "type", "duration") remain in English. Example:\n- text: "قراءة المدخلات وتهيئة المصفوفة"\n- script: "هنا بنقرأ الـ input من المستخدم ونحفظه في المصفوفة"\n- code: stays as-is in C++/Python/etc`;
+            systemPrompt += `\n\n## LANGUAGE RULE
+You MUST write ALL "text" and "script" fields in Arabic (العربية). Use natural Arabic. The "code" field stays in the programming language. Field names ("id", "type", "duration") remain in English. CRITICAL FORMATTING: Whenever you mix English variables, numbers, mathematical formulas, or code constructs inside the Arabic text (in text/script fields), you MUST enclose them in markdown backticks (e.g. \`O(N)\` or \`10^5\`) so the Right-To-Left system renders them correctly inline. Example:
+- text: "قراءة المدخلات وتهيئة المصفوفة ذات حجم \`N\`"
+- script: "هنا بنقرأ الـ input من المستخدم ونحفظه في المصفوفة. الوقت المستغرق هو \`O(N)\`"
+- code: stays as-is in C++/Python/etc
+
+## FINAL REMINDERS (ARABIC)
+1. text fields MUST be SHORT — MAX 8 words for concept scenes.
+2. Every problem/concept scene SHOULD have an svg.
+3. duration >= ceil(wordCount / 3) + 2.`;
         }
 
         const userPrompt = `Problem Description:
@@ -107,61 +187,115 @@ ${problemDescription}
 Solution Code (${language}):
 ${solution}
 
-Generate the video script following the STRICT SCENE FLOW. Remember: code scenes must contain the FULL source code with precise highlight ranges.${isArabic ? ' ALL text and script fields MUST be in Arabic (العربية).' : ''}`;
+Generate the video script following the STRICT PHASE ORDER. Remember: code scenes must contain the FULL source code with precise highlight ranges.${isArabic ? ' ALL text and script fields MUST be in Arabic (العربية).' : ''}`;
 
-        const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.apiKey}`
-            },
-            body: JSON.stringify({
-                model: settings.model,
-                response_format: { type: "json_object" },
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt }
-                ]
-            })
-        });
+        // ── LLM call with retry ─────────────────────────────────────────
+        let parsed: any = null;
+        let lastError: Error | null = null;
 
-        if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`LLM Failed: ${err}`);
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${settings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: settings.model,
+                        temperature: 0.4 + (attempt * 0.15), // Slightly increase temp on retry
+                        response_format: { type: "json_object" },
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: userPrompt }
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.text();
+                    throw new Error(`LLM Failed: ${err}`);
+                }
+
+                const data = await response.json();
+                const scriptJson = data.choices?.[0]?.message?.content;
+
+                if (!scriptJson) {
+                    throw new Error('Empty response from LLM');
+                }
+
+                parsed = extractAndParseJson(scriptJson);
+
+                if (!parsed.title || !parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
+                    throw new Error('Invalid script structure');
+                }
+
+                break; // Success, exit retry loop
+            } catch (err: any) {
+                lastError = err;
+                console.warn(`[Video Script] Attempt ${attempt + 1} failed:`, err.message);
+                if (attempt === 1) throw lastError;
+            }
         }
 
-        const data = await response.json();
-        const scriptJson = data.choices?.[0]?.message?.content;
+        // ── Text length limits per scene type ───────────────────────────
+        const maxTextChars: Record<string, number> = {
+            title: 40,
+            problem: 80,
+            concept: 50,
+            code: 60,
+            summary: 60,
+        };
 
-        if (!scriptJson) {
-            throw new Error('Empty response from LLM');
-        }
-
-        const parsed = extractAndParseJson(scriptJson);
-
-        // ── Post-processing validation ──────────────────────────────────
-        if (!parsed.title || !parsed.scenes || !Array.isArray(parsed.scenes)) {
-            throw new Error('Invalid script structure: missing title or scenes array');
-        }
+        // ── Find total lines of code for highlight clamping ─────────────
+        const totalCodeLines = solution ? solution.split('\n').length : 999;
 
         // Validate and fix common issues
         const validTypes = ['title', 'problem', 'concept', 'code', 'summary'];
         parsed.scenes = parsed.scenes
             .filter((s: any) => s && validTypes.includes(s.type))
-            .map((scene: any, idx: number) => ({
-                ...scene,
-                id: scene.id || `scene-${idx}`,
-                duration: Math.max(2, Math.min(15, scene.duration || 5)),
-                text: scene.text || '',
-                script: scene.script || '',
-                // Ensure code scenes have required fields
-                ...(scene.type === 'code' ? {
-                    code: scene.code || '',
-                    highlight: Array.isArray(scene.highlight) && scene.highlight.length === 2
-                        ? [Math.max(1, scene.highlight[0]), Math.max(1, scene.highlight[1])]
-                        : undefined
-                } : {})
-            }));
+            .map((scene: any, idx: number) => {
+                const scriptText = scene.script || '';
+                const wordCount = scriptText.split(/\s+/).filter(Boolean).length;
+                // Minimum duration = enough time to read all words at ~3 words/sec + 2s buffer
+                const minDurationForScript = Math.ceil(wordCount / 3) + 2;
+                const rawDuration = scene.duration || 5;
+                const finalDuration = Math.max(minDurationForScript, Math.max(2, Math.min(30, rawDuration)));
+
+                // Truncate text if it exceeds max chars for this scene type
+                let text = scene.text || '';
+                const maxLen = maxTextChars[scene.type] || 80;
+                if (text.length > maxLen) {
+                    text = text.substring(0, maxLen).trim();
+                    // Don't cut mid-word — find last space
+                    const lastSpace = text.lastIndexOf(' ');
+                    if (lastSpace > maxLen * 0.6) {
+                        text = text.substring(0, lastSpace).trim();
+                    }
+                }
+
+                return {
+                    ...scene,
+                    id: scene.id || `scene-${idx}`,
+                    duration: finalDuration,
+                    text,
+                    script: scriptText,
+                    // Auto-inject SVG fallback for problem/concept scenes without SVG
+                    ...((scene.type === 'problem' || scene.type === 'concept') && !scene.svg ? {
+                        svg: getSvgForKeywords(text + ' ' + scriptText)
+                    } : {}),
+                    // Ensure code scenes have required fields with highlight clamping
+                    ...(scene.type === 'code' ? {
+                        code: scene.code || '',
+                        highlight: Array.isArray(scene.highlight) && scene.highlight.length === 2
+                            ? [
+                                Math.max(1, Math.min(totalCodeLines, Math.min(scene.highlight[0], scene.highlight[1]))),
+                                Math.max(1, Math.min(totalCodeLines, Math.max(scene.highlight[0], scene.highlight[1])))
+                            ]
+                            : undefined
+                    } : {})
+                };
+            });
 
         if (parsed.scenes.length === 0) {
             throw new Error('No valid scenes were generated');

@@ -95,8 +95,8 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                         {/* Header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
                             <div>
-                                <h2 className="text-xl font-bold text-white">Bring your own LLM</h2>
-                                <p className="text-sm text-white/50 mt-1">Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.</p>
+                                <h2 className="text-xl font-bold text-white">{settings.language === 'ar' ? 'استخدم الـ LLM الخاص بك' : 'Bring your own LLM'}</h2>
+                                <p className="text-sm text-white/50 mt-1">{settings.language === 'ar' ? 'استخدم API متوافق مع OpenAI. يتم حفظ جميع الإعدادات والبيانات محلياً في متصفحك.' : 'Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.'}</p>
                             </div>
                             <button
                                 onClick={onClose}
@@ -118,18 +118,18 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                     />
                                     <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                                 </label>
-                                <span className="text-base font-semibold text-white">Enable</span>
+                                <span className="text-base font-semibold text-white">{settings.language === 'ar' ? 'تفعيل' : 'Enable'}</span>
                             </div>
 
                             {settings.enabled && (
                                 <div className="space-y-4 animate-in fade-in duration-200">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-white">Base URL</label>
+                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'رابط الـ API' : 'Base URL'}</label>
                                         <input
                                             type="text"
                                             value={settings.baseURL}
                                             onChange={e => setSettings({ ...settings, baseURL: e.target.value })}
-                                            placeholder="OpenAI compatible base URL"
+                                            placeholder={settings.language === 'ar' ? 'رابط الـ API المتوافق مع OpenAI' : 'OpenAI compatible base URL'}
                                             className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
                                         />
                                         <div className="flex gap-2">
@@ -141,30 +141,30 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-white">API key</label>
+                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'مفتاح الـ API' : 'API key'}</label>
                                         <input
                                             type="password"
                                             value={settings.apiKey}
                                             onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
-                                            placeholder="sk-..."
+                                            placeholder={settings.language === 'ar' ? 'مفتاح الـ API الخاص بك' : 'sk-...'}
                                             className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-white">Model</label>
+                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'الموديل' : 'Model'}</label>
                                         <input
                                             type="text"
                                             value={settings.model}
                                             onChange={e => setSettings({ ...settings, model: e.target.value })}
-                                            placeholder="Model name (e.g., gpt-4o)"
+                                            placeholder={settings.language === 'ar' ? 'اسم الموديل (مثلاً gpt-4o)' : 'Model name (e.g., gpt-4o)'}
                                             className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-white">Language</label>
-                                        <p className="text-xs text-white/40 mt-0.5">The AI will explain, teach, and caption videos in this language.</p>
+                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'اللغة' : 'Language'}</label>
+                                        <p className="text-xs text-white/40 mt-0.5">{settings.language === 'ar' ? 'سيتحدث الذكاء الاصطناعي ويشرح الدروس والفيديوهات بهذه اللغة.' : 'The AI will explain, teach, and caption videos in this language.'}</p>
                                         <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
                                             <button
                                                 onClick={() => setSettings({ ...settings, language: 'en' })}
@@ -189,8 +189,8 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                             {variants && variants.length > 0 && onLevelChange && (
                                 <div className="space-y-3 pt-1">
                                     <div>
-                                        <label className="text-sm font-semibold text-white">Solution Difficulty</label>
-                                        <p className="text-xs text-white/40 mt-0.5">How much the AI reveals when explaining a solution.</p>
+                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'صعوبة الحل' : 'Solution Difficulty'}</label>
+                                        <p className="text-xs text-white/40 mt-0.5">{settings.language === 'ar' ? 'مدى التفاصيل التي يكشفها الذكاء الاصطناعي عند شرح الحل.' : 'How much the AI reveals when explaining a solution.'}</p>
                                     </div>
                                     <div className="flex flex-col gap-2">
                                         {variants.map((v) => {
@@ -220,7 +220,7 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                                         </div>
                                                     </div>
                                                     {sel && (
-                                                        <div className="text-[10px] font-semibold opacity-60 uppercase tracking-wide">Active</div>
+                                                        <div className="text-[10px] font-semibold opacity-60 uppercase tracking-wide">{settings.language === 'ar' ? 'مفعل' : 'Active'}</div>
                                                     )}
                                                 </button>
                                             );
@@ -231,23 +231,23 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                             {/* Solution Style (Simple vs Smart) */}
                             <div className="space-y-3 pt-4 border-t border-white/10 mt-4">
                                 <div>
-                                    <label className="text-sm font-semibold text-white">Solution Style</label>
-                                    <p className="text-xs text-white/40 mt-0.5">How the AI approaches writing the code.</p>
+                                    <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'أسلوب الحل' : 'Solution Style'}</label>
+                                    <p className="text-xs text-white/40 mt-0.5">{settings.language === 'ar' ? 'كيفية كتابة الذكاء الاصطناعي للكود.' : 'How the AI approaches writing the code.'}</p>
                                 </div>
                                 <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
                                     <button
                                         onClick={() => setSolutionStyle('simple')}
                                         className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'simple' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
                                     >
-                                        <div className="text-[13px]">Simple Logic</div>
-                                        <div className="text-[10px] opacity-60 font-normal">Readable & beginner-friendly</div>
+                                        <div className="text-[13px]">{settings.language === 'ar' ? 'منطق بسيط' : 'Simple Logic'}</div>
+                                        <div className="text-[10px] opacity-60 font-normal">{settings.language === 'ar' ? 'سهل القراءة ومناسب للمبتدئين' : 'Readable & beginner-friendly'}</div>
                                     </button>
                                     <button
                                         onClick={() => setSolutionStyle('smart')}
                                         className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'smart' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
                                     >
-                                        <div className="text-[13px]">Smart / Optimal</div>
-                                        <div className="text-[10px] opacity-60 font-normal">Best time/space complexity</div>
+                                        <div className="text-[13px]">{settings.language === 'ar' ? 'ذكي / أمثل' : 'Smart / Optimal'}</div>
+                                        <div className="text-[10px] opacity-60 font-normal">{settings.language === 'ar' ? 'أفضل تعقيد زمني ومكاني' : 'Best time/space complexity'}</div>
                                     </button>
                                 </div>
                             </div>
@@ -259,13 +259,13 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                 onClick={onClose}
                                 className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors font-medium text-sm"
                             >
-                                Cancel
+                                {settings.language === 'ar' ? 'إلغاء' : 'Cancel'}
                             </button>
                             <button
                                 onClick={handleSave}
                                 className="flex-1 py-2.5 bg-white hover:bg-gray-200 text-black rounded-lg transition-colors font-medium text-sm"
                             >
-                                Save
+                                {settings.language === 'ar' ? 'حفظ' : 'Save'}
                             </button>
                         </div>
                     </motion.div>
