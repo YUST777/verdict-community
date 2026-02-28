@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Example } from '@/components/mirror/shared/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseCustomTestCasesParams {
     contestId: string;
@@ -15,6 +16,7 @@ interface UseCustomTestCasesReturn {
 }
 
 export function useCustomTestCases({ contestId, problemId, sampleTestCasesCount }: UseCustomTestCasesParams): UseCustomTestCasesReturn {
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const [customTestCases, setCustomTestCases] = useState<Example[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -29,7 +31,10 @@ export function useCustomTestCases({ contestId, problemId, sampleTestCasesCount 
 
     // Load custom test cases from localStorage and DB
     useEffect(() => {
-        if (!contestId || !problemId) return;
+        if (!contestId || !problemId || !isAuthenticated || authLoading) {
+            if (!authLoading && !isAuthenticated) setIsLoaded(true);
+            return;
+        }
 
         async function loadData() {
             const savedLocal = localStorage.getItem(customTestKey);
@@ -74,11 +79,11 @@ export function useCustomTestCases({ contestId, problemId, sampleTestCasesCount 
         }
 
         loadData();
-    }, [contestId, problemId, customTestKey, dbProblemId]);
+    }, [contestId, problemId, customTestKey, dbProblemId, isAuthenticated, authLoading]);
 
     // Save custom test cases to localStorage & Debounced upsert to Supabase
     useEffect(() => {
-        if (!isLoaded) return;
+        if (!isLoaded || !isAuthenticated || authLoading) return;
         if (isFirstLoad.current) {
             isFirstLoad.current = false;
             return;

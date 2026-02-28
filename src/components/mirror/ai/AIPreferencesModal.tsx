@@ -9,7 +9,7 @@ interface LLMSettings {
     baseURL: string;
     apiKey: string;
     model: string;
-    systemPrompt: string;
+    language: 'en' | 'ar';
 }
 
 const DEFAULT_SETTINGS: LLMSettings = {
@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS: LLMSettings = {
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o',
-    systemPrompt: 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.',
+    language: 'en',
 };
 
 interface AIPreferencesModalProps {
@@ -39,7 +39,13 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
             const stored = localStorage.getItem('verdict_byok_llm');
             if (stored) {
                 try {
-                    setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+                    const parsed = JSON.parse(stored);
+                    // Migrate old settings
+                    if (parsed.systemPrompt && !parsed.language) {
+                        parsed.language = 'en';
+                        delete parsed.systemPrompt;
+                    }
+                    setSettings({ ...DEFAULT_SETTINGS, ...parsed });
                 } catch (e) {
                     console.error('Failed to parse LLM settings');
                 }
@@ -157,12 +163,24 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-white">System prompt</label>
-                                        <textarea
-                                            value={settings.systemPrompt}
-                                            onChange={e => setSettings({ ...settings, systemPrompt: e.target.value })}
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white/60 text-sm focus:outline-none min-h-[100px] resize-y"
-                                        />
+                                        <label className="text-sm font-semibold text-white">Language</label>
+                                        <p className="text-xs text-white/40 mt-0.5">The AI will explain, teach, and caption videos in this language.</p>
+                                        <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
+                                            <button
+                                                onClick={() => setSettings({ ...settings, language: 'en' })}
+                                                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${settings.language === 'en' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                            >
+                                                <span className="text-lg">🇺🇸</span>
+                                                <span>English</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setSettings({ ...settings, language: 'ar' })}
+                                                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${settings.language === 'ar' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                            >
+                                                <span className="text-lg">🇸🇦</span>
+                                                <span>العربية</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             )}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Minimize2, ExternalLink, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types';
@@ -27,6 +28,7 @@ interface WhiteboardProps {
 }
 
 export default function Whiteboard({ contestId, problemIndex, isExpanded, onToggleExpand, height = 400 }: WhiteboardProps) {
+    const { isAuthenticated, loading: authLoading } = useAuth();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
 
@@ -85,7 +87,10 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
 
     // Initial Database Sync
     React.useEffect(() => {
-        if (!excalidrawAPI || isDbLoadedRef.current) return;
+        if (!excalidrawAPI || isDbLoadedRef.current || !isAuthenticated || authLoading) {
+            if (!authLoading && !isAuthenticated && excalidrawAPI) isDbLoadedRef.current = true;
+            return;
+        }
 
         async function loadDb() {
             try {
@@ -110,7 +115,7 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
         }
 
         loadDb();
-    }, [excalidrawAPI, contestId, problemIndex]);
+    }, [excalidrawAPI, contestId, problemIndex, isAuthenticated, authLoading]);
 
     // Cleanup timeout on unmount
     React.useEffect(() => {
@@ -125,7 +130,7 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
         const dataToSave = saveData(elements, appState);
 
         // Don't trigger DB saves until initial load is done to avoid overwriting DB with local empty state
-        if (!isDbLoadedRef.current || !dataToSave) return;
+        if (!isDbLoadedRef.current || !dataToSave || !isAuthenticated || authLoading) return;
 
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(async () => {

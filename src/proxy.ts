@@ -7,7 +7,7 @@ const rateLimitMap = new Map<string, { count: number, resetTime: number }>();
 const WINDOW_SIZE = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 100; // 100 requests per minute per IP
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const supabaseResponse = await updateSession(request);
     const response = supabaseResponse;
     const headers = response.headers;
@@ -19,8 +19,8 @@ export async function middleware(request: NextRequest) {
     headers.set('X-Content-Type-Options', 'nosniff');
     headers.set('Referrer-Policy', 'origin-when-cross-origin');
 
-    // CSP - Next.js requires unsafe-inline, WASM needs wasm-unsafe-eval for 3D models
-    headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: blob:; media-src 'self' https:; frame-src 'self' https://drive.google.com https://www.youtube.com https://accounts.google.com https://*.supabase.co; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;");
+    // CSP - Next.js requires unsafe-inline and unsafe-eval for dev, WASM needs wasm-unsafe-eval for 3D models
+    headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: blob:; media-src 'self' https: blob: data:; frame-src 'self' https://drive.google.com https://www.youtube.com https://accounts.google.com https://*.supabase.co; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;");
 
     // --- 2. Bot Blocking ---
     const userAgent = request.headers.get('user-agent')?.toLowerCase() || '';
@@ -31,7 +31,9 @@ export async function middleware(request: NextRequest) {
     const blockedAgents = ['python-requests', 'libwww-perl', 'scrapy'];
 
     if (!isLegitimateBot && blockedAgents.some(agent => userAgent.includes(agent))) {
-        return new NextResponse('Access Denied: Suspicious User Agent', { status: 403 });
+        // Next.js 16 proxy cannot return response bodies. 
+        // We'll return a status code only or rewrite to an error page.
+        return new NextResponse(null, { status: 403, statusText: 'Access Denied: Suspicious User Agent' });
     }
 
     // --- 3. Basic Rate Limiting ---
@@ -44,7 +46,7 @@ export async function middleware(request: NextRequest) {
         if (limitData) {
             if (now < limitData.resetTime) {
                 if (limitData.count >= MAX_REQUESTS) {
-                    return new NextResponse('Too Many Requests', { status: 429 });
+                    return new NextResponse(null, { status: 429, statusText: 'Too Many Requests' });
                 }
                 limitData.count++;
             } else {

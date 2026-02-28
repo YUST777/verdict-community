@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Trash2, Download } from 'lucide-react';
-
+import { useAuth } from '@/contexts/AuthContext';
 const Excalidraw = dynamic(
     () => import('@/components/shared/ExcalidrawWrapper'),
     {
@@ -18,6 +18,7 @@ const Excalidraw = dynamic(
 );
 
 export default function WhiteboardPage() {
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const params = useParams();
     const router = useRouter();
 
@@ -52,7 +53,9 @@ export default function WhiteboardPage() {
         whiteboardId === 'primary',
         contestId,
         problemIndex,
-        excalidrawAPI
+        excalidrawAPI,
+        isAuthenticated,
+        authLoading
     );
 
     // Handle changes
@@ -66,7 +69,7 @@ export default function WhiteboardPage() {
             excalidrawAPI.resetScene();
             localStorage.removeItem(storageKey);
 
-            if (whiteboardId === 'primary') {
+            if (whiteboardId === 'primary' && isAuthenticated && !authLoading) {
                 fetch('/api/workspace/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -77,7 +80,7 @@ export default function WhiteboardPage() {
                 }).catch(console.error);
             }
         }
-    }, [excalidrawAPI, storageKey]);
+    }, [excalidrawAPI, storageKey, whiteboardId, isAuthenticated, authLoading, contestId, problemIndex]);
 
     const handleExport = useCallback(async () => {
         if (!excalidrawAPI) return;
@@ -197,7 +200,9 @@ function useWhiteboardPersistence(
     isPrimary: boolean,
     contestId: string,
     problemIndex: string,
-    excalidrawAPI: any
+    excalidrawAPI: any,
+    isAuthenticated: boolean,
+    authLoading: boolean
 ) {
     const [initialData] = useState<WhiteboardData | null>(() => {
         if (typeof window === 'undefined') return null;
@@ -230,7 +235,10 @@ function useWhiteboardPersistence(
     }, [isPrimary, storageKey, legacyKey]);
 
     useEffect(() => {
-        if (!isPrimary || !excalidrawAPI || isDbLoadedRef.current) return;
+        if (!isPrimary || !excalidrawAPI || isDbLoadedRef.current || !isAuthenticated || authLoading) {
+            if (!authLoading && !isAuthenticated && excalidrawAPI) isDbLoadedRef.current = true;
+            return;
+        }
 
         async function loadDb() {
             try {
@@ -255,7 +263,7 @@ function useWhiteboardPersistence(
         }
 
         loadDb();
-    }, [excalidrawAPI, isPrimary, contestId, problemIndex]);
+    }, [excalidrawAPI, isPrimary, contestId, problemIndex, isAuthenticated, authLoading]);
 
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -276,7 +284,7 @@ function useWhiteboardPersistence(
                 };
                 localStorage.setItem(storageKey, JSON.stringify(data));
 
-                if (isPrimary && isDbLoadedRef.current) {
+                if (isPrimary && isDbLoadedRef.current && isAuthenticated && !authLoading) {
                     try {
                         await fetch('/api/workspace/sync', {
                             method: 'POST',

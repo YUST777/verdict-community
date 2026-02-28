@@ -64,25 +64,35 @@ const CodeBlock = ({ className, children, ...props }: any) => {
         );
     }
 
+    const highlightCode = (code: string) => {
+        const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return escaped
+            .replace(/\b(int|long|double|float|char|string|void|bool|if|else|for|while|return|main|using|namespace|include|std|vector|map|set|pair|push_back|size|length)\b/g, '<span class="text-blue-400 font-bold">$1</span>')
+            .replace(/(&quot;.*?&quot;|'.*?')/g, '<span class="text-orange-300">$1</span>')
+            .replace(/([-+*\/%&|^!<>]=?|[<>])/g, '<span class="text-white/40">$1</span>')
+            .replace(/(&#47;&#47;.*)/g, '<span class="text-zinc-500 italic">$1</span>');
+    };
+
     return (
-        <div className="relative group my-4 rounded-lg overflow-hidden border border-white/10 bg-[#0d1117]" dir="ltr">
-            <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/5">
-                <span className="text-[10px] uppercase tracking-wider font-mono text-white/40">
-                    {match?.[1] || 'Code'}
+        <div className="relative group my-4 rounded-xl overflow-hidden border border-white/10 bg-black/40 backdrop-blur-md shadow-2xl" dir="ltr">
+            <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+                <span className="text-[10px] uppercase tracking-[0.2em] font-black text-white/30">
+                    {match?.[1] || 'Code Segment'}
                 </span>
                 <button
                     onClick={handleCopy}
-                    className="flex items-center gap-1.5 p-1 hover:bg-white/10 rounded transition-colors text-white/40 hover:text-white"
-                    title="Copy code"
+                    className="flex items-center gap-2 px-2 py-1 hover:bg-white/10 rounded-lg transition-all text-white/40 hover:text-white group/btn"
+                    title="Copy to clipboard"
                 >
-                    {isCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                    <span className="text-[10px] font-medium">{isCopied ? 'Copied' : 'Copy'}</span>
+                    {isCopied ? <Check size={12} className="text-emerald-400 animate-in zoom-in" /> : <Copy size={12} className="group-hover/btn:scale-110 transition-transform" />}
+                    <span className="text-[10px] font-bold uppercase tracking-wider">{isCopied ? 'Copied' : 'Copy'}</span>
                 </button>
             </div>
-            <pre className="p-3 overflow-x-auto text-[13px] leading-relaxed font-mono custom-scrollbar">
-                <code className={className} {...props}>
-                    {children}
-                </code>
+            <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed font-mono custom-scrollbar">
+                <code
+                    className={className}
+                    dangerouslySetInnerHTML={{ __html: highlightCode(text) }}
+                />
             </pre>
         </div>
     );

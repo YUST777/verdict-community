@@ -7,7 +7,7 @@ export interface LLMSettings {
     baseURL: string;
     apiKey: string;
     model: string;
-    systemPrompt: string;
+    language: 'en' | 'ar';
 }
 
 const DEFAULT_SETTINGS: LLMSettings = {
@@ -15,7 +15,7 @@ const DEFAULT_SETTINGS: LLMSettings = {
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o',
-    systemPrompt: 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.',
+    language: 'en',
 };
 
 export function useLLM() {
@@ -26,7 +26,13 @@ export function useLLM() {
             const stored = localStorage.getItem('verdict_byok_llm');
             if (stored) {
                 try {
-                    setSettings(JSON.parse(stored));
+                    const parsed = JSON.parse(stored);
+                    // Migrate old settings: if they have systemPrompt but no language, default to 'en'
+                    if (parsed.systemPrompt && !parsed.language) {
+                        parsed.language = 'en';
+                        delete parsed.systemPrompt;
+                    }
+                    setSettings({ ...DEFAULT_SETTINGS, ...parsed });
                 } catch (e) {
                     console.error('Failed to parse LLM settings');
                 }

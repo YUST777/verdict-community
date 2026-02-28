@@ -3,7 +3,7 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowUp, Paperclip, Square, X, Library, Loader2, Wand2 } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, Library, Loader2, Wand2, Play } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { AIContextCircle } from "@/components/ui/ai-context-usage";
@@ -223,6 +223,8 @@ export interface PromptInputBoxProps {
     hasUsedTutor?: boolean;
     value?: string;
     onChange?: (value: string) => void;
+    onExplainVideo?: () => void;
+    isVideoLoading?: boolean;
 }
 
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>((props, ref) => {
@@ -342,11 +344,11 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         {/* Resources button */}
                         {onOpenResources && (
                             <motion.button
-                                whileHover={{ scale: 1.02, backgroundColor: 'rgba(16, 185, 129, 0.15)' }}
+                                whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={onOpenResources}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400"
                             >
                                 <Library className="w-3.5 h-3.5" />
                                 <span>Resources</span>
@@ -356,15 +358,30 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         {/* Teach Me button */}
                         {onTeachMe && !hasUsedTutor && (
                             <motion.button
-                                whileHover={{ scale: 1.02, backgroundColor: 'rgba(16, 185, 129, 0.15)' }}
+                                whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={onTeachMe}
                                 disabled={isTutorLoading || isTutorActive || isLoading}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isTutorLoading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
                                 <span>Teach Me</span>
+                            </motion.button>
+                        )}
+
+                        {/* Explain with Video button */}
+                        {props.onExplainVideo && (
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                type="button"
+                                onClick={props.onExplainVideo}
+                                disabled={props.isVideoLoading || isLoading}
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {props.isVideoLoading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                                <span>Explain with Video</span>
                             </motion.button>
                         )}
                     </div>

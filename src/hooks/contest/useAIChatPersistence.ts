@@ -124,7 +124,8 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
                 if (response.status === 401) {
                     onAuthError?.();
                 } else if (!response.ok) {
-                    console.error('[AIChat Sync] Save failed:', await response.text());
+                    const body = await response.text().catch(() => '');
+                    console.warn(`[AIChat Sync] Save failed (${response.status}):`, body || 'empty response');
                 }
             } catch (err) {
                 console.error('[AIChat Sync] Save exception:', err);

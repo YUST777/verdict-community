@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useLLM } from '@/lib/useLLM';
 import { extractAndParseJson } from '@/lib/json-utils';
+import { VideoScript } from '../video';
 
 interface Concept {
     title: string;
@@ -18,10 +19,11 @@ interface UseTutorSessionProps {
     getHeaders: () => Record<string, string>;
     onAiCodeUpdate?: (code: string) => void;
     onSwitchToAiTab?: () => void;
-    addMessage: (message: { id: string; role: 'assistant'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string } }) => void;
-    updateMessage: (id: string, content: string) => void;
-    setConcepts: (concepts: Concept[] | ((prev: Concept[]) => Concept[])) => void;
-    setIsTutorActive: (active: boolean) => void;
+    addMessage: (message: any, tabId?: string) => void;
+    updateMessage: (id: string, content: string, videoScript?: VideoScript, tabId?: string) => void;
+    setConcepts: (concepts: Concept[] | ((prev: Concept[]) => Concept[]), tabId?: string) => void;
+    setIsTutorActive: (active: boolean, tabId?: string) => void;
+    setIsLoading: (loading: boolean, tabId?: string) => void;
 }
 
 // ─── Simple mode banned constructs ──────────────────────────────────────
@@ -55,49 +57,53 @@ export function useTutorSession({
     addMessage,
     updateMessage,
     setConcepts,
-    setIsTutorActive
+    setIsTutorActive,
+    setIsLoading: setIsLoadingInParent
 }: UseTutorSessionProps) {
-    const [isLoading, setIsLoading] = useState(false);
     const [variants, setVariants] = useState<any[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
-    const tutorActiveRef = useRef(false);
+    // Maps tab ID to active status/abort controller
+    const tutorActiveRefs = useRef<Record<string, boolean>>({});
+    const abortControllers = useRef<Record<string, AbortController | null>>({});
     const { settings } = useLLM();
-
-    const abortControllerRef = useRef<AbortController | null>(null);
 
     // ─── Stream text word-by-word into a message ────────────────────────
     const streamTextToMessage = useCallback(async (
         msgId: string,
         prefix: string,
         text: string,
+        tabId: string,
         delayMs: number = 25
     ) => {
         const words = text.split(' ');
         let revealed = '';
         for (let i = 0; i < words.length; i++) {
-            if (!tutorActiveRef.current) break;
+            if (!tutorActiveRefs.current[tabId]) break;
             revealed += (i > 0 ? ' ' : '') + words[i];
-            updateMessage(msgId, prefix + revealed);
+            updateMessage(msgId, prefix + revealed, undefined, tabId);
             await new Promise(r => setTimeout(r, delayMs));
         }
     }, [updateMessage]);
 
     // ─── Stream code character-by-character into the editor ──────────
-    const streamCodeToEditor = useCallback(async (code: string) => {
+    const streamCodeToEditor = useCallback(async (code: string, tabId: string) => {
         if (!onAiCodeUpdate) return;
         const chunkSize = 3;
         for (let i = 0; i <= code.length; i += chunkSize) {
-            if (!tutorActiveRef.current) break;
+            if (!tutorActiveRefs.current[tabId]) break;
             onAiCodeUpdate(code.substring(0, Math.min(i + chunkSize, code.length)));
             await new Promise(r => setTimeout(r, 12));
         }
         // Ensure full code is set
-        if (tutorActiveRef.current) onAiCodeUpdate(code);
+        if (tutorActiveRefs.current[tabId]) onAiCodeUpdate(code);
     }, [onAiCodeUpdate]);
 
     // ─── Main tutor flow ────────────────────────────────────────────
-    const startTutor = useCallback(async () => {
-        if (tutorActiveRef.current || isLoading) return;
+    const startTutor = useCallback(async (tabId: string = 'default') => {
+        if (tutorActiveRefs.current[tabId]) {
+            console.warn(`[Tutor] Tab ${tabId} already has an active tutor session.`);
+            return;
+        }
 
         // Validate
         if (!testCases || testCases.length === 0) {
@@ -106,7 +112,7 @@ export function useTutorSession({
                 role: 'assistant',
                 content: 'No test cases available for this problem. I need test cases to verify the solution.',
                 timestamp: new Date()
-            });
+            }, tabId);
             return;
         }
 
@@ -116,24 +122,24 @@ export function useTutorSession({
                 role: 'assistant',
                 content: 'Please configure your LLM in Settings first (click the ⚙️ icon).',
                 timestamp: new Date()
-            });
+            }, tabId);
             return;
         }
 
-        // Abort previous fetch if running
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
+        // Abort previous fetch for this tab if running
+        if (abortControllers.current[tabId]) {
+            abortControllers.current[tabId]?.abort();
         }
-        abortControllerRef.current = new AbortController();
-        const signal = abortControllerRef.current.signal;
+        abortControllers.current[tabId] = new AbortController();
+        const signal = abortControllers.current[tabId]?.signal;
 
-        // Reset
-        setConcepts([]);
+        // Reset state for this tab
+        setConcepts([], tabId);
         setVariants([]);
         setSelectedLevel(2);
-        setIsTutorActive(true);
-        tutorActiveRef.current = true;
-        setIsLoading(true);
+        setIsTutorActive(true, tabId);
+        tutorActiveRefs.current[tabId] = true;
+        setIsLoadingInParent(true, tabId);
         if (onSwitchToAiTab) onSwitchToAiTab();
 
         // Detect solution style
@@ -148,7 +154,7 @@ export function useTutorSession({
             role: 'assistant',
             content: '<think>\nReading the problem...\n</think>\n\n🍳 *Getting ready to cook...*',
             timestamp: new Date()
-        });
+        }, tabId);
 
         if (onAiCodeUpdate) {
             onAiCodeUpdate(`// Analyzing problem...\n// Generating ${isSimple ? 'simple' : 'optimal'} solution...`);
@@ -181,7 +187,12 @@ export function useTutorSession({
                 } catch { /* reference fetch failed, proceed without it */ }
             }
 
-            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\n</think>\n\n📖 *Reading the problem and gathering ingredients...*`);
+            const isArabic = settings.language === 'ar';
+            const languageInstruction = isArabic
+                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Arabic (العربية). Use natural Arabic (Egyptian/tech dialect is fine). The "solution" code itself stays in the programming language (C++/etc), but the "explanation" and "thinking" fields MUST be in Arabic.'
+                : '';
+
+            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\n</think>\n\n*${isArabic ? 'بقرا المسألة وبجهز المكونات...' : 'Reading the problem and gathering ingredients...'}*`, undefined, tabId);
             await new Promise(r => setTimeout(r, 400));
 
             const systemPrompt = `You are an elite competitive programming tutor helping a ${isSimple ? 'beginner' : 'skilled programmer'}. You are passionate, slightly quirky, and love 'cooking up' brilliant solutions. You have a lot of 'soul' and personality.
@@ -216,7 +227,7 @@ CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping 
 
 REFERENCE SOLUTION GUIDANCE: If a verified reference solution is provided, you MUST maintain its algorithmic complexity. If the reference is O(n log n), do NOT downgrade to O(n²) even in "simple" mode, as it will likely fail for large inputs. Adapt the reference solution's core logic into your style while ensuring it remains highly efficient.
 
-SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid answers (e.g., "output any solution"), you MUST still prioritize matching the exact values provided in the example cases. This ensures you pass the strict judge checker. ${referenceBlock}`;
+SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid answers (e.g., "output any solution"), you MUST still prioritize matching the exact values provided in the example cases. This ensures you pass the strict judge checker. ${referenceBlock}${languageInstruction}`;
 
             const userPrompt = `Problem:\n${problemDescription}\n\nWrite a ${isSimple ? 'simple, beginner-friendly' : 'optimal'} solution in ${language}.${referenceBlock ? ' You have a verified reference solution — use it to ensure your logic is correct.' : ''} Return ONLY valid JSON. Remember: ZERO comments in the solution code.`;
 
@@ -237,7 +248,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             let judgeResultLine = "";
             let data: any = {};
 
-            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n🤔 *Thinking about the approach...*`);
+            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n🤔 *Thinking about the approach...*`, undefined, tabId);
 
             while (attempt < maxAttempts) {
                 attempt++;
@@ -245,10 +256,10 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 if (attempt > 1) {
                     const passCount = data.passCount || 0;
                     const totalCount = testCases.length;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed (${passCount}/${totalCount} tests passed).\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n🔧 *Debugging failing tests (Passed ${passCount}/${totalCount}). Working on a fix...*`);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed (${passCount}/${totalCount} tests passed).\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n*${isArabic ? `بصلح الأخطاء (نجح ${passCount}/${totalCount}). بشتغل على حل...` : `Debugging failing tests (Passed ${passCount}/${totalCount}). Working on a fix...`}*`, undefined, tabId);
                 }
 
-                const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\//g, "$1"), {
+                const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -283,7 +294,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         const { done, value } = await reader.read();
                         if (done) break;
                         buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\\n');
+                        const lines = buffer.split('\n');
                         buffer = lines.pop() || '';
                         for (const line of lines) {
                             const trimmedLine = line.trim();
@@ -299,7 +310,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                         const thinkMatch = rawContent.match(/"thinking"\s*:\s*"((?:[^"\\\\]|\\.)*)/);
                                         if (thinkMatch && thinkMatch[1]) {
                                             const partialThink = thinkMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                                            updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n🤔 *Thinking...*`);
+                                            updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n🤔 *Thinking...*`, undefined, tabId);
                                         }
                                     }
                                     if (parsedChunk.choices?.[0]?.finish_reason) {
@@ -341,7 +352,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     });
                     const latestThink = "Error: Hit maximum token limit. The output was cut off mid-sentence. Retrying with a more concise thought process...";
                     finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Ran out of tokens. Retrying more concisely...*`);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Ran out of tokens. Retrying more concisely...*`, undefined, tabId);
                     continue;
                 }
 
@@ -359,7 +370,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     });
                     const latestThink = "Error parsing response: " + parseErr.message;
                     finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *JSON Truncated. Retrying...*`);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *JSON Truncated. Retrying...*`, undefined, tabId);
                     continue;
                 }
 
@@ -374,14 +385,14 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         });
                         const latestThink = "Error: Maximum scratchpad limit reached. Retrying with final C++ solution...";
                         finalThinkingText += `\n\n**-- Max Scratchpads Reached --**\n` + latestThink;
-                        updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Scratchpad limit reached. Proceeding with solution...*`);
+                        updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Scratchpad limit reached. Proceeding with solution...*`, undefined, tabId);
                         attempt--; // Do not count scratchpad limit bump as a code attempt
                         continue;
                     }
 
                     const scratchpadThink = data.thinking || 'Using Python scratchpad to find a pattern...';
                     finalThinkingText += (attempt === 1 && scratchpadCount === 1 ? '' : '\n\n') + scratchpadThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n🐍 *Running Python scratchpad on local Judge0 to find a pattern...*`);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n🐍 *Running Python scratchpad on local Judge0 to find a pattern...*`, undefined, tabId);
 
                     try {
                         const scratchRes = await fetch('/api/judge/test', {
@@ -430,7 +441,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     });
                     const latestThink = "Error: Invalid or missing solution field. Retrying...";
                     finalThinkingText += (attempt === 1 ? '' : `\n\n**-- Fixing Attempt ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Invalid solution format. Retrying...*`);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *Invalid solution format. Retrying...*`, undefined, tabId);
                     continue;
                 }
 
@@ -452,7 +463,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
 
                 const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
 
-                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n⚙️ *Testing solution against Judge0 test cases (Attempt ${attempt}/${maxAttempts})...*`);
+                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n⚙️ *Testing solution against Judge0 test cases (Attempt ${attempt}/${maxAttempts})...*`, undefined, tabId);
 
                 try {
                     const judgeResponse = await fetch('/api/judge/test', {
@@ -501,13 +512,13 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 }
 
                 if (judgePassed && referenceCode && finalSolution && attempt < maxAttempts) {
-                    updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})... Passed sample tests!\n\nGenerating 5 tricky edge cases for stress-testing...\n</think>\n\n🕵️ *Wait, I'm not done! Stress-testing my solution against hidden edge cases...*`);
+                    updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})... Passed sample tests!\n\nGenerating 5 tricky edge cases for stress-testing...\n</think>\n\n🕵️ *Wait, I'm not done! Stress-testing my solution against hidden edge cases...*`, undefined, tabId);
 
                     try {
                         const edgeCasePrompt = `Your solution passed the basic examples! Now, imagine you are a competitive programming judge trying to break your own code. Generate exactly 5 tricky edge-case inputs for this problem (e.g., minimum/maximum constraints, all elements equal, n=1, empty arrays if allowed, etc.).
                         Return ONLY a JSON object containing an "inputs" array of 5 strings. Each string must be the exact text that would be passed to standard input (stdin). No markdown, no explanations. Example: { "inputs": ["1\\n1\\n", "10\\n1 2 3 4 5 6 7 8 9 10\\n"] }`;
 
-                        const edgeRes = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\//g, "$1"), {
+                        const edgeRes = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -529,7 +540,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             const edgeContent = edgeData.choices?.[0]?.message?.content || '{}';
                             const edgeObj = extractAndParseJson(edgeContent);
                             if (edgeObj && edgeObj.inputs && Array.isArray(edgeObj.inputs)) {
-                                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})... Passed sample tests!\n\nGenerated 5 edge cases. Fuzzing against verified reference solution...\n</think>\n\n🏎️ *Fuzzing my code against the verified solution with 5 hidden test cases...*`);
+                                updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\nTesting attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})... Passed sample tests!\n\nGenerated 5 edge cases. Fuzzing against verified reference solution...\n</think>\n\n🏎️ *Fuzzing my code against the verified solution with 5 hidden test cases...*`, undefined, tabId);
 
                                 const fuzzRes = await fetch('/api/judge/fuzz', {
                                     method: 'POST',
@@ -579,22 +590,22 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             // ── Phase 3: Stream thinking ────────────────────────────
             // The thinking stream has already been rendered natively during the SSE loop.
             // But we will re-render the final compiled thinking + approach block cleanly here.
-            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\nWriting solution...`);
+            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\nWriting solution...`, undefined, tabId);
 
             // ── Phase 4: Stream code into editor ────────────────────
             await new Promise(r => setTimeout(r, 300));
-            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nWriting code...\n</think>\n\n✍️ *Writing solution code to editor...*`);
+            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nWriting code...\n</think>\n\n*${isArabic ? 'بكتب الكود في المحرر...' : 'Writing solution code to editor...'}*`, undefined, tabId);
 
-            await streamCodeToEditor(finalSolution);
+            await streamCodeToEditor(finalSolution, tabId);
 
             // ── Phase 5: Final Result ───────────────────────────────
-            const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
-            const finalThinkBlock = `<think>\n${thinkBase}\n\nCode written successfully\n\n${judgeResultLine}\n</think>`;
+            const thinkBaseFinal = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
+            const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\nCode written successfully\n\n${judgeResultLine}\n</think>`;
 
             if (judgePassed) {
-                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\nThe solution has been written to the editor and passes all test cases.`);
+                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.\n\n**عايز شرح أعمق؟** أقدر أعملك فيديو يشرحلك الحل سطر بسطر!' : 'The solution has been written to the editor and passes all test cases.\n\n**Want a deeper breakdown?** I can generate a video walkthrough for this solution if you\'d like!'}`, undefined, tabId);
             } else {
-                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\nThe solution might need adjustments. Try asking me to fix it in the chat.`);
+                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\nThe solution might need adjustments. Try asking me to fix it in the chat.`, undefined, tabId);
             }
 
             // Save concepts & inject real youtube video dynamically
@@ -625,48 +636,155 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             }
 
             if (finalConcepts.length > 0) {
-                setConcepts(finalConcepts);
+                setConcepts(finalConcepts, tabId);
             }
 
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                updateMessage(thinkMsgId, `Tutor session was stopped.`);
+                updateMessage(thinkMsgId, `Tutor session was stopped.`, undefined, tabId);
             } else {
                 console.error('[Tutor Error]', err);
-                setIsLoading(false);
-                setIsTutorActive(false);
+                setIsLoadingInParent(false, tabId);
+                setIsTutorActive(false, tabId);
                 addMessage({
                     id: `err-${Date.now()}`,
                     role: 'assistant',
-                    content: `⚠️ Error: ${err.message || 'Failed to generate solution'}. Please try again.`,
+                    content: `${settings.language === 'ar' ? 'حصل خطأ' : 'Error'}: ${err.message || (settings.language === 'ar' ? 'فشل في إنشاء الحل' : 'Failed to generate solution')}. ${settings.language === 'ar' ? 'حاول تاني.' : 'Please try again.'}`,
                     timestamp: new Date()
-                });
+                }, tabId);
             }
         } finally {
-            setIsLoading(false);
+            setIsLoadingInParent(false, tabId);
+            setIsTutorActive(false, tabId);
+            tutorActiveRefs.current[tabId] = false;
         }
-    }, [problemId, language, problemDescription, testCases, getHeaders, onAiCodeUpdate, onSwitchToAiTab, addMessage, updateMessage, setConcepts, setIsTutorActive, streamCodeToEditor]);
+    }, [problemId, language, problemDescription, testCases, settings, getHeaders, onAiCodeUpdate, onSwitchToAiTab, addMessage, updateMessage, setConcepts, setIsTutorActive, streamCodeToEditor, setIsLoadingInParent, streamTextToMessage]);
 
     const changeLevel = useCallback(async (level: number) => {
         setSelectedLevel(level);
     }, []);
 
-    const stopTutor = useCallback(() => {
-        tutorActiveRef.current = false;
-        setIsTutorActive(false);
-        setIsLoading(false);
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
+    const stopTutor = useCallback((tabId?: string) => {
+        if (tabId) {
+            tutorActiveRefs.current[tabId] = false;
+            setIsTutorActive(false, tabId);
+            setIsLoadingInParent(false, tabId);
+            if (abortControllers.current[tabId]) {
+                abortControllers.current[tabId]?.abort();
+                abortControllers.current[tabId] = null;
+            }
+        } else {
+            // Stop all tabs
+            Object.keys(tutorActiveRefs.current).forEach(id => {
+                tutorActiveRefs.current[id] = false;
+                setIsTutorActive(false, id);
+                setIsLoadingInParent(false, id);
+                if (abortControllers.current[id]) {
+                    abortControllers.current[id]?.abort();
+                    abortControllers.current[id] = null;
+                }
+            });
         }
-    }, [setIsTutorActive]);
+    }, [setIsTutorActive, setIsLoadingInParent]);
+
+    const startVideoTutor = useCallback(async (currentSolution?: string, tabId: string = 'default') => {
+        // Abort previous video tutor if running for this tab
+        if (abortControllers.current[tabId]) {
+            abortControllers.current[tabId]?.abort();
+        }
+        abortControllers.current[tabId] = new AbortController();
+        const signal = abortControllers.current[tabId]?.signal;
+
+        setIsLoadingInParent(true, tabId);
+        if (onSwitchToAiTab) onSwitchToAiTab();
+
+        const videoMsgId = `video-tutor-${Date.now()}`;
+        addMessage({
+            id: videoMsgId,
+            role: 'assistant',
+            content: `<think>\nAnalyzing problem and searching for best solution...\n</think>\n\n*${settings.language === 'ar' ? 'بدور على أحسن طريقة أشرحلك بيها...' : 'Searching for the best way to explain this...'}*`,
+            timestamp: new Date()
+        }, tabId);
+
+        try {
+            let solutionToExplain = currentSolution || '';
+
+            // If no solution provided, try to find one in the DB (archived)
+            if (!solutionToExplain && problemId) {
+                updateMessage(videoMsgId, `<think>\nNo local code found. Searching for a verified solution in our archives...\n</think>\n\n*${settings.language === 'ar' ? 'بدور على حل متحقق منه...' : 'Searching for a verified solution to explain...'}*`, undefined, tabId);
+                try {
+                    const [contestIdStr, problemIndex] = problemId.split('-');
+                    const solRes = await fetch('/api/solutions/fetch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contestId: contestIdStr, problemIndex, language }),
+                        signal
+                    });
+                    if (solRes.ok) {
+                        const solData = await solRes.json();
+                        if (solData.found && solData.code) {
+                            solutionToExplain = solData.code;
+                            updateMessage(videoMsgId, `<think>\nVerified solution found in archives! Proceeding to video generation...\n</think>\n\n*${settings.language === 'ar' ? 'لقيت حل متحقق منه! بجهز الفيديو...' : 'Found a verified solution! Crafting your video walkthrough...'}*`, undefined, tabId);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Video Tutor] Solution discovery failed', e);
+                }
+            }
+
+            // If still no solution, we MUST generate one first (just like teach me flow)
+            if (!solutionToExplain) {
+                updateMessage(videoMsgId, `<think>\nNo solution found. I need to solve the problem first to explain it accurately.\n</think>\n\n*${settings.language === 'ar' ? 'مفيش حل. بحل المسألة الأول عشان أقدر أشرحها...' : 'No solution found. Solving the problem first so I can explain it...'}*`, undefined, tabId);
+                // Note: Normally we'd call startTutor here, but for simplicity we'll tell the user to use Teach Me or provide code.
+                updateMessage(videoMsgId, settings.language === 'ar' ? 'ملقيتش حل أشرحه. جرب **علمني** الأول عشان يتعمل حل، وبعدين أقدر أعملك فيديو!' : `I couldn't find a solution to explain. Try using **Teach Me** first to generate a solution, then I can walk you through it with a video!`, undefined, tabId);
+                setIsLoadingInParent(false, tabId);
+                return;
+            }
+
+            // Phase 2: Call the Video API
+            updateMessage(videoMsgId, `<think>\nSolution confirmed. Calling Video Generation API...\nBreaking down code into scenes...\nAdding meticulous line-by-line narration...\n</think>\n\n*${settings.language === 'ar' ? 'بجهز الفيديو... ممكن ياخد ثواني.' : 'Crafting your video walkthrough... This might take a few seconds.'}*`, undefined, tabId);
+
+            const response = await fetch('/api/ai/video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    problemDescription,
+                    solution: solutionToExplain,
+                    language,
+                    settings
+                }),
+                signal
+            });
+
+            if (response.ok) {
+                const scriptData = await response.json();
+
+                // We update the message with the video script data
+                updateMessage(videoMsgId, settings.language === 'ar' ? '**الفيديو جاهز!** شوف الشرح سطر بسطر تحت:' : '**Video walkthrough ready!** Watch the line-by-line breakdown below:', scriptData, tabId);
+            } else {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to generate video script');
+            }
+
+        } catch (err: any) {
+            if (err.name === 'AbortError') {
+                updateMessage(videoMsgId, `Video generation was cancelled.`, undefined, tabId);
+            } else {
+                console.error('[Video Tutor Error]', err);
+                updateMessage(videoMsgId, `⚠️ Sorry, I failed to generate the video: ${err.message}`, undefined, tabId);
+            }
+        } finally {
+            setIsLoadingInParent(false, tabId);
+            abortControllers.current[tabId] = null;
+        }
+    }, [problemId, language, problemDescription, settings, addMessage, updateMessage, onSwitchToAiTab, setIsLoadingInParent]);
 
     return {
-        isLoading,
         variants,
         selectedLevel,
         changeLevel,
         startTutor,
-        stopTutor
+        stopTutor,
+        startVideoTutor
     };
 }

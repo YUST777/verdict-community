@@ -56,6 +56,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     profile_picture: session.user.user_metadata?.avatar_url
                 });
                 setProfile({ id: 0, name: session.user.email?.split('@')[0] || 'User' });
+            } else if (process.env.NODE_ENV === 'development') {
+                // Auth Bypass for Local Development
+                setUser({
+                    id: 'dev-mock-uuid',
+                    email: 'dev@verdict.run',
+                    isVerified: true,
+                    role: 'admin',
+                    lastLogin: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                    profile_picture: null
+                });
+                setProfile({ id: 1, name: 'DevUser' });
             } else {
                 setUser(null);
                 setProfile(null);

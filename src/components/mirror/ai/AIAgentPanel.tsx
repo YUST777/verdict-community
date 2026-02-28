@@ -20,6 +20,7 @@ import { useTutorSession } from './useTutorSession';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ui/conversation';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { AIContextUsageProvider, useAIContextUsage } from '@/components/ui/ai-context-usage';
+import { VideoExplainerModal, VideoScript } from '../video';
 
 interface Message {
     id: string;
@@ -33,6 +34,7 @@ interface Message {
         lineReference?: string;
     };
     sources?: { title: string; url: string; description: string; type?: 'web' | 'youtube' }[];
+    videoScript?: VideoScript;
 }
 
 interface AIAgentPanelProps {
@@ -114,6 +116,9 @@ export default function AIAgentPanel({
     const [preferences, setPreferences] = useState<Partial<AILearningPreferences>>({});
     const [showPreferencesModal, setShowPreferencesModal] = useState(false);
     const [isResourcesOpen, setIsResourcesOpen] = useState(false);
+    const [isVideoExplainerOpen, setIsVideoExplainerOpen] = useState(false);
+    const [videoScript, setVideoScript] = useState<VideoScript | null>(null);
+    const [isVideoLoading, setIsVideoLoading] = useState(false);
     const { settings } = useLLM();
 
     const handleOAuth = async (provider: 'github' | 'google') => {
@@ -141,33 +146,31 @@ export default function AIAgentPanel({
     const isLoadingMessage = isLoadingByTab[activeChatTab] || false;
     const aiStatus = aiStatusByTab[activeChatTab] || 'Thinking...';
 
-    const setMessages = useCallback((updater: React.SetStateAction<Message[]>) => {
+    const setMessages = useCallback((updater: React.SetStateAction<Message[]>, tabId: string = activeChatTab) => {
         setMessagesByTab(prev => {
-            const currentTabId = activeChatTab;
-            const prevMsgs = prev[currentTabId] || [];
+            const prevMsgs = prev[tabId] || [];
             const nextMsgs = typeof updater === 'function' ? (updater as (p: Message[]) => Message[])(prevMsgs) : updater;
             return {
                 ...prev,
-                [currentTabId]: nextMsgs
+                [tabId]: nextMsgs
             };
         });
     }, [activeChatTab]);
 
-    const setInput = useCallback((valOrUpdater: string | ((prev: string) => string)) => {
+    const setInput = useCallback((valOrUpdater: string | ((prev: string) => string), tabId: string = activeChatTab) => {
         setInputByTab(prev => {
-            const current = activeChatTab;
-            const prevVal = prev[current] || '';
+            const prevVal = prev[tabId] || '';
             const nextVal = typeof valOrUpdater === 'function' ? valOrUpdater(prevVal) : valOrUpdater;
-            return { ...prev, [current]: nextVal };
+            return { ...prev, [tabId]: nextVal };
         });
     }, [activeChatTab]);
 
-    const setIsLoadingMessage = useCallback((loading: boolean) => {
-        setIsLoadingByTab((prev: Record<string, boolean>) => ({ ...prev, [activeChatTab]: loading }));
+    const setIsLoadingMessage = useCallback((loading: boolean, tabId: string = activeChatTab) => {
+        setIsLoadingByTab((prev: Record<string, boolean>) => ({ ...prev, [tabId]: loading }));
     }, [activeChatTab]);
 
-    const setAiStatus = useCallback((status: string) => {
-        setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [activeChatTab]: status }));
+    const setAiStatus = useCallback((status: string, tabId: string = activeChatTab) => {
+        setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [tabId]: status }));
     }, [activeChatTab]);
 
     const addNewChat = useCallback(() => {
@@ -204,6 +207,7 @@ export default function AIAgentPanel({
                 setTutorActiveByTab((p: Record<string, boolean>) => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
                 setIsLoadingByTab((p: Record<string, boolean>) => { const d = { ...p, [newId]: false }; delete d[tabId]; return d; });
                 setAiStatusByTab((p: Record<string, string>) => { const d = { ...p, [newId]: 'Thinking...' }; delete d[tabId]; return d; });
+                stopTutor(tabId);
                 return [{ id: newId, label: 'Chat 1' }];
             }
             const filtered = prev.filter(t => t.id !== tabId);
@@ -212,6 +216,7 @@ export default function AIAgentPanel({
                 const newActive = filtered[Math.min(deletedIndex, filtered.length - 1)];
                 setActiveChatTab(newActive.id);
             }
+            stopTutor(tabId);
             setMessagesByTab((p: Record<string, any[]>) => {
                 const newDict = { ...p };
                 delete newDict[tabId];
@@ -277,19 +282,28 @@ export default function AIAgentPanel({
     // (removed local storage useEffect logic as it is now handled by useAIChatPersistence)
 
     // Message helpers for hook
-    const addMessage = useCallback((msg: { id: string; role: 'assistant'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string } }) => {
-        setMessages(prev => [...prev, msg]);
-    }, []);
+    const addMessage = useCallback((msg: { id: string; role: 'assistant' | 'user' | 'sources'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string }; sources?: any[] }, tabId: string = activeChatTab) => {
+        setMessagesByTab(prev => {
+            const prevMsgs = prev[tabId] || [];
+            return {
+                ...prev,
+                [tabId]: [...prevMsgs, msg]
+            };
+        });
+    }, [activeChatTab]);
 
-    const updateMessage = useCallback((id: string, content: string) => {
-        setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
-
-        // Note: We don't update DB for message edits since they're typically just status updates
-        // The final message content is already saved via addMessage
-    }, []);
+    const updateMessage = useCallback((id: string, content: string, videoScript?: VideoScript, tabId: string = activeChatTab) => {
+        setMessagesByTab(prev => {
+            const prevMsgs = prev[tabId] || [];
+            return {
+                ...prev,
+                [tabId]: prevMsgs.map(m => m.id === id ? { ...m, content, videoScript: videoScript || m.videoScript } : m)
+            };
+        });
+    }, [activeChatTab]);
 
     // Tutor hook
-    const { isLoading: tutorLoading, startTutor, stopTutor, variants, selectedLevel, changeLevel } = useTutorSession({
+    const { startTutor, stopTutor, startVideoTutor, variants, selectedLevel, changeLevel } = useTutorSession({
         problemId,
         language,
         problemDescription,
@@ -299,16 +313,18 @@ export default function AIAgentPanel({
         onSwitchToAiTab,
         addMessage,
         updateMessage,
-        setConcepts: (updater) => {
+        setConcepts: (updater, tabId = activeChatTab) => {
             setConceptsByTab(prev => {
-                const currentTab = activeChatTab;
-                const prevVal = prev[currentTab] || [];
+                const prevVal = prev[tabId] || [];
                 const nextVal = typeof updater === 'function' ? updater(prevVal) : updater;
-                return { ...prev, [currentTab]: nextVal };
+                return { ...prev, [tabId]: nextVal };
             });
         },
-        setIsTutorActive: (active) => {
-            setTutorActiveByTab(prev => ({ ...prev, [activeChatTab]: active }));
+        setIsTutorActive: (active, tabId = activeChatTab) => {
+            setTutorActiveByTab(prev => ({ ...prev, [tabId]: active }));
+        },
+        setIsLoading: (loading, tabId = activeChatTab) => {
+            setIsLoadingByTab(prev => ({ ...prev, [tabId]: loading }));
         }
     });
 
@@ -336,23 +352,23 @@ export default function AIAgentPanel({
         }
     }, [problemId, language, messages]);
 
-    const handleStartTutor = useCallback(() => {
+    const handleStartTutor = useCallback((tabId: string = activeChatTab) => {
         if (!problemId) {
-            startTutor();
+            startTutor(tabId);
             return;
         }
         const key = `tutor_used_${problemId}_${language}`;
         localStorage.setItem(key, 'true');
         setHasUsedTutor(true);
-        startTutor();
-    }, [problemId, language, startTutor]);
+        startTutor(tabId);
+    }, [problemId, language, startTutor, activeChatTab]);
 
     // Auto-start Tutor if requested
     useEffect(() => {
-        if (autoStart && !isTutorActive && messages.length === 0 && !tutorLoading) {
-            startTutor();
+        if (autoStart && !isTutorActive && messages.length === 0 && !isLoadingMessage) {
+            startTutor(activeChatTab);
         }
-    }, [autoStart, isTutorActive, messages.length, tutorLoading, startTutor]);
+    }, [autoStart, isTutorActive, messages.length, isLoadingMessage, startTutor, activeChatTab]);
 
     // Helper function to update last interaction response length
     const updateLastInteractionResponse = (responseLength: number) => {
@@ -430,8 +446,8 @@ export default function AIAgentPanel({
     const chatAbortControllerRef = useRef<AbortController | null>(null);
 
     const stopGeneration = useCallback(() => {
-        if (tutorLoading || isTutorActive) {
-            stopTutor();
+        if (isLoadingMessage || isTutorActive) {
+            stopTutor(activeChatTab);
         }
         if (chatAbortControllerRef.current) {
             chatAbortControllerRef.current.abort();
@@ -439,15 +455,16 @@ export default function AIAgentPanel({
         }
         setIsLoadingByTab(prev => ({ ...prev, [activeChatTab]: false }));
         setAiStatusByTab(prev => ({ ...prev, [activeChatTab]: 'Thinking...' }));
-    }, [tutorLoading, isTutorActive, stopTutor, activeChatTab]);
+    }, [isLoadingMessage, isTutorActive, stopTutor, activeChatTab]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     const handleSendMessage = async (overridePrompt?: string, file?: File) => {
-        const promptToSend = (overridePrompt || input).trim();
-        if (!promptToSend || isLoadingMessage) return;
+        const tabId = activeChatTab;
+        const promptToSend = (overridePrompt || inputByTab[tabId] || '').trim();
+        if (!promptToSend || isLoadingByTab[tabId]) return;
 
         // Detect "teach me" to auto-trigger tutor
         if (promptToSend.toLowerCase().includes('teach me') && !hasUsedTutor && (onSolveProblem || onAiCodeUpdate)) {
@@ -458,11 +475,11 @@ export default function AIAgentPanel({
                 content: promptToSend,
                 timestamp: new Date()
             };
-            setMessages(prev => [...prev, userMsg]);
-            if (!overridePrompt) setInput('');
+            setMessages(prev => [...prev, userMsg], tabId);
+            if (!overridePrompt) setInput('', tabId);
 
             // Start tutor after adding user message so it appears chronologically correct
-            handleStartTutor();
+            handleStartTutor(tabId);
             return;
         }
 
@@ -501,24 +518,25 @@ export default function AIAgentPanel({
             })
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        setMessages(prev => [...prev, userMessage], tabId);
 
         // Clear input only if it wasn't an override prompt
         if (!overridePrompt) {
-            setInput('');
+            setInput('', tabId);
         }
 
         if (onSelectionCleared) {
             onSelectionCleared(); // Notify parent to clear selection
         }
-        setIsLoadingMessage(true);
-        setAiStatus('Reading the problem...');
+        setIsLoadingMessage(true, tabId);
+        setAiStatus('Reading the problem...', tabId);
 
         // Create streaming message ID before try so catch can access it
         const streamMsgId = `ai-${Date.now()}`;
 
         try {
-            const chatMessages: any[] = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({
+            const currentTabMessages = messagesByTab[tabId] || [];
+            const chatMessages: any[] = currentTabMessages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({
                 role: m.role,
                 content: m.content
             }));
@@ -527,7 +545,7 @@ export default function AIAgentPanel({
             if (hasSelectedCode) {
                 contentString += `\n\nCode Context:\n\`\`\`${language}\n${selectedCode}\n\`\`\`\n`;
             }
-            if (problemDescription && !messages.length) {
+            if (problemDescription && !currentTabMessages.length) {
                 contentString = `Problem Description: ${problemDescription}\n\n` + contentString;
             }
 
@@ -541,12 +559,17 @@ export default function AIAgentPanel({
 
             const thinkInstruction = 'Always enclose your detailed, step-by-step thinking process inside <think>...</think> tags. After your thought process, provide a concise final summary and explanation as your main response.';
 
+            const isArabic = settings.language === 'ar';
+            const baseSystemPrompt = isArabic
+                ? 'أنت مساعد بالذكاء الاصطناعي متخصص في البرمجة التنافسية. اشرح بوضوح وبإيجاز. تحدث بالعربية الطبيعية (لهجة مصرية/تقنية مقبولة). عند شرح الأكواد، اهتم بتحليل التعقيد (الوقت والذاكرة). اكتب الكود بالانجليزي لكن كل الشروحات والتعليقات بالعربي.'
+                : 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.';
+
             let currentMessages = [
-                { role: 'system', content: settings.systemPrompt + '\n\n' + styleInstruction + '\n\n' + thinkInstruction },
+                { role: 'system', content: baseSystemPrompt + '\n\n' + styleInstruction + '\n\n' + thinkInstruction },
                 ...chatMessages
             ];
 
-            setAiStatus('Thinking...');
+            setAiStatus('Thinking...', tabId);
 
             // Create streaming assistant message (uses streamMsgId from outer scope)
             addMessage({
@@ -554,8 +577,8 @@ export default function AIAgentPanel({
                 role: 'assistant',
                 content: '<think>\nThinking...\n</think>',
                 timestamp: new Date()
-            });
-            setIsLoadingMessage(false); // Hide loading dots, we have a message now
+            }, tabId);
+            setIsLoadingMessage(false, tabId); // Hide loading dots, we have a message now
 
             const tools = [
                 {
@@ -772,20 +795,45 @@ export default function AIAgentPanel({
             let streamed = '';
             for (let i = 0; i < words.length; i++) {
                 streamed += (i > 0 ? ' ' : '') + words[i];
-                updateMessage(streamMsgId, streamed);
+                updateMessage(streamMsgId, streamed, undefined, tabId);
                 await new Promise(r => setTimeout(r, 18));
             }
             // Ensure final content is set
-            updateMessage(streamMsgId, finalAiResponse);
+            updateMessage(streamMsgId, finalAiResponse, undefined, tabId);
 
             // Update last interaction with response length for learning
             updateLastInteractionResponse(finalAiResponse.length);
 
         } catch (error) {
             console.error('[AI Chat Error]', error);
-            updateMessage(streamMsgId, 'Sorry, I encountered an error. Please try again or check your connection.');
+            updateMessage(streamMsgId, 'Sorry, I encountered an error. Please try again or check your connection.', undefined, tabId);
         } finally {
-            setIsLoadingMessage(false);
+            setIsLoadingMessage(false, tabId);
+        }
+    };
+
+    const handleExplainVideo = async () => {
+        const tabId = activeChatTab;
+        if (!settings.apiKey) {
+            setShowPreferencesModal(true);
+            return;
+        }
+
+        if (!problemDescription) {
+            setMessages(prev => [...prev, {
+                id: `err-${Date.now()}`,
+                role: 'assistant',
+                content: '⚠️ I couldn\'t find the problem description. Please make sure the problem is loaded before requesting a video explanation.',
+                timestamp: new Date()
+            }], tabId);
+            return;
+        }
+
+        setIsVideoLoading(true);
+        try {
+            await startVideoTutor(userCode, tabId);
+        } finally {
+            setIsVideoLoading(false);
         }
     };
 
@@ -837,7 +885,7 @@ export default function AIAgentPanel({
                         {messages.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
                                 <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
-                                    <Image src="/icons/logo.webp" alt="Verdict" fill className="object-contain p-2.5 opacity-80" />
+                                    <Image src="/icons/logo.webp" alt="Verdict" fill sizes="56px" className="object-contain p-2.5 opacity-80" />
                                 </div>
                                 <h3 className="text-base font-semibold text-white/80 mb-1.5">How can I help?</h3>
                                 <p className="text-xs text-white/35 max-w-[220px] leading-relaxed">
@@ -894,7 +942,7 @@ export default function AIAgentPanel({
                             {isLoadingMessage && (
                                 <div className="flex items-center gap-3 py-3">
                                     <div className="w-7 h-7 rounded-full bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center shrink-0 relative overflow-hidden">
-                                        <Image src="/icons/logo.webp" alt="AI" fill className="object-contain p-1.5 opacity-60" />
+                                        <Image src="/icons/logo.webp" alt="AI" fill sizes="28px" className="object-contain p-1.5 opacity-60" />
                                     </div>
                                     <div className="flex flex-col gap-0.5">
                                         <div className="flex gap-1 items-center">
@@ -959,7 +1007,7 @@ export default function AIAgentPanel({
                             <PromptInputBox
                                 value={input}
                                 onChange={setInput}
-                                isLoading={isLoadingMessage || tutorLoading}
+                                isLoading={isLoadingMessage}
                                 placeholder={
                                     !settings.enabled || !settings.apiKey ? 'Configure LLM first...'
                                         : selectedCode && selectedLineReference ? 'Ask about the selected code...'
@@ -969,7 +1017,9 @@ export default function AIAgentPanel({
                                 onStop={stopGeneration}
                                 onOpenResources={() => setIsResourcesOpen(true)}
                                 onTeachMe={() => handleSendMessage('Teach me this problem')}
-                                isTutorLoading={tutorLoading}
+                                onExplainVideo={handleExplainVideo}
+                                isVideoLoading={isVideoLoading}
+                                isTutorLoading={isLoadingMessage}
                                 isTutorActive={isTutorActive}
                                 hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
                             />

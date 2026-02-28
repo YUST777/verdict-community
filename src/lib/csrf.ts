@@ -5,7 +5,7 @@ const CSRF_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY || 'csr
 const CSRF_TOKEN_EXPIRY = 60 * 60 * 1000; // 1 hour
 
 interface CSRFPayload {
-    userId: number;
+    userId: string;
     timestamp: number;
     random: string;
 }
@@ -13,7 +13,7 @@ interface CSRFPayload {
 /**
  * Generate a CSRF token for a user
  */
-export function generateCSRFToken(userId: number): string {
+export function generateCSRFToken(userId: string): string {
     const payload: CSRFPayload = {
         userId,
         timestamp: Date.now(),
@@ -33,7 +33,7 @@ export function generateCSRFToken(userId: number): string {
 /**
  * Verify a CSRF token
  */
-export function verifyCSRFToken(token: string, userId: number): boolean {
+export function verifyCSRFToken(token: string, userId: string): boolean {
     try {
         const decoded = Buffer.from(token, 'base64').toString('utf-8');
         const [data, signature] = decoded.split('.');
@@ -88,7 +88,7 @@ export function getCSRFTokenFromRequest(req: NextRequest): string | null {
 /**
  * Validate CSRF for a request (requires auth user)
  */
-export function validateCSRF(req: NextRequest, userId: number): boolean {
+export function validateCSRF(req: NextRequest, userId: string): boolean {
     const token = getCSRFTokenFromRequest(req);
     if (!token) return false;
     return verifyCSRFToken(token, userId);

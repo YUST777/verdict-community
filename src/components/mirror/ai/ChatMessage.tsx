@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Globe, Youtube } from 'lucide-react';
 import MarkdownRenderer from '../shared/MarkdownRenderer';
+import InlineVideoExplainer from '../video/InlineVideoExplainer';
 import { Message, MessageContent } from '@/components/ui/message';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -82,7 +83,17 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                                 </div>
                             </div>
                             <pre className="px-3 py-2.5 text-xs font-mono text-white/80 overflow-x-auto text-left leading-relaxed">
-                                <code>{message.codeBlock.code}</code>
+                                <code
+                                    dangerouslySetInnerHTML={{
+                                        __html: (function highlight(code: string) {
+                                            const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                            return escaped
+                                                .replace(/\b(int|long|double|float|char|string|void|bool|if|else|for|while|return|main|using|namespace|include|std|vector|map|set|pair)\b/g, '<span class="text-blue-400 font-bold">$1</span>')
+                                                .replace(/([-+*\/%&|^!<>]=?|[<>])/g, '<span class="text-white/40">$1</span>')
+                                                .replace(/(&#47;&#47;.*)/g, '<span class="text-zinc-500 italic">$1</span>');
+                                        })(message.codeBlock.code)
+                                    }}
+                                />
                             </pre>
                         </div>
                     )}
@@ -101,6 +112,7 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                             </ChainOfThought>
                         )}
                         {mainContent && <MarkdownRenderer content={mainContent} />}
+                        {message.videoScript && <InlineVideoExplainer script={message.videoScript as any} />}
                         {message.role === 'sources' && message.sources && message.sources.length > 0 && (
                             <div className="mt-2 space-y-3">
                                 <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Sources Found</div>

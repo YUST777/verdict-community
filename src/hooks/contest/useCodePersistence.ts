@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DEFAULT_CODE = `#include <bits/stdc++.h>
 using namespace std;
@@ -23,6 +24,7 @@ interface UseCodePersistenceReturn {
 }
 
 export function useCodePersistence({ contestId, problemId }: UseCodePersistenceParams): UseCodePersistenceReturn {
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const [code, setCode] = useState(DEFAULT_CODE);
     const [language, setLanguage] = useState('cpp');
     const [isLoaded, setIsLoaded] = useState(false);
@@ -39,7 +41,10 @@ export function useCodePersistence({ contestId, problemId }: UseCodePersistenceP
 
     // Load saved code and language
     useEffect(() => {
-        if (!contestId || !problemId) return;
+        if (!contestId || !problemId || !isAuthenticated || authLoading) {
+            if (!authLoading && !isAuthenticated) setIsLoaded(true);
+            return;
+        }
 
         async function loadData() {
             const localCode = localStorage.getItem(storageKeyCode);
@@ -76,7 +81,7 @@ export function useCodePersistence({ contestId, problemId }: UseCodePersistenceP
 
     // Save changes to localStorage & Debounced upsert to Supabase
     useEffect(() => {
-        if (!isLoaded) return;
+        if (!isLoaded || !isAuthenticated || authLoading) return;
         if (isFirstLoad.current) {
             isFirstLoad.current = false;
             return;

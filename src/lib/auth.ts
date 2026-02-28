@@ -65,5 +65,16 @@ export async function verifyAuth(req: NextRequest): Promise<AuthUser | null> {
         console.error('VERIFY ERROR:', e instanceof Error ? e.message : 'Unknown error');
     }
 
+
+    // 2. Development Auth Bypass: If we reach here on localhost, provide a mock user
+    if (process.env.NODE_ENV === 'development') {
+        return {
+            id: 1, // Traditional admin/first user ID
+            email: 'dev@verdict.run',
+            role: 'admin',
+            auth_id: 'dev-mock-uuid'
+        };
+    }
+
     return null;
 }
