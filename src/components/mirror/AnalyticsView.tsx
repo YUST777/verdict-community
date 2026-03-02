@@ -1,5 +1,4 @@
-
-import { Loader2, BarChart2, Clock, Sparkles, HardDrive, Database, Trophy } from 'lucide-react';
+import { Loader2, BarChart2, Clock, HardDrive, Trophy, Tag, TrendingUp, Zap } from 'lucide-react';
 import { AnalyticsStats } from './shared/types';
 import {
     BarChart,
@@ -12,279 +11,411 @@ import {
 
 interface AnalyticsViewProps {
     stats: AnalyticsStats | null;
-    cfStats?: { rating?: number; solvedCount: number } | null;
+    cfStats?: { rating?: number; solvedCount: number; tags?: string[] } | null;
     loading: boolean;
     analyzeComplexity: () => void;
     complexityLoading: boolean;
 }
 
+/* ── helpers ── */
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
+const ChartTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-[#1a1a1a] border border-white/10 p-3 rounded-lg shadow-xl">
-                <p className="text-white font-medium mb-1">{`Range: ${label}`}</p>
-                <p className="text-[#34D399]">{`Count: ${payload[0].value}`}</p>
+            <div className="bg-[#282828] border border-white/10 px-3 py-2 rounded-lg text-xs">
+                <p className="text-[#999] mb-0.5">{label}</p>
+                <p className="text-white font-medium">{payload[0].value} submissions</p>
             </div>
         );
     }
     return null;
 };
 
-export default function AnalyticsView({ stats, cfStats, loading, analyzeComplexity, complexityLoading }: AnalyticsViewProps) {
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center py-12">
-                <Loader2 className="animate-spin text-[#10B981]" size={32} />
-            </div>
-        );
-    }
+function getRatingColor(rating: number): string {
+    if (rating >= 2400) return 'text-red-500';
+    if (rating >= 2100) return 'text-orange-400';
+    if (rating >= 1900) return 'text-violet-400';
+    if (rating >= 1600) return 'text-blue-400';
+    if (rating >= 1400) return 'text-cyan-400';
+    if (rating >= 1200) return 'text-[#2cbb5d]';
+    return 'text-[#999]';
+}
 
+function getRatingBg(rating: number): string {
+    if (rating >= 2400) return 'bg-red-500/10 border-red-500/20';
+    if (rating >= 2100) return 'bg-orange-400/10 border-orange-400/20';
+    if (rating >= 1900) return 'bg-violet-400/10 border-violet-400/20';
+    if (rating >= 1600) return 'bg-blue-400/10 border-blue-400/20';
+    if (rating >= 1400) return 'bg-cyan-400/10 border-cyan-400/20';
+    if (rating >= 1200) return 'bg-[#2cbb5d]/10 border-[#2cbb5d]/20';
+    return 'bg-white/5 border-white/10';
+}
+
+function getRatingLabel(rating: number): string {
+    if (rating >= 2400) return 'Grandmaster';
+    if (rating >= 2100) return 'Master';
+    if (rating >= 1900) return 'Candidate Master';
+    if (rating >= 1600) return 'Expert';
+    if (rating >= 1400) return 'Specialist';
+    if (rating >= 1200) return 'Pupil';
+    return 'Newbie';
+}
+
+function formatMemoryValue(kb: number): string {
+    if (kb >= 1024) return `${(kb / 1024).toFixed(1)}`;
+    return `${Math.round(kb)}`;
+}
+
+function formatMemoryUnit(kb: number): string {
+    return kb >= 1024 ? 'MB' : 'KB';
+}
+
+/* ── component ── */
+
+export default function AnalyticsView({ stats, cfStats, loading, analyzeComplexity, complexityLoading }: AnalyticsViewProps) {
     const showLocalStats = stats && stats.totalSubmissions > 0;
 
-    if (!showLocalStats && !cfStats) {
+    if (!loading && !showLocalStats && !cfStats) {
         return (
-            <div className="text-center py-16 text-[#666]">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] flex items-center justify-center border border-white/5">
-                    <BarChart2 size={32} className="opacity-40" />
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+                <img src="/icons/search-error.svg" alt="" className="w-20 h-20 opacity-40" draggable={false} />
+                <div className="text-center">
+                    <p className="text-sm text-[#555]">No analytics data yet</p>
+                    <p className="text-xs text-[#444] mt-1">Submit a solution to see performance analysis</p>
                 </div>
-                <p className="text-sm font-medium">No accepted submissions to analyze yet</p>
-                <p className="text-xs text-[#444] mt-1">Submit a solution to see your analytics</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            {/* Codeforces Global Stats */}
-            {cfStats && (
-                <div className="relative rounded-2xl overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent" />
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl opacity-50" />
+        <div className="space-y-3 pb-4">
 
-                    <div className="relative bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-6 rounded-2xl">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center border border-purple-500/20">
-                                <Trophy size={20} className="text-purple-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-semibold text-white">Global Stats</h3>
-                                <p className="text-xs text-[#666]">Codeforces Community Data</p>
+            {/* ── Problem Info Card ── */}
+            {cfStats && (
+                <div className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06]">
+                        <Trophy size={14} className="text-[#666]" />
+                        <span className="text-xs font-medium text-[#999]">Problem Info</span>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="grid grid-cols-2 divide-x divide-white/[0.06]">
+                        <div className="px-4 py-3.5">
+                            <p className="text-[10px] text-[#555] uppercase tracking-wider mb-1.5">Difficulty</p>
+                            {cfStats.rating ? (
+                                <div className="flex items-baseline gap-2">
+                                    <span className={`text-xl font-bold tabular-nums ${getRatingColor(cfStats.rating)}`}>
+                                        {cfStats.rating}
+                                    </span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md border ${getRatingBg(cfStats.rating)} ${getRatingColor(cfStats.rating)}`}>
+                                        {getRatingLabel(cfStats.rating)}
+                                    </span>
+                                </div>
+                            ) : (
+                                <span className="text-xl font-bold text-[#555]">Unrated</span>
+                            )}
+                        </div>
+                        <div className="px-4 py-3.5">
+                            <p className="text-[10px] text-[#555] uppercase tracking-wider mb-1.5">Global Solves</p>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-xl font-bold text-white tabular-nums">
+                                    {cfStats.solvedCount >= 1000
+                                        ? `${(cfStats.solvedCount / 1000).toFixed(cfStats.solvedCount >= 10000 ? 0 : 1)}K`
+                                        : cfStats.solvedCount.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] text-[#555]">accepted</span>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-[#121212] p-4 rounded-xl border border-white/5">
-                                <p className="text-xs text-[#666] mb-1">Difficulty Rating</p>
-                                <p className="text-2xl font-bold text-white">
-                                    {cfStats.rating ? (
-                                        <span className={cfStats.rating >= 2000 ? 'text-red-400' : cfStats.rating >= 1500 ? 'text-blue-400' : 'text-green-400'}>
-                                            {cfStats.rating}
-                                        </span>
-                                    ) : 'Unrated'}
-                                </p>
+                    {/* Tags */}
+                    {cfStats.tags && cfStats.tags.length > 0 && (
+                        <div className="px-4 py-3 border-t border-white/[0.06]">
+                            <div className="flex items-center gap-1.5 mb-2">
+                                <Tag size={10} className="text-[#555]" />
+                                <span className="text-[10px] text-[#555] uppercase tracking-wider font-medium">Topics</span>
                             </div>
-                            <div className="bg-[#121212] p-4 rounded-xl border border-white/5">
-                                <p className="text-xs text-[#666] mb-1">Global Solves</p>
-                                <p className="text-2xl font-bold text-[#34D399]">
-                                    {cfStats.solvedCount.toLocaleString()}
-                                </p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {cfStats.tags.map((tag) => (
+                                    <span
+                                        key={tag}
+                                        className="px-2 py-0.5 text-[10px] rounded-md bg-white/[0.04] text-[#888] border border-white/[0.06]"
+                                    >
+                                        {tag}
+                                    </span>
+                                ))}
                             </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Skeleton: Performance Cards ── */}
+            {loading && !showLocalStats && (
+                <>
+                    {/* Skeleton performance cards */}
+                    <div className="grid grid-cols-2 gap-3">
+                        {[0, 1].map((i) => (
+                            <div key={i} className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl px-4 py-3.5">
+                                <div className="flex items-center gap-1.5 mb-3">
+                                    <div className="w-3 h-3 rounded-full bg-white/[0.06] animate-pulse" style={{ animationDelay: `${i * 150}ms` }} />
+                                    <div className="h-2.5 w-14 rounded-md bg-white/[0.06] animate-pulse" style={{ animationDelay: `${i * 150 + 50}ms` }} />
+                                </div>
+                                <div className="h-7 w-16 rounded-md bg-white/[0.08] animate-pulse mb-1" style={{ animationDelay: `${i * 150 + 100}ms` }} />
+                                <div className="h-3.5 w-20 rounded-md bg-white/[0.04] animate-pulse mb-3" style={{ animationDelay: `${i * 150 + 150}ms` }} />
+                                <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                                    <div className="h-full w-0 bg-white/[0.06] rounded-full animate-pulse" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Skeleton distribution chart */}
+                    {[0, 1].map((chartIdx) => (
+                        <div key={chartIdx} className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3.5 h-3.5 rounded-full bg-white/[0.06] animate-pulse" style={{ animationDelay: `${chartIdx * 200}ms` }} />
+                                    <div className="h-3 w-28 rounded-md bg-white/[0.06] animate-pulse" style={{ animationDelay: `${chartIdx * 200 + 50}ms` }} />
+                                </div>
+                                <div className="h-2.5 w-16 rounded-md bg-white/[0.04] animate-pulse" style={{ animationDelay: `${chartIdx * 200 + 100}ms` }} />
+                            </div>
+                            <div className="px-4 pt-4 pb-3">
+                                {/* Skeleton bar chart */}
+                                <div className="h-32 flex items-end gap-1.5 px-2">
+                                    {Array.from({ length: 12 }).map((_, i) => {
+                                        const heights = [35, 55, 70, 85, 95, 80, 60, 45, 30, 20, 15, 10];
+                                        return (
+                                            <div
+                                                key={i}
+                                                className="flex-1 rounded-t-sm bg-white/[0.04] animate-pulse"
+                                                style={{
+                                                    height: `${heights[i % 12]}%`,
+                                                    animationDelay: `${chartIdx * 200 + i * 60}ms`,
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                                {/* Skeleton x-axis labels */}
+                                <div className="flex justify-between mt-2 px-1">
+                                    {Array.from({ length: 4 }).map((_, i) => (
+                                        <div key={i} className="h-2 w-8 rounded-sm bg-white/[0.04] animate-pulse" style={{ animationDelay: `${chartIdx * 200 + i * 80}ms` }} />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </>
+            )}
+
+            {/* ── Performance Cards (Runtime + Memory side by side) ── */}
+            {showLocalStats && stats!.userStats && (
+                <div className="grid grid-cols-2 gap-3">
+                    {/* Runtime Card */}
+                    <div className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl px-4 py-3.5">
+                        <div className="flex items-center gap-1.5 mb-3">
+                            <Clock size={12} className="text-[#2cbb5d]" />
+                            <span className="text-[10px] text-[#555] uppercase tracking-wider font-medium">Runtime</span>
+                        </div>
+                        <div className="flex items-baseline gap-1 mb-1">
+                            <span className="text-2xl font-bold text-white tabular-nums">
+                                {stats!.userStats!.runtime.value}
+                            </span>
+                            <span className="text-xs text-[#555]">ms</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mb-3">
+                            <TrendingUp size={10} className="text-[#2cbb5d]" />
+                            <span className="text-xs text-[#2cbb5d] font-medium">
+                                Beats {stats!.userStats!.runtime.percentile}%
+                            </span>
+                        </div>
+                        {/* Mini progress bar */}
+                        <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-[#2cbb5d] rounded-full transition-all duration-700"
+                                style={{ width: `${stats!.userStats!.runtime.percentile}%` }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Memory Card */}
+                    <div className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl px-4 py-3.5">
+                        <div className="flex items-center gap-1.5 mb-3">
+                            <HardDrive size={12} className="text-[#5b8ff9]" />
+                            <span className="text-[10px] text-[#555] uppercase tracking-wider font-medium">Memory</span>
+                        </div>
+                        <div className="flex items-baseline gap-1 mb-1">
+                            <span className="text-2xl font-bold text-white tabular-nums">
+                                {formatMemoryValue(stats!.userStats!.memory.value)}
+                            </span>
+                            <span className="text-xs text-[#555]">{formatMemoryUnit(stats!.userStats!.memory.value)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mb-3">
+                            <TrendingUp size={10} className="text-[#5b8ff9]" />
+                            <span className="text-xs text-[#5b8ff9] font-medium">
+                                Beats {stats!.userStats!.memory.percentile}%
+                            </span>
+                        </div>
+                        {/* Mini progress bar */}
+                        <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-[#5b8ff9] rounded-full transition-all duration-700"
+                                style={{ width: `${stats!.userStats!.memory.percentile}%` }}
+                            />
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Local Stats */}
-            {showLocalStats ? (
-                <>
-                    {/* Runtime Card */}
-                    <div className="relative rounded-2xl overflow-hidden">
-                        {/* Gradient Background */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent" />
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl" />
-
-                        <div className="relative bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-6 rounded-2xl">
-                            <div className="flex items-start justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center border border-emerald-500/20">
-                                        <Clock size={20} className="text-emerald-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-white">Runtime</h3>
-                                        <p className="text-xs text-[#666]">{stats?.totalSubmissions ?? 0} submissions analyzed</p>
-                                    </div>
+            {/* ── Runtime Distribution Chart ── */}
+            {showLocalStats && (
+                <div className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                        <div className="flex items-center gap-2">
+                            <Clock size={13} className="text-[#666]" />
+                            <span className="text-xs font-medium text-[#999]">Runtime Distribution</span>
+                        </div>
+                        <span className="text-[10px] text-[#555]">{stats!.totalSubmissions.toLocaleString()} accepted</span>
+                    </div>
+                    <div className="px-2 pt-4 pb-2">
+                        <div className="h-32 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={stats!.runtimeDistribution} margin={{ top: 4, right: 8, bottom: 16, left: -24 }}>
+                                    <XAxis
+                                        dataKey="label"
+                                        stroke="#333"
+                                        fontSize={8}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval="preserveStartEnd"
+                                        angle={-20}
+                                        dy={8}
+                                    />
+                                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                                    <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+                                        {stats!.runtimeDistribution.map((entry, index) => (
+                                            <Cell
+                                                key={`rt-${index}`}
+                                                fill={entry.isUser ? '#2cbb5d' : '#2cbb5d'}
+                                                fillOpacity={entry.isUser ? 1 : 0.15}
+                                                stroke={entry.isUser ? '#2cbb5d' : 'transparent'}
+                                                strokeWidth={entry.isUser ? 1.5 : 0}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        {/* Legend */}
+                        {stats!.userStats && (
+                            <div className="flex items-center gap-4 justify-center pb-1">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-sm bg-[#2cbb5d]" />
+                                    <span className="text-[10px] text-[#555]">You</span>
                                 </div>
-                                <button onClick={analyzeComplexity} disabled={complexityLoading} className="flex items-center gap-2 px-3 py-1.5 bg-[#10B981]/10 hover:bg-[#10B981]/20 border border-[#10B981]/20 rounded-lg text-xs font-medium text-[#10B981] transition-all hover:scale-105 disabled:opacity-50">
-                                    {complexityLoading ? <Loader2 size={12} className="animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />}
-                                    Analyze Complexity
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-sm bg-[#2cbb5d]/15" />
+                                    <span className="text-[10px] text-[#555]">Others</span>
+                                </div>
                             </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
-                            {/* Stats Row */}
-                            <div className="flex items-end gap-4 mb-6">
-                                <div>
-                                    <span className="text-4xl font-bold text-white tracking-tight">
-                                        {stats!.userStats?.runtime.value ?? 0}
-                                    </span>
-                                    <span className="text-lg text-[#666] ml-1">ms</span>
+            {/* ── Memory Distribution Chart ── */}
+            {showLocalStats && (
+                <div className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                        <div className="flex items-center gap-2">
+                            <HardDrive size={13} className="text-[#666]" />
+                            <span className="text-xs font-medium text-[#999]">Memory Distribution</span>
+                        </div>
+                        <span className="text-[10px] text-[#555]">Lower is better</span>
+                    </div>
+                    <div className="px-2 pt-4 pb-2">
+                        <div className="h-32 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={stats!.memoryDistribution} margin={{ top: 4, right: 8, bottom: 16, left: -24 }}>
+                                    <XAxis
+                                        dataKey="label"
+                                        stroke="#333"
+                                        fontSize={8}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval="preserveStartEnd"
+                                        angle={-20}
+                                        dy={8}
+                                    />
+                                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                                    <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+                                        {stats!.memoryDistribution.map((entry, index) => (
+                                            <Cell
+                                                key={`mem-${index}`}
+                                                fill={entry.isUser ? '#5b8ff9' : '#5b8ff9'}
+                                                fillOpacity={entry.isUser ? 1 : 0.15}
+                                                stroke={entry.isUser ? '#5b8ff9' : 'transparent'}
+                                                strokeWidth={entry.isUser ? 1.5 : 0}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        {/* Legend */}
+                        {stats!.userStats && (
+                            <div className="flex items-center gap-4 justify-center pb-1">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-sm bg-[#5b8ff9]" />
+                                    <span className="text-[10px] text-[#555]">You</span>
                                 </div>
-                                {stats!.userStats?.runtime.percentile !== undefined && (
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                        <span className="text-sm font-semibold text-emerald-400">
-                                            Beats {Math.round(stats!.userStats.runtime.percentile)}%
-                                        </span>
-                                        <Sparkles size={16} className="text-emerald-400" />
-                                    </div>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-sm bg-[#5b8ff9]/15" />
+                                    <span className="text-[10px] text-[#555]">Others</span>
+                                </div>
                             </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
-                            {/* Progress Bar */}
-                            {stats!.userStats?.runtime.percentile !== undefined && (
-                                <div className="mb-6">
-                                    <div className="h-2 bg-[#0a0a0a] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000 ease-out"
-                                            style={{ width: `${Math.round(stats!.userStats.runtime.percentile)}%` }}
-                                        />
-                                    </div>
-                                    <div className="flex justify-between mt-1 text-[10px] text-[#444]">
-                                        <span>Slower</span>
-                                        <span>Faster</span>
-                                    </div>
-                                </div>
+            {/* ── Analyze Complexity ── */}
+            {showLocalStats && (
+                <div className="bg-[#1a1a1a] border border-white/[0.06] rounded-xl px-4 py-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <Zap size={14} className="text-[#2cbb5d]" />
+                            <div>
+                                <p className="text-xs font-medium text-[#999]">Complexity Analysis</p>
+                                <p className="text-[10px] text-[#555]">AI-powered time & space analysis</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={analyzeComplexity}
+                            disabled={complexityLoading}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2cbb5d]/10 hover:bg-[#2cbb5d]/15 border border-[#2cbb5d]/20 rounded-lg text-[11px] font-medium text-[#2cbb5d] transition-colors disabled:opacity-40"
+                        >
+                            {complexityLoading ? (
+                                <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                                <BarChart2 size={11} />
                             )}
-
-                            {/* Chart */}
-                            <div className="h-32 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stats!.runtimeDistribution} margin={{ top: 5, right: 5, bottom: 20, left: -20 }}>
-                                        <XAxis
-                                            dataKey="label"
-                                            stroke="#444"
-                                            fontSize={9}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            interval="preserveStartEnd"
-                                        />
-                                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                                            {stats!.runtimeDistribution.map((entry, index) => (
-                                                <Cell
-                                                    key={`cell-${index}`}
-                                                    fill={entry.isUser ? '#10B981' : '#10B981'}
-                                                    fillOpacity={entry.isUser ? 1 : 0.25}
-                                                    stroke={entry.isUser ? '#10B981' : 'transparent'}
-                                                    strokeWidth={entry.isUser ? 2 : 0}
-                                                />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
+                            Analyze
+                        </button>
                     </div>
+                </div>
+            )}
 
-                    {/* Memory Card */}
-                    <div className="relative rounded-2xl overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent" />
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl" />
-
-                        <div className="relative bg-[#1a1a1a]/80 backdrop-blur-sm border border-white/5 p-6 rounded-2xl">
-                            <div className="flex items-start justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center border border-blue-500/20">
-                                        <HardDrive size={20} className="text-blue-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-white">Memory</h3>
-                                        <p className="text-xs text-[#666]">Lower is better</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Stats Row */}
-                            <div className="flex items-end gap-4 mb-6">
-                                <div>
-                                    <span className="text-4xl font-bold text-white tracking-tight">
-                                        {stats!.userStats?.memory.value ? Math.round(stats!.userStats.memory.value / 1024 * 10) / 10 : 0}
-                                    </span>
-                                    <span className="text-lg text-[#666] ml-1">MB</span>
-                                </div>
-                                {stats!.userStats?.memory.percentile !== undefined && (
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                        <span className="text-sm font-semibold text-blue-400">
-                                            Beats {Math.round(stats!.userStats.memory.percentile)}%
-                                        </span>
-                                        <Database size={16} className="text-blue-400" />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Progress Bar */}
-                            {stats!.userStats?.memory.percentile !== undefined && (
-                                <div className="mb-6">
-                                    <div className="h-2 bg-[#0a0a0a] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000 ease-out"
-                                            style={{ width: `${Math.round(stats!.userStats.memory.percentile)}%` }}
-                                        />
-                                    </div>
-                                    <div className="flex justify-between mt-1 text-[10px] text-[#444]">
-                                        <span>More Memory</span>
-                                        <span>Less Memory</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Chart */}
-                            <div className="h-32 w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stats!.memoryDistribution} margin={{ top: 5, right: 5, bottom: 20, left: -20 }}>
-                                        <XAxis
-                                            dataKey="label"
-                                            stroke="#444"
-                                            fontSize={9}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            interval="preserveStartEnd"
-                                        />
-                                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                                        <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                                            {stats!.memoryDistribution.map((entry, index) => (
-                                                <Cell
-                                                    key={`cell-${index}`}
-                                                    fill={entry.isUser ? '#3B82F6' : '#3B82F6'}
-                                                    fillOpacity={entry.isUser ? 1 : 0.25}
-                                                    stroke={entry.isUser ? '#3B82F6' : 'transparent'}
-                                                    strokeWidth={entry.isUser ? 2 : 0}
-                                                />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Summary Footer */}
-                    <div className="bg-gradient-to-r from-[#1a1a1a] to-[#0f0f0f] rounded-xl border border-white/5 p-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-[#10B981]/10 flex items-center justify-center">
-                                    <BarChart2 size={16} className="text-[#10B981]" />
-                                </div>
-                                <div>
-                                    <p className="text-xs text-[#666]">Total Submissions Analyzed</p>
-                                    <p className="text-sm font-semibold text-white">{stats!.totalSubmissions}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            ) : (
-                <div className="text-center py-8 text-[#666] border border-dashed border-white/10 rounded-2xl">
-                    <p className="text-sm">Submit your solution to generate runtime analysis</p>
+            {/* ── No local submissions prompt ── */}
+            {!showLocalStats && cfStats && (
+                <div className="bg-[#1a1a1a] border border-dashed border-white/[0.08] rounded-xl px-4 py-8 text-center">
+                    <p className="text-sm text-[#666]">Submit your solution to see performance data</p>
+                    <p className="text-xs text-[#444] mt-1">
+                        Compare against {cfStats.solvedCount.toLocaleString()} accepted solutions
+                    </p>
                 </div>
             )}
         </div>

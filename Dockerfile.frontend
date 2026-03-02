@@ -35,6 +35,69 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=bun:bun /app/.next/standalone ./
 COPY --from=builder --chown=bun:bun /app/.next/static ./.next/static
 
+# Fix: Next.js standalone trace only copies ESM entries for external packages.
+# yt-search and cheerio need their full CJS dep trees at runtime.
+COPY --from=deps /app/node_modules/cheerio ./node_modules/cheerio
+COPY --from=deps /app/node_modules/cheerio-select ./node_modules/cheerio-select
+COPY --from=deps /app/node_modules/css-select ./node_modules/css-select
+COPY --from=deps /app/node_modules/css-what ./node_modules/css-what
+COPY --from=deps /app/node_modules/boolbase ./node_modules/boolbase
+COPY --from=deps /app/node_modules/nth-check ./node_modules/nth-check
+COPY --from=deps /app/node_modules/dom-serializer ./node_modules/dom-serializer
+COPY --from=deps /app/node_modules/domelementtype ./node_modules/domelementtype
+COPY --from=deps /app/node_modules/domhandler ./node_modules/domhandler
+COPY --from=deps /app/node_modules/domutils ./node_modules/domutils
+COPY --from=deps /app/node_modules/encoding-sniffer ./node_modules/encoding-sniffer
+COPY --from=deps /app/node_modules/entities ./node_modules/entities
+COPY --from=deps /app/node_modules/htmlparser2 ./node_modules/htmlparser2
+COPY --from=deps /app/node_modules/iconv-lite ./node_modules/iconv-lite
+COPY --from=deps /app/node_modules/parse5 ./node_modules/parse5
+COPY --from=deps /app/node_modules/parse5-htmlparser2-tree-adapter ./node_modules/parse5-htmlparser2-tree-adapter
+COPY --from=deps /app/node_modules/parse5-parser-stream ./node_modules/parse5-parser-stream
+COPY --from=deps /app/node_modules/safer-buffer ./node_modules/safer-buffer
+COPY --from=deps /app/node_modules/undici ./node_modules/undici
+COPY --from=deps /app/node_modules/whatwg-encoding ./node_modules/whatwg-encoding
+COPY --from=deps /app/node_modules/whatwg-mimetype ./node_modules/whatwg-mimetype
+COPY --from=deps /app/node_modules/yt-search ./node_modules/yt-search
+COPY --from=deps /app/node_modules/dasu ./node_modules/dasu
+COPY --from=deps /app/node_modules/human-time ./node_modules/human-time
+COPY --from=deps /app/node_modules/async.parallellimit ./node_modules/async.parallellimit
+COPY --from=deps /app/node_modules/async.util.eachoflimit ./node_modules/async.util.eachoflimit
+COPY --from=deps /app/node_modules/async.util.isarray ./node_modules/async.util.isarray
+COPY --from=deps /app/node_modules/async.util.isarraylike ./node_modules/async.util.isarraylike
+COPY --from=deps /app/node_modules/async.util.keyiterator ./node_modules/async.util.keyiterator
+COPY --from=deps /app/node_modules/async.util.keys ./node_modules/async.util.keys
+COPY --from=deps /app/node_modules/async.util.noop ./node_modules/async.util.noop
+COPY --from=deps /app/node_modules/async.util.once ./node_modules/async.util.once
+COPY --from=deps /app/node_modules/async.util.onlyonce ./node_modules/async.util.onlyonce
+COPY --from=deps /app/node_modules/async.util.parallel ./node_modules/async.util.parallel
+COPY --from=deps /app/node_modules/async.util.restparam ./node_modules/async.util.restparam
+COPY --from=deps /app/node_modules/node-fzf ./node_modules/node-fzf
+COPY --from=deps /app/node_modules/jsep ./node_modules/jsep
+COPY --from=deps /app/node_modules/jsonpath-plus ./node_modules/jsonpath-plus
+COPY --from=deps /app/node_modules/minimist ./node_modules/minimist
+COPY --from=deps /app/node_modules/minimatch ./node_modules/minimatch
+COPY --from=deps /app/node_modules/brace-expansion ./node_modules/brace-expansion
+COPY --from=deps /app/node_modules/balanced-match ./node_modules/balanced-match
+COPY --from=deps /app/node_modules/concat-map ./node_modules/concat-map
+COPY --from=deps /app/node_modules/boolstring ./node_modules/boolstring
+COPY --from=deps /app/node_modules/redstar ./node_modules/redstar
+COPY --from=deps /app/node_modules/keypress ./node_modules/keypress
+COPY --from=deps /app/node_modules/picocolors ./node_modules/picocolors
+COPY --from=deps /app/node_modules/ansi-regex ./node_modules/ansi-regex
+COPY --from=deps /app/node_modules/is-fullwidth-code-point ./node_modules/is-fullwidth-code-point
+COPY --from=deps /app/node_modules/mimic-fn ./node_modules/mimic-fn
+COPY --from=deps /app/node_modules/onetime ./node_modules/onetime
+COPY --from=deps /app/node_modules/restore-cursor ./node_modules/restore-cursor
+COPY --from=deps /app/node_modules/signal-exit ./node_modules/signal-exit
+COPY --from=deps /app/node_modules/string-width ./node_modules/string-width
+COPY --from=deps /app/node_modules/strip-ansi ./node_modules/strip-ansi
+COPY --from=deps /app/node_modules/ttys ./node_modules/ttys
+COPY --from=deps /app/node_modules/needle ./node_modules/needle
+COPY --from=deps /app/node_modules/sax ./node_modules/sax
+COPY --from=deps /app/node_modules/@jsep-plugin/assignment ./node_modules/@jsep-plugin/assignment
+COPY --from=deps /app/node_modules/@jsep-plugin/regex ./node_modules/@jsep-plugin/regex
+
 USER bun
 
 EXPOSE 3000

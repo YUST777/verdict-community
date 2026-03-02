@@ -70,17 +70,15 @@ async function verifySolutionPage(
         const html = await res.text();
         console.log(`[SuperEngine] Fetched HTML length: ${html.length}`);
 
-        // Multi-pattern verification: Be extremely liberal
+        // Strict verification: only trust CF-specific markers
         const patterns = [
-            new RegExp(`/contest/${contestId}/problem/${problemIndex}`, 'i'),
-            new RegExp(`/problemset/problem/${contestId}/${problemIndex}`, 'i'),
-            new RegExp(`>${problemIndex}\\s*-\\s*`, 'i'),
-            new RegExp(`${contestId}${problemIndex}`, 'i'),
-            new RegExp(`>\\s*${problemIndex}\\s*<`, 'i')
+            new RegExp(`/contest/${contestId}/problem/${problemIndex}[^a-zA-Z0-9]`, 'i'),
+            new RegExp(`/problemset/problem/${contestId}/${problemIndex}[^a-zA-Z0-9]`, 'i'),
         ];
 
-        const isAccepted = html.includes('verdict-accepted') || html.includes('OK') || html.includes('Accepted') || html.includes('Correct');
-        const matchesProblem = patterns.some(p => p.test(html)) || (html.includes(`${contestId}`) && html.includes(`${problemIndex}`));
+        // Only trust the CSS class 'verdict-accepted' — generic 'OK' matches too many pages
+        const isAccepted = html.includes('verdict-accepted') || html.includes('Accepted</span>');
+        const matchesProblem = patterns.some(p => p.test(html));
 
         console.log(`[SuperEngine] Match Stats: Problem=${matchesProblem}, Accepted=${isAccepted}`);
 
@@ -92,16 +90,7 @@ async function verifySolutionPage(
                 sourceMatch = html.match(/class="[^"]*program-source[^"]*"[^>]*>([\s\S]*?)<\/pre>/);
             }
 
-            if (!sourceMatch) {
-                const allPres = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/g);
-                if (allPres) {
-                    const content = allPres.map(p => p.match(/<pre[^>]*>([\s\S]*?)<\/pre>/)?.[1] || "")
-                        .sort((a, b) => b.length - a.length)[0];
-                    if (content.length > 50) {
-                        sourceMatch = [null, content] as any;
-                    }
-                }
-            }
+            // Don't fall back to random <pre> tags — only trust program-source markers
 
             if (sourceMatch && sourceMatch[1].trim().length > 20) {
                 const authorMatch = html.match(/\/profile\/([^"]+)"/);

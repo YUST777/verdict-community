@@ -1,16 +1,38 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
-// We reuse the basic shape of messages and tabs from AIAgentPanel
-export function useAIChatPersistence(problemId: string, isAuthenticated: boolean = false, initialTabs: any[] = [{ id: 'default', label: 'Chat 1' }], onAuthError?: () => void) {
+/**
+ * useAIChatPersistence — Hybrid cloud persistence for AI chat.
+ *
+ * PRIMARY source of truth: normalized `ai_conversations` + `ai_messages` tables
+ * (loaded via GET /api/ai/chat/history, saved via POST /api/ai/chat/history).
+ *
+ * SECONDARY backup: the JSONB blob in `user_workspaces` (debounced 2s via POST /api/workspace/sync).
+ * This acts as a fallback if the normalized tables are empty (e.g. existing users
+ * who already have JSONB data from before the migration).
+ *
+ * On mount:
+ *   1. Try normalized API → if data exists, use it.
+ *   2. Else, try workspace JSONB → if data exists, use it AND migrate to normalized.
+ *   3. Else, start fresh.
+ *
+ * On message send:
+ *   - Fire-and-forget POST to /api/ai/chat/history (individual message, normalized).
+ *   - Debounced POST to /api/workspace/sync (full JSONB blob, backup).
+ */
+export function useAIChatPersistence(
+    problemId: string,
+    isAuthenticated: boolean = false,
+    initialTabs: any[] = [{ id: 'default', label: 'Chat 1' }],
+    onAuthError?: () => void
+) {
     const [messagesByTab, setMessagesByTab] = useState<Record<string, any[]>>({ 'default': [] });
     const [conceptsByTab, setConceptsByTab] = useState<Record<string, any[]>>({ 'default': [] });
     const [inputByTab, setInputByTab] = useState<Record<string, string>>({ 'default': '' });
     const [chatTabs, setChatTabs] = useState<any[]>(initialTabs);
     const [isLoaded, setIsLoaded] = useState(false);
 
-    // We use refs to avoid triggering effect cycles and track latest values for debouncing
     const messagesRef = useRef(messagesByTab);
     const conceptsRef = useRef(conceptsByTab);
     const inputRef = useRef(inputByTab);
@@ -26,61 +48,92 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
         tabsRef.current = chatTabs;
     }, [messagesByTab, conceptsByTab, inputByTab, chatTabs]);
 
-    // Initial load from cloud (fallback to local storage for guest mode)
+    // ── Load on mount ────────────────────────────────────────────────
     useEffect(() => {
         if (!problemId) return;
 
         let isMounted = true;
 
         const loadData = async () => {
-            try {
-                // 1. Try to load from Supabase ONLY if authenticated
-                if (isAuthenticated) {
-                    const response = await fetch(`/api/workspace/sync?problemId=${problemId}`);
-                    if (response.ok) {
-                        const json = await response.json();
-                        if (json.data) {
-                            if (isMounted) {
-                                if (json.data.ai_chat_tabs) {
-                                    setChatTabs(json.data.ai_chat_tabs);
-                                }
-                                if (json.data.ai_chat_messages) {
-                                    // Hydrate dates manually
-                                    const parsedMsgs = json.data.ai_chat_messages;
-                                    const hydratedRecord: Record<string, any[]> = {};
-                                    for (const tabId in parsedMsgs) {
-                                        hydratedRecord[tabId] = (parsedMsgs[tabId] || []).map((m: any) => ({
-                                            ...m,
-                                            timestamp: new Date(m.timestamp)
-                                        }));
-                                    }
-                                    setMessagesByTab(hydratedRecord);
-                                }
-                                if (json.data.ai_chat_concepts) {
-                                    setConceptsByTab(json.data.ai_chat_concepts);
-                                }
-                                if (json.data.ai_chat_inputs) {
-                                    setInputByTab(json.data.ai_chat_inputs);
-                                }
-                                setIsLoaded(true);
-                                return; // Successfully loaded from cloud
-                            }
-                        }
-                    } else if (response.status === 401) {
-                        // Session might have expired but Main Auth context hasn't reacted yet
-                        // We don't trigger onAuthError here to avoid loops during mount, 
-                        // we just let it fall back to local storage.
-                        console.warn('[AIChat Sync] 401 during initial load, falling back to local');
-                    }
-                }
-            } catch (err: any) {
-                console.error('[AIChat Sync] Load error:', err?.message || err);
+            if (!isAuthenticated) {
+                if (isMounted) setIsLoaded(true);
+                return;
             }
 
-            // 2. Default fallback for unauthenticated or first-time cloud users
-            if (isMounted) {
-                setIsLoaded(true);
+            try {
+                // === Step 1: Try normalized tables ===
+                const histRes = await fetch(`/api/ai/chat/history?problemId=${problemId}`);
+
+                if (histRes.ok) {
+                    const histData = await histRes.json();
+
+                    // If we have tabs with messages from normalized tables, use them
+                    if (histData.tabs?.length > 0) {
+                        const hasAnyMessages = Object.values(histData.messagesByTab || {}).some(
+                            (msgs: any) => Array.isArray(msgs) && msgs.length > 0
+                        );
+
+                        if (hasAnyMessages && isMounted) {
+                            setChatTabs(histData.tabs);
+                            // Hydrate timestamps
+                            const hydrated: Record<string, any[]> = {};
+                            for (const tabId in histData.messagesByTab) {
+                                hydrated[tabId] = (histData.messagesByTab[tabId] || []).map((m: any) => ({
+                                    ...m,
+                                    timestamp: new Date(m.timestamp)
+                                }));
+                            }
+                            setMessagesByTab(hydrated);
+                            setIsLoaded(true);
+                            return; // Successfully loaded from normalized tables
+                        }
+                    }
+                } else if (histRes.status === 401) {
+                    console.warn('[AIChat] 401 from normalized history, falling back');
+                }
+
+                // === Step 2: Fallback to workspace JSONB ===
+                const wsRes = await fetch(`/api/workspace/sync?problemId=${problemId}`);
+
+                if (wsRes.ok) {
+                    const wsData = await wsRes.json();
+                    if (wsData.data && isMounted) {
+                        const data = wsData.data;
+                        if (data.ai_chat_tabs) {
+                            setChatTabs(data.ai_chat_tabs);
+                        }
+                        if (data.ai_chat_messages) {
+                            const hydratedRecord: Record<string, any[]> = {};
+                            for (const tabId in data.ai_chat_messages) {
+                                hydratedRecord[tabId] = (data.ai_chat_messages[tabId] || []).map((m: any) => ({
+                                    ...m,
+                                    timestamp: new Date(m.timestamp)
+                                }));
+                            }
+                            setMessagesByTab(hydratedRecord);
+
+                            // === Migrate JSONB data to normalized tables (fire-and-forget) ===
+                            const tabs = data.ai_chat_tabs || initialTabs;
+                            migrateJsonbToNormalized(problemId, tabs, hydratedRecord);
+                        }
+                        if (data.ai_chat_concepts) {
+                            setConceptsByTab(data.ai_chat_concepts);
+                        }
+                        if (data.ai_chat_inputs) {
+                            setInputByTab(data.ai_chat_inputs);
+                        }
+                        setIsLoaded(true);
+                        return;
+                    }
+                } else if (wsRes.status === 401) {
+                    console.warn('[AIChat] 401 from workspace sync');
+                }
+            } catch (err: any) {
+                console.error('[AIChat] Load error:', err?.message || err);
             }
+
+            // === Step 3: Nothing found, start fresh ===
+            if (isMounted) setIsLoaded(true);
         };
 
         loadData();
@@ -91,18 +144,15 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
         };
     }, [problemId, isAuthenticated]);
 
-    // Save changes to cloud (debounced)
+    // ── Debounced JSONB backup save ──────────────────────────────────
     useEffect(() => {
         if (!isLoaded || !problemId) return;
         if (isFirstLoad.current) {
             isFirstLoad.current = false;
             return;
         }
-
-        // Skip cloud sync if not authenticated
         if (!isAuthenticated) return;
 
-        // Debounced Cloud Save
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
         saveTimeoutRef.current = setTimeout(async () => {
@@ -125,14 +175,66 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
                     onAuthError?.();
                 } else if (!response.ok) {
                     const body = await response.text().catch(() => '');
-                    console.warn(`[AIChat Sync] Save failed (${response.status}):`, body || 'empty response');
+                    console.warn(`[AIChat Backup] Save failed (${response.status}):`, body || 'empty');
                 }
             } catch (err: any) {
-                console.error('[AIChat Sync] Save exception:', err?.message || err);
+                console.error('[AIChat Backup] Save exception:', err?.message || err);
             }
-        }, 1500); // 1.5s debounce to batch character streams optimally
+        }, 2000); // 2s debounce for backup
 
     }, [messagesByTab, chatTabs, conceptsByTab, inputByTab, problemId, isLoaded, isAuthenticated]);
+
+    // ── saveMessage: persist a single message to normalized tables ───
+    const saveMessage = useCallback((
+        tabId: string,
+        tabLabel: string,
+        message: {
+            id: string;
+            role: string;
+            content: string;
+            contextType?: string;
+            codeBlock?: any;
+            sources?: any[];
+            videoScript?: any;
+        }
+    ) => {
+        if (!isAuthenticated || !problemId) return;
+
+        // Fire-and-forget — don't block UI
+        fetch('/api/ai/chat/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                problemId,
+                tabId,
+                tabLabel,
+                message: {
+                    id: message.id,
+                    role: message.role,
+                    content: message.content,
+                    contextType: message.contextType || 'chat',
+                    ...(message.codeBlock ? { codeBlock: message.codeBlock } : {}),
+                    ...(message.sources ? { sources: message.sources } : {}),
+                    ...(message.videoScript ? { videoScript: message.videoScript } : {}),
+                }
+            })
+        }).catch(err => {
+            console.warn('[AIChat] Failed to persist message:', err?.message || err);
+        });
+    }, [isAuthenticated, problemId]);
+
+    // ── deleteConversation: remove a tab from normalized tables ──────
+    const deleteConversation = useCallback((tabId: string) => {
+        if (!isAuthenticated || !problemId) return;
+
+        fetch('/api/ai/chat/history', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ problemId, tabId })
+        }).catch(err => {
+            console.warn('[AIChat] Failed to delete conversation:', err?.message || err);
+        });
+    }, [isAuthenticated, problemId]);
 
     return {
         messagesByTab,
@@ -143,6 +245,44 @@ export function useAIChatPersistence(problemId: string, isAuthenticated: boolean
         setInputByTab,
         chatTabs,
         setChatTabs,
-        isLoaded
+        isLoaded,
+        saveMessage,
+        deleteConversation
     };
+}
+
+/**
+ * One-time migration: takes JSONB blob data and writes each message
+ * into the normalized tables. Fire-and-forget.
+ */
+function migrateJsonbToNormalized(
+    problemId: string,
+    tabs: { id: string; label: string }[],
+    messagesByTab: Record<string, any[]>
+) {
+    for (const tab of tabs) {
+        const msgs = messagesByTab[tab.id] || [];
+        for (const msg of msgs) {
+            if (!msg.content && !msg.sources) continue; // skip empty
+
+            fetch('/api/ai/chat/history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    problemId,
+                    tabId: tab.id,
+                    tabLabel: tab.label,
+                    message: {
+                        id: msg.id || `migrated-${Date.now()}-${Math.random()}`,
+                        role: msg.role || 'user',
+                        content: msg.content || '',
+                        contextType: 'chat',
+                        ...(msg.codeBlock ? { codeBlock: msg.codeBlock } : {}),
+                        ...(msg.sources ? { sources: msg.sources } : {}),
+                        ...(msg.videoScript ? { videoScript: msg.videoScript } : {}),
+                    }
+                })
+            }).catch(() => { /* fire and forget */ });
+        }
+    }
 }

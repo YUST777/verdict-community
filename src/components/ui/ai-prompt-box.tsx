@@ -37,7 +37,7 @@ const TooltipContent = React.forwardRef<
         ref={ref}
         sideOffset={sideOffset}
         className={cn(
-            "z-50 overflow-hidden rounded-md border border-[#333333] bg-[#1F2023] px-3 py-1.5 text-xs text-white shadow-md animate-in fade-in-0 zoom-in-95",
+            "z-50 overflow-hidden rounded-md border border-white/[0.06] bg-[#1a1a1a] px-3 py-1.5 text-xs text-white shadow-md animate-in fade-in-0 zoom-in-95",
             className
         )}
         {...props}
@@ -68,11 +68,11 @@ const DialogContent = React.forwardRef<
         <DialogOverlay />
         <DialogPrimitive.Content
             ref={ref}
-            className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-[90vw] md:max-w-[800px] translate-x-[-50%] translate-y-[-50%] gap-4 border border-[#333333] bg-[#1F2023] p-0 shadow-xl duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out rounded-2xl", className)}
+            className={cn("fixed left-[50%] top-[50%] z-50 grid w-full max-w-[90vw] md:max-w-[800px] translate-x-[-50%] translate-y-[-50%] gap-4 border border-white/[0.06] bg-[#1a1a1a] p-0 shadow-xl duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out rounded-2xl", className)}
             {...props}
         >
             {children}
-            <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-full bg-[#2E3033]/80 p-2 hover:bg-[#2E3033] transition-all">
+            <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-full bg-white/[0.06] p-2 hover:bg-white/[0.10] transition-all">
                 <X className="h-5 w-5 text-gray-200" />
                 <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
@@ -121,7 +121,7 @@ const ImageViewDialog: React.FC<{ imageUrl: string | null; onClose: () => void }
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
-                    className="relative bg-[#1F2023] rounded-2xl overflow-hidden shadow-2xl"
+                    className="relative bg-[#1a1a1a] rounded-xl overflow-hidden shadow-2xl"
                 >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imageUrl} alt="Full preview" className="w-full max-h-[80vh] object-contain rounded-2xl" />
@@ -167,7 +167,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 <PromptInputContext.Provider value={{ isLoading, value: value ?? internalValue, setValue: onValueChange ?? handleChange, maxHeight, onSubmit, disabled }}>
                     <div
                         ref={ref}
-                        className={cn("rounded-2xl border border-white/10 bg-[#16161c] p-2 transition-all duration-300", isLoading && "border-white/20", className)}
+                        className={cn("rounded-2xl border border-white/[0.06] bg-[#1a1a1a] p-2 transition-all duration-300", isLoading && "border-white/[0.08]", className)}
                         onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
                     >
                         {children}
@@ -301,7 +301,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                         {files.map((file, index) => (
                             <div key={index} className="relative group">
                                 {isImageFile(file) && filePreviews[file.name] && (
-                                    <div className="w-14 h-14 rounded-xl overflow-hidden cursor-pointer border border-white/10" onClick={() => setSelectedImage(filePreviews[file.name])}>
+                                    <div className="w-14 h-14 rounded-xl overflow-hidden cursor-pointer border border-white/[0.06]" onClick={() => setSelectedImage(filePreviews[file.name])}>
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img src={filePreviews[file.name]} alt={file.name} className="h-full w-full object-cover" />
                                         <button onClick={(e) => { e.stopPropagation(); setFiles([]); setFilePreviews({}); }} className="absolute top-1 right-1 rounded-full bg-black/70 p-0.5">
@@ -348,7 +348,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                                 whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={onOpenResources}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400"
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-[#2cbb5d]/10 hover:bg-[#2cbb5d]/15 border border-[#2cbb5d]/20 text-[#2cbb5d]"
                             >
                                 <Library className="w-3.5 h-3.5" />
                                 <span>Resources</span>
@@ -363,7 +363,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                                 type="button"
                                 onClick={onTeachMe}
                                 disabled={isTutorLoading || isTutorActive || isLoading}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-[#2cbb5d]/10 hover:bg-[#2cbb5d]/15 border border-[#2cbb5d]/20 text-[#2cbb5d] ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isTutorLoading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
                                 <span>Teach Me</span>
@@ -395,7 +395,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                                     <PButton
                                         variant="default"
                                         size="icon"
-                                        className="h-7 w-7 transition-all duration-200 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
+                                        className="h-7 w-7 transition-all duration-200 bg-[#ef4743]/10 hover:bg-[#ef4743]/15 text-[#ef4743] border border-[#ef4743]/20"
                                         onClick={(e) => {
                                             e.preventDefault();
                                             onStop?.();

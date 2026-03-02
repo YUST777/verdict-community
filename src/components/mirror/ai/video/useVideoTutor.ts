@@ -30,7 +30,7 @@ export function useVideoTutor({
             addMessage({
                 id: Date.now().toString(),
                 role: 'assistant',
-                content: settings.language === 'ar' ? 'برجاء إعداد الـ LLM الخاص بك في الإعدادات أولاً.' : 'Please configure your LLM in Settings first.',
+                content: settings.language === 'ar' ? 'اعمل إعداد للنموذج في الإعدادات الأول.' : 'Please configure your LLM in Settings first.',
                 timestamp: new Date()
             }, tabId);
             return;
@@ -49,7 +49,7 @@ export function useVideoTutor({
         addMessage({
             id: videoMsgId,
             role: 'assistant',
-            content: `<think>\nGenerating line-by-line video explanation script...\n</think>\n\n🎬 *${settings.language === 'ar' ? 'بجهز فيديو شرح المسألة...' : 'Preparing video explanation...'}*`,
+            content: `<think>\n${settings.language === 'ar' ? 'توليد سيناريو فيديو لشرح الكود سطراً سطراً...' : 'Generating line-by-line video explanation script...'}\n</think>\n\n🎬 *${settings.language === 'ar' ? 'بجهز فيديو شرح المسألة...' : 'Preparing video explanation...'}*`,
             timestamp: new Date()
         }, tabId);
 
@@ -94,16 +94,16 @@ export function useVideoTutor({
                 }))
             };
 
-            updateMessage(videoMsgId, `<think>\nVideo script generated successfully via API.\n</think>\n\n🎥 ${settings.language === 'ar' ? 'الفيديو جاهز للمراجعة!' : 'Your video explanation is ready!'}`, videoScript, tabId);
+            updateMessage(videoMsgId, `<think>\n${settings.language === 'ar' ? 'تم توليد سيناريو الفيديو بنجاح.' : 'Video script generated successfully via API.'}\n</think>\n\n🎥 ${settings.language === 'ar' ? 'الفيديو جاهز للمراجعة!' : 'Your video explanation is ready!'}`, videoScript, tabId);
 
         } catch (err: any) {
             if (err.name === 'AbortError' || err.message === 'signal is aborted without reason') {
-                updateMessage(videoMsgId, settings.language === 'ar' ? 'تم إيقاف توليد الفيديو.' : `Video generation stopped.`, undefined, tabId);
+                updateMessage(videoMsgId, settings.language === 'ar' ? 'توليد الفيديو اتوقف.' : `Video generation stopped.`, undefined, tabId);
             } else {
                 addMessage({
                     id: `err-video-${Date.now()}`,
                     role: 'assistant',
-                    content: (settings.language === 'ar' ? 'خطأ في توليد الفيديو: ' : 'Video Generation Error: ') + err.message,
+                    content: (settings.language === 'ar' ? 'غلط في توليد الفيديو: ' : 'Video Generation Error: ') + err.message,
                     timestamp: new Date()
                 }, tabId);
             }

@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import Image from 'next/image';
 import { Navbar, Footer } from '@/components/landing';
 
 export default function PrivacyPolicy() {

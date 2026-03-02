@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # One-command run: build and start the full Verdict stack (standalone Docker).
-# Run from repo root: ./scripts/run-docker.sh
+# Run from repo root: ./scripts/docker/run-docker.sh
 
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 if [ ! -f .env ]; then
     echo "No .env found. Copying .env.example to .env (set Supabase + DATABASE_URL for full functionality)."

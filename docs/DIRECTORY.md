@@ -79,6 +79,9 @@ Where heavy JavaScript algorithmic logic acts separated from visual React code.
 
 ## 5. Standalone Scripts (`scripts/`)
 DevOps/Maintenance scripts completely removed from normal User Web Server execution.
-* `vcl` - Developer CLI (e.g. `vcl rebuild`, `vcl logs`).
-* `migrate_rls.js` - PostgreSQL migration logic bootstrapping Supabase Row Level Security configurations.
-* `migrate_supabase.js` - Legacy migration driver transferring older data to unified Supabase schema.
+
+* **Root** – `vcl` (developer CLI: `./scripts/vcl status`, `vcl logs`, `vcl rebuild`), `convert_images.py`.
+* **`docker/`** – `run-docker.sh`, `nuke-icpchue.sh`, `nuke-logs.js`.
+* **`migrate/`** – `migrate_rls.js`, `migrate_supabase.js`, `migrate_ai_chat.js`, `migrate_linter_fixes.js`, `fix_user_tabs_table.js`.
+* **`release/`** – `push-release.sh` (push main and tag to GitHub with `GITHUB_TOKEN`).
+* **`test/`** – Ad-hoc tests: `test_frontend.ts`, `test_google_tts.ts`, `test_new_tts_key.js`, `test_video_api.ts`, `test-renderer.js`, `test_trailing_slash.js`.

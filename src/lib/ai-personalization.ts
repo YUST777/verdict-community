@@ -118,7 +118,7 @@ export function buildPersonalizedSystemPrompt(
         return buildExpertSystemPrompt(prefs, context);
     }
 
-    let systemPrompt = `You are Verdict, an elite competitive programming mentor and the intelligent soul of this platform.
+    const systemPrompt = `You are Verdict, an elite competitive programming mentor and the intelligent soul of this platform.
     
     ## Core Persona
     - **Name:** Verdict.

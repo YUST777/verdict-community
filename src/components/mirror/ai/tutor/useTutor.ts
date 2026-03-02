@@ -64,6 +64,49 @@ const SMART_MODE_RULES = `STRICT RULES — Use an EXPERT TEACHING approach:
 
 CRITICAL: The "solution" must contain ZERO comments. No // comments, no /* */ comments, no # comments. Not a single comment anywhere. Pure code only.`;
 
+/**
+ * Extract partial "thinking" text from an incomplete/streaming JSON string.
+ * Uses simple indexOf to find the "thinking" key and extracts the value
+ * so far, handling escaped characters. Works on partial JSON.
+ */
+function extractPartialThinking(raw: string): string | null {
+    const tKey = '"thinking"';
+    const tIdx = raw.indexOf(tKey);
+    if (tIdx === -1) return null;
+
+    // Find the opening quote of the value
+    let vStart = raw.indexOf('"', tIdx + tKey.length + 1); // skip past ":"
+    if (vStart === -1) return null;
+    vStart += 1; // move past the quote
+
+    // Walk forward, unescaping as we go, until we hit the closing quote or end of string
+    let result = '';
+    let i = vStart;
+    while (i < raw.length) {
+        const ch = raw[i];
+        if (ch === '\\' && i + 1 < raw.length) {
+            const next = raw[i + 1];
+            if (next === 'n') { result += '\n'; i += 2; continue; }
+            if (next === 'r') { result += '\r'; i += 2; continue; }
+            if (next === 't') { result += '\t'; i += 2; continue; }
+            if (next === '"') { result += '"'; i += 2; continue; }
+            if (next === '\\') { result += '\\'; i += 2; continue; }
+            // Unknown escape — just keep both chars
+            result += ch + next;
+            i += 2;
+            continue;
+        }
+        if (ch === '"') {
+            // Closing quote — we're done
+            break;
+        }
+        result += ch;
+        i++;
+    }
+
+    return result.length > 0 ? result : null;
+}
+
 export function useTutor({
     problemId,
     language,
@@ -177,11 +220,16 @@ export function useTutor({
 
             const referenceStatusAr = referenceStatus.includes('Verified') ? 'لقيت حل مرجعي. هستخدمه كمرجع.' : 'مفيش حل مرجعي. هحلها من أول وجديد.';
             const languageInstruction = isArabic
-                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Egyptian Arabic (عامية مصرية). Use natural Egyptian dialect — not formal Arabic (فصحى). The "solution" code itself stays in the programming language (C++/etc), but the "explanation" and "thinking" fields MUST be in Egyptian colloquial. CRITICAL FORMATTING: Whenever you mix English variables, numbers, formulas, or code (e.g. O(N), vector, 10^5) inside the Arabic text, enclose them in markdown backticks (e.g. `O(N)` or `dp[i]`) so direction renders correctly.'
+                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Egyptian Arabic (عامية مصرية). Use natural Egyptian dialect — not formal Arabic (فصحى). The "solution" code itself stays in the programming language (C++/etc), but the "explanation", "thinking", and "approach" fields MUST ALL be in Egyptian colloquial Arabic. CRITICAL FORMATTING: Whenever you mix English variables, numbers, formulas, or code (e.g. O(N), vector, 10^5) inside the Arabic text, enclose them in markdown backticks (e.g. `O(N)` or `dp[i]`) so direction renders correctly.'
                 : '';
 
             updateMessage(thinkMsgId, `<think>\n${isArabic ? 'قراءة المسألة...\n' + referenceStatusAr + '\nبحدد القيود والكيسات الصعبة...' : 'Reading the problem...\n' + referenceStatus + '\nIdentifying constraints and edge cases...'}\n</think>\n\n*${isArabic ? 'بقرا المسألة وبجهز المكونات...' : 'Reading the problem and gathering ingredients...'}*`, undefined, tabId);
             await new Promise(r => setTimeout(r, 400));
+
+            // Build the thinking field description based on language
+            const thinkingFieldDesc = isArabic
+                ? 'تحليل تقني مباشر ومختصر بالعامية المصرية. اشرح الخوارزمية الأساسية، تعقيد الوقت والمساحة، والحالات الحدية. اكتب بالعامية المصرية مش فصحى. لما تستخدم مصطلحات إنجليزية حطها في backticks.'
+                : 'A strictly technical, straightforward, and concise analysis. Detail the core algorithm, time and space complexity, and specific edge case considerations (e.g., negative integers, large inputs, empty sets). Omit all conversational filler, personality, or metaphors. Focus purely on engineering logic.';
 
             const systemPrompt = `You are an elite competitive programming tutor helping a ${isSimple ? 'beginner' : 'skilled programmer'}. You are passionate, slightly quirky, and love 'cooking up' brilliant solutions. You have a lot of 'soul' and personality.
 
@@ -194,7 +242,7 @@ You MUST respond with ONLY valid JSON (no markdown, no backticks wrapping). You 
 **OPTION 1: Standard Solution (Use this 95% of the time)**
 If the algorithm is clear or you are confident in your logic, return the full solution:
 {
-  "thinking": "A strictly technical, straightforward, and concise analysis. Detail the core algorithm, time and space complexity, and specific edge case considerations (e.g., negative integers, large inputs, empty sets). Omit all conversational filler, personality, or metaphors. Focus purely on engineering logic.",
+  "thinking": "${thinkingFieldDesc}",
   "solution": "The complete, compilable source code as a single string WITH ABSOLUTELY ZERO COMMENTS. MUST be valid C++ with semicolons after structs/classes.",
   "approach": "Brief explanation of the approach (1-2 sentences).",
   "explanation": "A conversational explanation directed at the user outside the thinking block. Start with an engaging intro (e.g., 'Alright, let's cook up this solution!' or something similar), explain the core logic clearly, and talk about how it works.",
@@ -280,6 +328,10 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 let rawContent = '';
                 let finishReason = null;
 
+                // Throttle UI updates to avoid excessive re-renders
+                let lastUIUpdate = 0;
+                const UI_UPDATE_INTERVAL = 150; // ms between UI updates
+
                 let buffer = '';
                 if (reader) {
                     while (true) {
@@ -306,34 +358,21 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             }
                         }
 
-                        // Parse out partial 'content' and 'thinking' using pure linear string matching (avoiding regex catastrophic backtracking)
-                        let partialContent = '';
-                        if (buffer.trim()) {
-                            const cKey = '"content":';
-                            const cIdx = buffer.indexOf(cKey);
-                            if (cIdx !== -1) {
-                                let cStart = buffer.indexOf('"', cIdx + cKey.length);
-                                if (cStart !== -1) {
-                                    cStart += 1;
-                                    let cEnd = cStart;
-                                    while (cEnd < buffer.length && !(buffer[cEnd] === '"' && buffer[cEnd - 1] !== '\\')) cEnd++;
-                                    partialContent = buffer.substring(cStart, cEnd).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-                                }
-                            }
-                        }
-
-                        const streamedSoFar = rawContent + partialContent;
-                        const tKey = '"thinking":';
-                        const tIdx = streamedSoFar.indexOf(tKey);
-                        if (tIdx !== -1) {
-                            let tStart = streamedSoFar.indexOf('"', tIdx + tKey.length);
-                            if (tStart !== -1) {
-                                tStart += 1;
-                                let tEnd = tStart;
-                                while (tEnd < streamedSoFar.length && !(streamedSoFar[tEnd] === '"' && streamedSoFar[tEnd - 1] !== '\\')) tEnd++;
-                                const partialThink = streamedSoFar.substring(tStart, tEnd).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                        // Real-time streaming: extract partial thinking from rawContent on every chunk
+                        const now = Date.now();
+                        if (rawContent.length > 0 && (now - lastUIUpdate) >= UI_UPDATE_INTERVAL) {
+                            lastUIUpdate = now;
+                            const partialThink = extractPartialThinking(rawContent);
+                            if (partialThink && partialThink.length > 5) {
                                 updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n*${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
                             }
+                        }
+                    }
+                    // Final UI update after stream ends — show the full thinking
+                    if (rawContent.length > 0) {
+                        const finalPartialThink = extractPartialThinking(rawContent);
+                        if (finalPartialThink && finalPartialThink.length > 5) {
+                            updateMessage(thinkMsgId, `<think>\n${finalPartialThink}\n</think>\n\n*${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
                         }
                     }
                     if (!rawContent && buffer.trim().startsWith('{')) {

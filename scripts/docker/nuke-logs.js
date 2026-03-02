@@ -17,7 +17,7 @@ function nukeLogs(dir) {
         if (stat.isDirectory()) {
             nukeLogs(fullPath);
         } else if (EXTENSIONS.includes(path.extname(fullPath))) {
-            let content = fs.readFileSync(fullPath, 'utf8');
+            const content = fs.readFileSync(fullPath, 'utf8');
 
             // Regex to find console.log(...) calls
             // handles simple nested parenthesis: console.log(fn(a))

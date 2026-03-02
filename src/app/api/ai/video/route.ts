@@ -263,7 +263,16 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
         };
 
         // ── Find total lines of code for highlight clamping ─────────────
-        const totalCodeLines = solution ? solution.split('\n').length : 999;
+        // Use the LLM's own code field (from the first code scene) as the source
+        // of truth, NOT the original solution. The LLM often reformats code with
+        // different line counts, and clamping against the original solution's line
+        // count truncates highlights (e.g. stuck at line 9 if original had 9 lines).
+        const firstCodeScene = (parsed.scenes as Array<Record<string, unknown>>).find(
+            (s: Record<string, unknown>) => s.type === 'code' && typeof s.code === 'string' && s.code.length > 0
+        );
+        const totalCodeLines = firstCodeScene
+            ? (firstCodeScene.code as string).split('\n').length
+            : (solution ? solution.split('\n').length : 999);
 
         // Validate and fix common issues
         const validTypes = ['title', 'problem', 'concept', 'code', 'summary'];
@@ -287,6 +296,12 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
                     }
                 }
 
+                // For code scenes, compute line count from this scene's own code field
+                // to handle cases where different code scenes have slightly different code
+                const sceneCodeLines = scene.type === 'code' && typeof scene.code === 'string'
+                    ? (scene.code as string).split('\n').length
+                    : totalCodeLines;
+
                 return {
                     ...scene,
                     id: scene.id || `scene-${idx}`,
@@ -302,8 +317,8 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
                         code: scene.code || '',
                         highlight: Array.isArray(scene.highlight) && scene.highlight.length === 2
                             ? [
-                                Math.max(1, Math.min(totalCodeLines, Math.min(scene.highlight[0], scene.highlight[1]))),
-                                Math.max(1, Math.min(totalCodeLines, Math.max(scene.highlight[0], scene.highlight[1])))
+                                Math.max(1, Math.min(sceneCodeLines, Math.min(scene.highlight[0], scene.highlight[1]))),
+                                Math.max(1, Math.min(sceneCodeLines, Math.max(scene.highlight[0], scene.highlight[1])))
                             ]
                             : undefined
                     } : {})
@@ -364,7 +379,7 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
             throw new Error('No valid scenes were generated');
         }
 
-        await query('UPDATE public.users SET tts_video_count = COALESCE(tts_video_count, 0) + 1 WHERE id = $1', [auth.user!.id]);
+        await query('UPDATE public.users SET tts_video_count = COALESCE(tts_video_count, 0) + 1 WHERE id = $1', [user.id]);
 
         return NextResponse.json(parsed);
 

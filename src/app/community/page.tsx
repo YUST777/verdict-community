@@ -1,11 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function CommunityRedirect() {
-    const router = useRouter();
-
     useEffect(() => {
         window.location.href = 'https://t.me/verdict_run_chat';
     }, []);

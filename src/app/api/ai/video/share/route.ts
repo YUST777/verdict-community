@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         const id = result.rows[0].id;
 
         return NextResponse.json({ id, url: `/video/${id}` });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Video Share Error]', error);
         return NextResponse.json({ error: 'Failed to create share link' }, { status: 500 });
     }

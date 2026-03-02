@@ -14,23 +14,19 @@ const STORAGE_KEY = 'verdict-cf-handle';
  * Hook to get Codeforces handle from multiple sources:
  * 1. Extension (if available)
  * 2. API (user's saved handle in DB)
- * 3. localStorage (user's manually entered handle)
+ * 3. localStorage (fallback for logged-out users)
  */
 export function useCodeforcesHandle(): UseCodeforcesHandleReturn {
     const [handle, setHandleState] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Save handle to localStorage
     const saveToLocalStorage = useCallback((cfHandle: string) => {
         try {
             localStorage.setItem(STORAGE_KEY, cfHandle);
-        } catch (e) {
-            console.warn('Failed to save handle to localStorage', e);
-        }
+        } catch {}
     }, []);
 
-    // Load handle from localStorage
     const loadFromLocalStorage = useCallback((): string | null => {
         try {
             return localStorage.getItem(STORAGE_KEY);
@@ -39,18 +35,14 @@ export function useCodeforcesHandle(): UseCodeforcesHandleReturn {
         }
     }, []);
 
-    // Get handle from extension
     const getHandleFromExtension = useCallback(async (): Promise<string | null> => {
         return new Promise((resolve) => {
-            // Check if extension is available
             if (!document.getElementById('verdict-extension-installed')) {
                 resolve(null);
                 return;
             }
 
             let resolved = false;
-
-            // Set timeout in case extension doesn't respond
             const timeout = setTimeout(() => {
                 if (!resolved) {
                     resolved = true;
@@ -59,7 +51,6 @@ export function useCodeforcesHandle(): UseCodeforcesHandleReturn {
                 }
             }, 2000);
 
-            // Listen for extension response
             const messageHandler = (event: MessageEvent) => {
                 if (event.source !== window) return;
                 if (event.data?.type === 'VERDICT_HANDLE_RESPONSE') {
@@ -73,15 +64,10 @@ export function useCodeforcesHandle(): UseCodeforcesHandleReturn {
             };
 
             window.addEventListener('message', messageHandler);
-
-            // Request handle from extension
-            window.postMessage({
-                type: 'VERDICT_GET_HANDLE'
-            }, '*');
+            window.postMessage({ type: 'VERDICT_GET_HANDLE' }, '*');
         });
     }, []);
 
-    // Get handle from API
     const getHandleFromAPI = useCallback(async (): Promise<string | null> => {
         try {
             const res = await fetch('/api/user/cf-handle');
@@ -93,7 +79,16 @@ export function useCodeforcesHandle(): UseCodeforcesHandleReturn {
         }
     }, []);
 
-    // Refresh handle from all sources
+    const saveHandleToDB = useCallback(async (cfHandle: string) => {
+        try {
+            await fetch('/api/user/cf-handle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ handle: cfHandle }),
+            });
+        } catch {}
+    }, []);
+
     const refreshHandle = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -101,56 +96,49 @@ export function useCodeforcesHandle(): UseCodeforcesHandleReturn {
         try {
             // Try extension first
             let cfHandle = await getHandleFromExtension();
-            
-            // Try API if extension didn't provide handle
+
+            // Try DB
             if (!cfHandle) {
                 cfHandle = await getHandleFromAPI();
             }
 
-            // Try localStorage if API didn't provide handle
+            // Try localStorage fallback
             if (!cfHandle) {
                 cfHandle = loadFromLocalStorage();
+                // If found in localStorage but not DB, save to DB
+                if (cfHandle) {
+                    saveHandleToDB(cfHandle);
+                }
             }
 
             if (cfHandle) {
                 setHandleState(cfHandle);
-                // Save to localStorage for future use
                 saveToLocalStorage(cfHandle);
             } else {
                 setHandleState(null);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to get handle');
-            // Fallback to localStorage
             const localHandle = loadFromLocalStorage();
-            if (localHandle) {
-                setHandleState(localHandle);
-            }
+            if (localHandle) setHandleState(localHandle);
         } finally {
             setLoading(false);
         }
-    }, [getHandleFromExtension, getHandleFromAPI, loadFromLocalStorage, saveToLocalStorage]);
+    }, [getHandleFromExtension, getHandleFromAPI, loadFromLocalStorage, saveToLocalStorage, saveHandleToDB]);
 
-    // Set handle manually (from user input)
+    // Set handle manually (from user input) — saves to both DB and localStorage
     const setHandle = useCallback((cfHandle: string) => {
         const trimmed = cfHandle.trim();
         if (trimmed) {
             setHandleState(trimmed);
             saveToLocalStorage(trimmed);
+            saveHandleToDB(trimmed);
         }
-    }, [saveToLocalStorage]);
+    }, [saveToLocalStorage, saveHandleToDB]);
 
-    // Load handle on mount
     useEffect(() => {
         refreshHandle();
     }, [refreshHandle]);
 
-    return {
-        handle,
-        loading,
-        error,
-        setHandle,
-        refreshHandle
-    };
+    return { handle, loading, error, setHandle, refreshHandle };
 }
-

@@ -44,3 +44,6 @@ next-env.d.ts
 
 # supabase local (keep supabase/ in repo for migrations/schema)
 # supabase/
+
+# External skill templates
+antigravity-awesome-skills/

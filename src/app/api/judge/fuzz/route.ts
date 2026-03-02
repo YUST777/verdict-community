@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
         const languageId = JUDGE0_LANGUAGE_MAP[normalizedLang] || 54; // default to C++ 
 
-        const extractStdin = (tc: any): string => {
+        const extractStdin = (tc: { input?: string } | string): string => {
             if (typeof tc === 'object' && tc !== null) {
                 return String(tc.input ?? '');
             }
@@ -59,20 +59,19 @@ export async function POST(request: Request) {
         if (!aiRes.ok) throw new Error('Failed to submit AI solution to Judge0');
         const aiTokens = await aiRes.json();
 
-        // 3. Poll for results 
-        const fetchResults = async (tokens: any[]) => {
-            const tokenString = tokens.map((t: any) => t.token).join(',');
-            let allFinished = false;
-            let results = [];
+        // 3. Poll for results (reduced iterations so fuzz doesn't stretch to minutes)
+        const fetchResults = async (tokens: { token?: string }[]): Promise<{ status_id?: number; stdout?: string; stderr?: string; compile_output?: string }[]> => {
+            const tokenString = tokens.map((t: { token?: string }) => t.token).join(',');
+            let results: { status_id?: number; stdout?: string; stderr?: string; compile_output?: string }[] = [];
 
-            for (let i = 0; i < 15; i++) {
-                await new Promise(r => setTimeout(r, 1000));
+            for (let i = 0; i < 8; i++) {
+                await new Promise(r => setTimeout(r, 800));
                 const res = await fetch(`${JUDGE0_URL}/submissions/batch?tokens=${tokenString}&base64_encoded=false&fields=status_id,stdout,stderr,compile_output,time,memory`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.submissions && Array.isArray(data.submissions)) {
                         results = data.submissions;
-                        allFinished = results.every((r: any) => r.status_id >= 3);
+                        const allFinished = results.every((r: { status_id?: number }) => (r.status_id ?? 0) >= 3);
                         if (allFinished) break;
                     }
                 }
@@ -87,22 +86,24 @@ export async function POST(request: Request) {
 
         // 4. Compare Outputs
         let passed = true;
-        let failingCase = null;
+        let failingCase: { input: string; expected: string; actual: string; statusId?: number } | null = null;
 
         for (let i = 0; i < edgeCases.length; i++) {
-            const expectedOut = (refResults[i]?.stdout || '').trim();
-            const actualOut = (aiResults[i]?.stdout || '').trim();
+            const refResult = refResults[i] as { status_id?: number; stdout?: string } | undefined;
+            const aiResult = aiResults[i] as { status_id?: number; stdout?: string; stderr?: string; compile_output?: string } | undefined;
+            const expectedOut = (refResult?.stdout || '').trim();
+            const actualOut = (aiResult?.stdout || '').trim();
 
-            // If the reference crashed, we skip this edge case as invalid
-            if (refResults[i]?.status_id !== 3) continue;
+            if (refResult?.status_id !== 3) continue;
 
-            if (aiResults[i]?.status_id !== 3 || expectedOut !== actualOut) {
+            if (aiResult?.status_id !== 3 || expectedOut !== actualOut) {
                 passed = false;
+                const edgeInput = edgeCases[i];
                 failingCase = {
-                    input: edgeCases[i].input || edgeCases[i],
+                    input: typeof edgeInput === 'object' && edgeInput !== null && 'input' in edgeInput ? String(edgeInput.input ?? '') : String(edgeInput),
                     expected: expectedOut,
-                    actual: actualOut || (aiResults[i]?.stderr || aiResults[i]?.compile_output || 'Time Limit Exceeded or Runtime Error'),
-                    statusId: aiResults[i]?.status_id
+                    actual: actualOut || (aiResult?.stderr || aiResult?.compile_output || 'Time Limit Exceeded or Runtime Error'),
+                    statusId: aiResult?.status_id
                 };
                 break;
             }
@@ -110,8 +111,11 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ passed, failingCase });
 
-    } catch (error: any) {
-        console.error('[Judge] Fuzz error:', error);
-        return NextResponse.json({ passed: true, error: error.message }); // gracefully fail open if fuzzer crashes
+    } catch (error: unknown) {
+        console.error('[Judge] Fuzz error', error);
+        return NextResponse.json({
+            passed: true,
+            error: error instanceof Error ? error.message : 'Fuzz failed'
+        });
     }
 }

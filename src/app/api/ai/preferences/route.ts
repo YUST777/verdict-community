@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
     // Return default preferences
     return NextResponse.json({
         preferences: {
@@ -14,10 +14,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
+        await req.json();
         // Mock save success
         return NextResponse.json({ success: true, message: 'Preferences saved (mock)' });
-    } catch (e) {
+    } catch (_e) {
         return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
     }
 }

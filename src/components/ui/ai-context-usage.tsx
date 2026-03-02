@@ -99,7 +99,7 @@ function formatTokenCount(count: number): string {
 function getUsageColor(percentage: number): string {
     if (percentage >= 90) return '#ef4444'; // red
     if (percentage >= 70) return '#f59e0b'; // amber
-    if (percentage >= 40) return '#10b981'; // emerald
+    if (percentage >= 40) return '#2cbb5d'; // emerald
     return '#6366f1';                        // indigo
 }
 
@@ -169,7 +169,7 @@ export function AIContextCircle({ className, size = 28, strokeWidth = 3 }: AICon
             {/* Hover card */}
             {isHovered && (
                 <div
-                    className="absolute bottom-full right-0 mb-2 z-50 min-w-[220px] rounded-xl bg-[#1a1a22] border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150"
+                    className="absolute bottom-full right-0 mb-2 z-50 min-w-[220px] rounded-xl bg-[#1a1a1a] border border-white/[0.06] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150"
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
                 >
@@ -197,14 +197,14 @@ export function AIContextCircle({ className, size = 28, strokeWidth = 3 }: AICon
                     </div>
 
                     {/* Body */}
-                    <div className="px-3.5 py-2 space-y-1.5 border-t border-white/5">
+                    <div className="px-3.5 py-2 space-y-1.5 border-t border-white/[0.06]">
                         <UsageRow label="Input tokens" value={usage.inputTokens} color="#6366f1" />
                         <UsageRow label="Output tokens" value={usage.outputTokens} color="#10b981" />
                         <UsageRow label="Requests" value={usage.requestCount} color="#f59e0b" isCount />
                     </div>
 
                     {/* Footer */}
-                    <div className="px-3.5 py-2 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
+                    <div className="px-3.5 py-2 bg-white/[0.02] border-t border-white/[0.06] flex items-center justify-between">
                         <span className="text-[10px] text-white/30">Session usage</span>
                         <span className="text-[10px] font-medium" style={{ color }}>
                             {percentage.toFixed(1)}% used

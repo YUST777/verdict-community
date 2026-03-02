@@ -13,7 +13,7 @@ interface UseProblemDataReturn {
     cfData: CFProblemData | null;
     loading: boolean;
     error: string | null;
-    cfStats: { rating?: number; solvedCount: number } | null;
+    cfStats: { rating?: number; solvedCount: number; tags?: string[] } | null;
     sampleTestCases: Example[];
 }
 
@@ -22,7 +22,7 @@ export function useProblemData({ contestId, problemId, urlType, groupId }: UsePr
     const [problem, setProblem] = useState<Problem | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [cfStats, setCfStats] = useState<{ rating?: number; solvedCount: number } | null>(null);
+    const [cfStats, setCfStats] = useState<{ rating?: number; solvedCount: number; tags?: string[] } | null>(null);
     const [sampleTestCases, setSampleTestCases] = useState<Example[]>([]);
 
     // Fetch Low Cost Global Stats

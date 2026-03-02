@@ -22,16 +22,42 @@ export async function POST(req: NextRequest) {
         }
 
         // 1. Ensure the conversation exists for this user and problem.
-        // We use ON CONFLICT DO UPDATE SET updated_at = NOW() to get the row ID back.
-        const convResult = await query(`
-            INSERT INTO ai_conversations (user_id, problem_id, updated_at) 
-            VALUES ($1, $2, NOW())
-            ON CONFLICT (user_id, problem_id) 
-            DO UPDATE SET updated_at = NOW()
-            RETURNING id
-        `, [user.id, problemId]);
+        // The current schema does not enforce a unique constraint on (user_id, problem_id),
+        // so we manually SELECT/UPDATE/INSERT instead of relying on ON CONFLICT.
+        let conversationId: string;
 
-        const conversationId = convResult.rows[0].id;
+        const existingConv = await query(
+            `
+            SELECT id
+            FROM ai_conversations
+            WHERE user_id = $1 AND problem_id = $2
+            ORDER BY updated_at DESC
+            LIMIT 1
+        `,
+            [user.id, problemId]
+        );
+
+        if (existingConv.rows.length > 0) {
+            conversationId = existingConv.rows[0].id;
+            await query(
+                `
+                UPDATE ai_conversations
+                SET updated_at = NOW()
+                WHERE id = $1
+            `,
+                [conversationId]
+            );
+        } else {
+            const convResult = await query(
+                `
+                INSERT INTO ai_conversations (user_id, problem_id, updated_at)
+                VALUES ($1, $2, NOW())
+                RETURNING id
+            `,
+                [user.id, problemId]
+            );
+            conversationId = convResult.rows[0].id;
+        }
 
         // 2. Insert the message
         await query(`

@@ -4,13 +4,13 @@
 #
 # Usage:
 #   export GITHUB_TOKEN=ghp_your_personal_access_token
-#   ./scripts/push-release.sh
+#   ./scripts/release/push-release.sh
 #
 # Or create .github-token (chmod 600) with the token on one line and run:
-#   ./scripts/push-release.sh
+#   ./scripts/release/push-release.sh
 
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 REMOTE="${GIT_REMOTE:-origin}"
 REPO="YUST777/verdict-community"

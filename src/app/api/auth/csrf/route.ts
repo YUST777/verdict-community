@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateCSRFToken } from '@/lib/csrf';
 import { createClient } from '@/lib/supabase/server';
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
     try {
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -25,9 +25,12 @@ export async function GET(req: NextRequest) {
         });
 
         return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[CSRF API Error]', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Internal error' },
+            { status: 500 }
+        );
     }
 }
 

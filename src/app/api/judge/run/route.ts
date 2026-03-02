@@ -15,10 +15,10 @@ export async function POST(request: Request) {
 
         const result = await executeSingleOnJudge0(code, language || 'python', stdin);
         return NextResponse.json(result);
-    } catch (error: any) {
-        console.error('Judge Run API Error:', error);
+    } catch (error: unknown) {
+        console.error('Judge Run API Error', error);
         return NextResponse.json(
-            { error: error?.message || 'Failed to execute code.' },
+            { error: error instanceof Error ? error.message : 'Failed to execute code.' },
             { status: 500 }
         );
     }

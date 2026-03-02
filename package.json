@@ -35,6 +35,7 @@
     "duck-duck-scrape": "^2.2.7",
     "framer-motion": "^12.34.3",
     "hugeicons-react": "^0.4.0",
+    "ioredis": "^5.10.0",
     "js-tiktoken": "^1.0.21",
     "jsonwebtoken": "^9.0.3",
     "katex": "^0.16.28",

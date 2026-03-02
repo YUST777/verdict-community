@@ -20,17 +20,17 @@ export default async function VideoSharePage({ params }: Props) {
         return notFound();
     }
 
+    let script: VideoScript | null = null;
     try {
         const result = await query('SELECT script FROM public.video_shares WHERE id = $1', [resolvedParams.id]);
         if (result.rows.length === 0) {
             return notFound();
         }
-
-        const script = result.rows[0].script as VideoScript;
-
-        return <ClientPage script={script} />;
+        script = result.rows[0].script as VideoScript;
     } catch (err) {
         console.error("Failed to load video", err);
         return notFound();
     }
+    if (!script) return notFound();
+    return <ClientPage script={script} />;
 }

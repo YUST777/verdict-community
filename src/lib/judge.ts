@@ -84,7 +84,7 @@ export function compareOutputs(expected: string, actual: string): boolean {
             // If both are valid BigInts but different, they are definitely different
             // Do NOT fall back to float comparison, or we lose precision for large integers
             return false;
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+             
         } catch (_) {
             // Not valid integers (decimals like "1.0", scientific notation, or non-numeric)
             // Fallthrough to float comparison

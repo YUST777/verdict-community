@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getCache, setCache } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,6 +10,13 @@ export async function POST(req: Request) {
 
         if (!query) {
             return NextResponse.json({ error: 'Query is required' }, { status: 400 });
+        }
+
+        // Check Redis cache first
+        const cacheKey = `search:${query.trim().toLowerCase()}`;
+        const cached = await getCache<{ results: unknown[] }>(cacheKey);
+        if (cached) {
+            return NextResponse.json(cached);
         }
 
         // Dynamic imports to avoid "File is not defined" at build time
@@ -49,11 +57,16 @@ export async function POST(req: Request) {
 
         const results = [...webResults, ...ytResults];
 
+        // Cache non-empty results for 5 minutes
+        if (results.length > 0) {
+            setCache(cacheKey, { results }, 300).catch(() => {});
+        }
+
         return NextResponse.json({ results });
-    } catch (error: any) {
-        console.error('Search error:', error);
+    } catch (error: unknown) {
+        console.error('Search error', error);
         return NextResponse.json(
-            { error: error.message || 'Internal Server Error' },
+            { error: error instanceof Error ? error.message : 'Internal Server Error' },
             { status: 500 }
         );
     }

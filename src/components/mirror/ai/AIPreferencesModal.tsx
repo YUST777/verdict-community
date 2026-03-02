@@ -90,13 +90,13 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-                        className="relative w-full sm:max-w-lg h-full bg-[#1a1a1a] border-l border-white/10 shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full sm:max-w-lg h-full bg-[#1a1a1a] border-l border-white/[0.06] overflow-hidden flex flex-col"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] shrink-0">
                             <div>
-                                <h2 className="text-xl font-bold text-white">{settings.language === 'ar' ? 'استخدم الـ LLM الخاص بك' : 'Bring your own LLM'}</h2>
-                                <p className="text-sm text-white/50 mt-1">{settings.language === 'ar' ? 'استخدم API متوافق مع OpenAI. يتم حفظ جميع الإعدادات والبيانات محلياً في متصفحك.' : 'Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.'}</p>
+                                <h2 className="text-xl font-bold text-white">{settings.language === 'ar' ? 'استخدم النموذج بتاعك' : 'Bring your own LLM'}</h2>
+                                <p className="text-sm text-white/50 mt-1">{settings.language === 'ar' ? 'استخدم واجهة برمجية متوافقة مع المعيار المفتوح. كل الإعدادات والبيانات بتتحفظ عندك في المتصفح.' : 'Bring your own OpenAI-compatible API. All settings and credentials are saved locally in your browser.'}</p>
                             </div>
                             <button
                                 onClick={onClose}
@@ -108,7 +108,7 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
 
                         {/* Content */}
                         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-                            <div className="flex items-center gap-3 border-b border-white/10 pb-5">
+                            <div className="flex items-center gap-3 border-b border-white/[0.06] pb-5">
                                 <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -116,7 +116,7 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                         onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
                                         className="sr-only peer"
                                     />
-                                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2cbb5d]"></div>
                                 </label>
                                 <span className="text-base font-semibold text-white">{settings.language === 'ar' ? 'تفعيل' : 'Enable'}</span>
                             </div>
@@ -124,19 +124,19 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                             {settings.enabled && (
                                 <div className="space-y-4 animate-in fade-in duration-200">
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'رابط الـ API' : 'Base URL'}</label>
+                                        <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'رابط الواجهة البرمجية' : 'Base URL'}</label>
                                         <input
                                             type="text"
                                             value={settings.baseURL}
                                             onChange={e => setSettings({ ...settings, baseURL: e.target.value })}
-                                            placeholder={settings.language === 'ar' ? 'رابط الـ API المتوافق مع OpenAI' : 'OpenAI compatible base URL'}
-                                            className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                            placeholder={settings.language === 'ar' ? 'رابط الواجهة البرمجية المتوافق مع المعيار المفتوح' : 'OpenAI compatible base URL'}
+                                            className="w-full bg-transparent border border-white/[0.08] rounded-lg p-3 text-white text-sm focus:outline-none focus:border-[#2cbb5d] transition-colors"
                                         />
                                         <div className="flex gap-2">
-                                            <button onClick={() => fillProvider('https://api.openai.com/v1', 'gpt-4o')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenAI</button>
-                                            <button onClick={() => fillProvider('https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-2.5-flash')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">Gemini</button>
-                                            <button onClick={() => fillProvider('https://api.x.ai/v1', 'grok-beta')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">xAI</button>
-                                            <button onClick={() => fillProvider('https://openrouter.ai/api/v1', 'anthropic/claude-3-5-sonnet')} className="text-xs border border-white/20 bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenRouter</button>
+                                            <button onClick={() => fillProvider('https://api.openai.com/v1', 'gpt-4o')} className="text-xs border border-white/[0.08] bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenAI</button>
+                                            <button onClick={() => fillProvider('https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-2.5-flash')} className="text-xs border border-white/[0.08] bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">Gemini</button>
+                                            <button onClick={() => fillProvider('https://api.x.ai/v1', 'grok-beta')} className="text-xs border border-white/[0.08] bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">xAI</button>
+                                            <button onClick={() => fillProvider('https://openrouter.ai/api/v1', 'anthropic/claude-3-5-sonnet')} className="text-xs border border-white/[0.08] bg-white/5 hover:bg-white/10 rounded px-2.5 py-1 text-white/70">OpenRouter</button>
                                         </div>
                                     </div>
 
@@ -147,7 +147,7 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                             value={settings.apiKey}
                                             onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
                                             placeholder={settings.language === 'ar' ? 'مفتاح الـ API الخاص بك' : 'sk-...'}
-                                            className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                            className="w-full bg-transparent border border-white/[0.08] rounded-lg p-3 text-white text-sm focus:outline-none focus:border-[#2cbb5d] transition-colors"
                                         />
                                     </div>
 
@@ -158,24 +158,24 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                             value={settings.model}
                                             onChange={e => setSettings({ ...settings, model: e.target.value })}
                                             placeholder={settings.language === 'ar' ? 'اسم الموديل (مثلاً gpt-4o)' : 'Model name (e.g., gpt-4o)'}
-                                            className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                            className="w-full bg-transparent border border-white/[0.08] rounded-lg p-3 text-white text-sm focus:outline-none focus:border-[#2cbb5d] transition-colors"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
                                         <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'اللغة' : 'Language'}</label>
                                         <p className="text-xs text-white/40 mt-0.5">{settings.language === 'ar' ? 'سيتحدث الذكاء الاصطناعي ويشرح الدروس والفيديوهات بهذه اللغة.' : 'The AI will explain, teach, and caption videos in this language.'}</p>
-                                        <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
+                                        <div className="flex bg-white/5 border border-white/[0.06] p-1 rounded-xl">
                                             <button
                                                 onClick={() => setSettings({ ...settings, language: 'en' })}
-                                                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${settings.language === 'en' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${settings.language === 'en' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
                                             >
                                                 <span className="text-lg">🇺🇸</span>
                                                 <span>English</span>
                                             </button>
                                             <button
                                                 onClick={() => setSettings({ ...settings, language: 'ar' })}
-                                                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${settings.language === 'ar' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${settings.language === 'ar' ? 'bg-[#2cbb5d]/10 text-[#2cbb5d] border border-[#2cbb5d]/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
                                             >
                                                 <span className="text-lg">🇸🇦</span>
                                                 <span>العربية</span>
@@ -198,7 +198,7 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                             const palette = [
                                                 { active: 'bg-orange-500/10 border-orange-500/30 text-orange-300', dot: 'bg-orange-400' },
                                                 { active: 'bg-blue-500/10 border-blue-500/30 text-blue-300', dot: 'bg-blue-400' },
-                                                { active: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300', dot: 'bg-emerald-400' },
+                                                { active: 'bg-[#2cbb5d]/10 border-[#2cbb5d]/30 text-[#2cbb5d]', dot: 'bg-[#2cbb5d]' },
                                             ];
                                             const p = palette[(v.level - 1) % 3];
                                             return (
@@ -229,22 +229,22 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                                 </div>
                             )}
                             {/* Solution Style (Simple vs Smart) */}
-                            <div className="space-y-3 pt-4 border-t border-white/10 mt-4">
+                            <div className="space-y-3 pt-4 border-t border-white/[0.06] mt-4">
                                 <div>
                                     <label className="text-sm font-semibold text-white">{settings.language === 'ar' ? 'أسلوب الحل' : 'Solution Style'}</label>
                                     <p className="text-xs text-white/40 mt-0.5">{settings.language === 'ar' ? 'كيفية كتابة الذكاء الاصطناعي للكود.' : 'How the AI approaches writing the code.'}</p>
                                 </div>
-                                <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl">
+                                <div className="flex bg-white/5 border border-white/[0.06] p-1 rounded-xl">
                                     <button
                                         onClick={() => setSolutionStyle('simple')}
-                                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'simple' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'simple' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
                                     >
                                         <div className="text-[13px]">{settings.language === 'ar' ? 'منطق بسيط' : 'Simple Logic'}</div>
                                         <div className="text-[10px] opacity-60 font-normal">{settings.language === 'ar' ? 'سهل القراءة ومناسب للمبتدئين' : 'Readable & beginner-friendly'}</div>
                                     </button>
                                     <button
                                         onClick={() => setSolutionStyle('smart')}
-                                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'smart' ? 'bg-emerald-500/10 text-emerald-400 shadow-sm border border-emerald-500/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${solutionStyle === 'smart' ? 'bg-[#2cbb5d]/10 text-[#2cbb5d] border border-[#2cbb5d]/20' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
                                     >
                                         <div className="text-[13px]">{settings.language === 'ar' ? 'ذكي / أمثل' : 'Smart / Optimal'}</div>
                                         <div className="text-[10px] opacity-60 font-normal">{settings.language === 'ar' ? 'أفضل تعقيد زمني ومكاني' : 'Best time/space complexity'}</div>
@@ -254,7 +254,7 @@ export default function AIPreferencesModal({ isOpen, onClose, onPreferencesSaved
                         </div>
 
                         {/* Footer */}
-                        <div className="px-6 py-4 border-t border-white/10 shrink-0 flex items-center gap-3">
+                        <div className="px-6 py-4 border-t border-white/[0.06] shrink-0 flex items-center gap-3">
                             <button
                                 onClick={onClose}
                                 className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors font-medium text-sm"

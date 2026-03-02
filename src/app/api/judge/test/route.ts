@@ -22,10 +22,10 @@ export async function POST(request: Request) {
         );
 
         return NextResponse.json(result);
-    } catch (error: any) {
-        console.error('Judge Test API Error:', error);
+    } catch (error: unknown) {
+        console.error('Judge Test API Error', error);
         return NextResponse.json(
-            { error: error?.message || 'Failed to execute test cases.' },
+            { error: error instanceof Error ? error.message : 'Failed to execute test cases.' },
             { status: 500 }
         );
     }

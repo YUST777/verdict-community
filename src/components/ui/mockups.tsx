@@ -415,3 +415,91 @@ export function AnalyticsMockup() {
         </div>
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Graphic 6 — AI Video Generation Mockup
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function VideoMockup() {
+    const VIDEO_URL = "/video/20a67c62-f412-4348-a015-2a8e015b7019";
+
+    return (
+        <a
+            href={VIDEO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute inset-0 bg-[#0a0a0f] flex flex-col cursor-pointer group/video"
+        >
+            {/* Scene pill badge */}
+            <div className="absolute top-4 right-4 z-10">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 backdrop-blur-sm">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                    <span className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Code</span>
+                </div>
+            </div>
+
+            {/* Watermark */}
+            <div className="absolute top-4 left-4 z-10 flex items-center gap-2 opacity-40">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                    <span className="text-black text-[7px] font-bold">V</span>
+                </div>
+                <span className="text-white/60 text-[10px] font-medium tracking-tight">verdict.run</span>
+            </div>
+
+            {/* Code editor area */}
+            <div className="flex-1 px-4 pt-12 pb-16 overflow-hidden">
+                {/* Scene header */}
+                <div className="mb-3 px-2">
+                    <span className="text-white/80 text-[13px] font-medium">Compute ceiling division</span>
+                </div>
+
+                {/* Code block */}
+                <div className="bg-[#0d0d12] rounded-lg border border-white/[0.06] overflow-hidden">
+                    <div className="px-3 py-1.5 border-b border-white/[0.04] flex items-center justify-between">
+                        <span className="text-[10px] text-white/20 font-mono">solution.cpp</span>
+                        <div className="flex gap-1">
+                            <div className="w-2 h-2 rounded-full bg-white/[0.06]" />
+                            <div className="w-2 h-2 rounded-full bg-white/[0.06]" />
+                            <div className="w-2 h-2 rounded-full bg-white/[0.06]" />
+                        </div>
+                    </div>
+                    <div className="font-mono text-[10px] leading-[18px] py-2">
+                        <CodeLine n={1} tokens={[{ t: "#include", c: "text-[#c586c0]" }, { t: " <bits/stdc++.h>", c: "text-[#ce9178]" }]} />
+                        <CodeLine n={2} tokens={[{ t: "using", c: "text-[#569cd6]" }, { t: " ", c: "" }, { t: "namespace", c: "text-[#569cd6]" }, { t: " std;", c: "text-white/40" }]} />
+                        <CodeLine n={3} tokens={[{ t: "int", c: "text-[#569cd6]" }, { t: " ", c: "" }, { t: "main", c: "text-[#dcdcaa]" }, { t: "() {", c: "text-white/40" }]} />
+                        <CodeLine n={4} tokens={[{ t: "    long long", c: "text-[#569cd6]" }, { t: " n, m, a;", c: "text-white/50" }]} />
+                        <CodeLine n={5} tokens={[{ t: "    cin", c: "text-[#4ec9b0]" }, { t: " >> n >> m >> a;", c: "text-white/40" }]} />
+                        {/* Highlighted lines */}
+                        <div className="bg-emerald-500/[0.07] border-l-2 border-emerald-400">
+                            <CodeLine n={6} tokens={[{ t: "    long long", c: "text-[#569cd6]" }, { t: " rows = (n+a-1)/a;", c: "text-white/60" }]} />
+                        </div>
+                        <div className="bg-emerald-500/[0.07] border-l-2 border-emerald-400">
+                            <CodeLine n={7} tokens={[{ t: "    long long", c: "text-[#569cd6]" }, { t: " cols = (m+a-1)/a;", c: "text-white/60" }]} />
+                        </div>
+                        <CodeLine n={8} tokens={[{ t: "    cout", c: "text-[#4ec9b0]" }, { t: " << rows*cols << endl;", c: "text-white/40" }]} />
+                        <CodeLine n={9} tokens={[{ t: "    return", c: "text-[#c586c0]" }, { t: " 0;", c: "text-white/40" }]} />
+                        <CodeLine n={10} tokens={[{ t: "}", c: "text-white/40" }]} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Caption bar at bottom */}
+            <div className="absolute bottom-0 inset-x-0 z-10">
+                <div className="mx-4 mb-4 px-4 py-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/[0.06]">
+                    <p className="text-white/80 text-[11px] leading-relaxed text-center">
+                        Here is the core logic. We compute the number of rows of tiles as n plus a minus 1, integer divided by a...
+                    </p>
+                </div>
+            </div>
+
+            {/* Play button overlay */}
+            <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/20 opacity-0 group-hover/video:opacity-100 transition-opacity duration-300">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/90 flex items-center justify-center shadow-lg shadow-emerald-500/30 backdrop-blur-sm">
+                    <svg className="w-6 h-6 text-black ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                </div>
+            </div>
+        </a>
+    );
+}

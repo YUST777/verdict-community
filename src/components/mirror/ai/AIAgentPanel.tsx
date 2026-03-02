@@ -105,7 +105,9 @@ export default function AIAgentPanel({
         setInputByTab,
         chatTabs,
         setChatTabs,
-        isLoaded
+        isLoaded,
+        saveMessage,
+        deleteConversation
     } = useAIChatPersistence(
         problemId || 'unknown',
         !!user,
@@ -200,6 +202,9 @@ export default function AIAgentPanel({
     }, [chatTabs]);
 
     const deleteChat = useCallback((tabId: string) => {
+        // Remove from normalized DB tables
+        deleteConversation(tabId);
+
         setChatTabs(prev => {
             if (prev.length <= 1) {
                 // Reset the last tab instead of deleting the whole array
@@ -523,7 +528,17 @@ export default function AIAgentPanel({
 
         setMessages(prev => [...prev, userMessage], tabId);
 
-        // Async log to explicitly track user message
+        // Persist user message to normalized tables (fire-and-forget)
+        const currentTab = chatTabs.find(t => t.id === tabId);
+        saveMessage(tabId, currentTab?.label || 'Chat', {
+            id: userMessage.id,
+            role: 'user',
+            content: promptToSend,
+            contextType: 'chat',
+            ...(hasSelectedCode ? { codeBlock: userMessage.codeBlock } : {}),
+        });
+
+        // Also log to legacy ai_messages audit trail
         const logContent = hasSelectedCode ? `${promptToSend}\n\nCode Context:\n\`\`\`${language}\n${selectedCode}\n\`\`\`` : promptToSend;
         try {
             fetch('/api/ai/log', {
@@ -726,6 +741,15 @@ export default function AIAgentPanel({
                                         sources: searchData.results
                                     };
                                     setMessages(prev => [...prev, srcMsg]);
+                                    // Persist sources to normalized tables
+                                    const srcTab = chatTabs.find(t => t.id === tabId);
+                                    saveMessage(tabId, srcTab?.label || 'Chat', {
+                                        id: srcMsg.id,
+                                        role: 'sources',
+                                        content: '',
+                                        contextType: 'chat',
+                                        sources: searchData.results,
+                                    });
                                 }
                                 return {
                                     tool_call_id: toolCall.id,
@@ -824,7 +848,16 @@ export default function AIAgentPanel({
             // Ensure final content is set
             updateMessage(streamMsgId, finalAiResponse, undefined, tabId);
 
-            // Log final AI message to explicitly track the response
+            // Persist assistant message to normalized tables
+            const activeTab = chatTabs.find(t => t.id === tabId);
+            saveMessage(tabId, activeTab?.label || 'Chat', {
+                id: streamMsgId,
+                role: 'assistant',
+                content: finalAiResponse,
+                contextType: 'chat',
+            });
+
+            // Also log to legacy ai_messages audit trail
             try {
                 fetch('/api/ai/log', {
                     method: 'POST',
@@ -887,16 +920,16 @@ export default function AIAgentPanel({
                 problemDescription={problemDescription}
                 userCode={userCode}
             />
-            <div className="flex flex-col h-full bg-[#0e0e13] min-h-0 text-white" data-lenis-prevent>
+            <div className="flex flex-col h-full bg-[#121212] min-h-0 text-white" data-lenis-prevent>
 
                 {/* ── Chat Tab Bar ─────────────────────────────────── */}
-                <div className="flex items-center gap-0 border-b border-white/[0.06] shrink-0 bg-[#0a0a0f] overflow-x-auto">
+                <div className="flex items-center gap-0 border-b border-white/[0.06] shrink-0 bg-[#121212] overflow-x-auto">
                     {chatTabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveChatTab(tab.id)}
                             className={`group/tab flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-medium border-b-2 transition-all shrink-0 ${activeChatTab === tab.id
-                                ? 'border-emerald-500 text-white/90 bg-white/[0.03]'
+                                ? 'border-[#2cbb5d] text-white/90 bg-white/[0.03]'
                                 : 'border-transparent text-white/35 hover:text-white/60 hover:bg-white/[0.02]'
                                 }`}
                         >
@@ -922,11 +955,11 @@ export default function AIAgentPanel({
 
 
                 {/* ── Messages ───────────────────────────────────── */}
-                <Conversation className="relative flex-1 min-h-0 bg-[#0e0e13]">
+                <Conversation className="relative flex-1 min-h-0 bg-[#121212]">
                     <ConversationContent className="px-3 py-4">
                         {messages.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
-                                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
+                                <div className="w-14 h-14 rounded-2xl bg-[#2cbb5d]/10 border border-[#2cbb5d]/20 flex items-center justify-center mb-4 relative overflow-hidden ">
                                     <Image src="/icons/logo.svg" alt="Verdict" fill sizes="56px" className="object-contain p-2.5 opacity-80" />
                                 </div>
                                 <h3 className="text-base font-semibold text-white/80 mb-1.5">{isArabic ? 'كيف يمكنني مساعدتك؟' : 'How can I help?'}</h3>
@@ -954,7 +987,7 @@ export default function AIAgentPanel({
                                                     const isYT = src.type === 'youtube' || domain.includes('youtube');
                                                     return (
                                                         <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.07] hover:bg-white/[0.07] hover:border-white/[0.14] transition-all group"
+                                                            className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.10] transition-all group"
                                                         >
                                                             <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${isYT ? 'bg-red-500/15' : 'bg-white/5'
                                                                 }`}>
@@ -993,7 +1026,7 @@ export default function AIAgentPanel({
                     <ConversationScrollButton />
                 </Conversation>
 
-                <div className="bg-[#0e0e13] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10">
+                <div className="bg-[#121212] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10">
 
                     {/* Selected code context badge */}
                     {selectedCode?.trim() && selectedLineReference && (
@@ -1012,7 +1045,7 @@ export default function AIAgentPanel({
                     {user && (!settings.enabled || !settings.apiKey) && (
                         <button
                             onClick={() => setShowPreferencesModal(true)}
-                            className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.13] border border-emerald-500/20 rounded-2xl text-emerald-400 text-[12px] font-medium transition-all group"
+                            className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#2cbb5d]/10 hover:bg-[#2cbb5d]/15 border border-[#2cbb5d]/20 rounded-xl text-[#2cbb5d] text-[12px] font-medium transition-all group"
                         >
                             <BrainCircuit size={14} strokeWidth={2} />
                             {isArabic ? 'إعداد النموذج بتاعك' : 'Configure Bring Your Own LLM'}
@@ -1021,14 +1054,14 @@ export default function AIAgentPanel({
 
                     {/* Chat input + action buttons */}
                     {!authLoading && !user ? (
-                        <div className="w-full mb-3 flex flex-col gap-3 p-4 bg-[#141419] border border-white/[0.08] rounded-2xl relative overflow-hidden">
+                        <div className="w-full mb-3 flex flex-col gap-3 p-4 bg-[#1a1a1a] border border-white/[0.06] rounded-xl relative overflow-hidden">
                             <div className="relative z-10 flex flex-col gap-1.5">
                                 <h4 className="text-[13px] font-semibold text-white/90">{isArabic ? 'سجل دخول لاستخدام مساعد الذكاء الاصطناعي' : 'Sign in to use the AI Tutor'}</h4>
                                 <p className="text-[11px] text-white/50 mb-2">{isArabic ? 'نطلب منك تسجيل الدخول لمنع إساءة استخدام الخدمة.' : 'We ask you to sign in to prevent API abuse.'}</p>
 
                                 <button
                                     onClick={() => setShowSignInModal(true)}
-                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white font-medium rounded-lg text-[12px] transition-colors"
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#2cbb5d] hover:bg-[#24a34e] text-white font-medium rounded-lg text-[12px] transition-colors"
                                 >
                                     <BrainCircuit size={14} strokeWidth={2} />
                                     <span>{isArabic ? 'استخدم النموذج بتاعك' : 'Bring your own LLM'}</span>
@@ -1090,10 +1123,10 @@ export default function AIAgentPanel({
                                 animate={{ x: 0 }}
                                 exit={{ x: '100%' }}
                                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-                                className="absolute inset-y-0 right-0 w-full sm:w-[90%] bg-[#1c1c1f] shadow-2xl z-50 flex flex-col border-l border-white/10"
+                                className="absolute inset-y-0 right-0 w-full sm:w-[90%] bg-[#1a1a1a] shadow-2xl z-50 flex flex-col border-l border-white/[0.06]"
                             >
                                 {/* Header */}
-                                <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#1c1c1f]">
+                                <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#1a1a1a]">
                                     <h3 className="text-sm font-semibold text-white/90">Resources</h3>
                                     <button
                                         onClick={() => setIsResourcesOpen(false)}
@@ -1104,7 +1137,7 @@ export default function AIAgentPanel({
                                 </div>
 
                                 {/* Content */}
-                                <div className="flex-1 overflow-y-auto p-4 space-y-8 bg-[#161619]">
+                                <div className="flex-1 overflow-y-auto p-4 space-y-8 bg-[#121212]">
                                     {concepts.length === 0 && (
                                         <div className="text-center py-10 text-white/40 text-sm">
                                             No resources available yet. Start a session or ask a question to generate resources.
@@ -1120,8 +1153,8 @@ export default function AIAgentPanel({
                                             </div>
                                             <div className="flex flex-col gap-3">
                                                 {concepts.filter((c: any) => c.type === 'video').map((c: any, i: number) => (
-                                                    <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex gap-3 text-left transition-colors hover:bg-white/5 p-2 rounded-xl -m-2">
-                                                        <div className="relative w-28 h-16 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-black/50">
+                                                    <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex gap-3 text-left transition-colors hover:bg-white/[0.03] p-2 rounded-lg -m-2">
+                                                        <div className="relative w-28 h-16 shrink-0 rounded-lg overflow-hidden border border-white/[0.06] bg-black/40">
                                                             <div className="absolute inset-0 flex items-center justify-center">
                                                                 <Youtube className="w-8 h-8 text-red-500 opacity-90 group-hover:scale-110 transition-transform" />
                                                             </div>
@@ -1153,7 +1186,7 @@ export default function AIAgentPanel({
                                                         // Ignore invalid URLs
                                                     }
                                                     return (
-                                                        <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between gap-4 p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
+                                                        <a key={i} href={c.url} target="_blank" rel="noreferrer" className="group flex items-center justify-between gap-4 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                                                             <div className="flex items-center gap-3 min-w-0">
                                                                 <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                                                                     {domain.includes('wikipedia') ? (

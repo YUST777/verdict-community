@@ -302,11 +302,17 @@ const CodeScene: React.FC<{ text: string, code: string, highlight?: [number, num
         const mid = (highlight[0] + highlight[1]) / 2;
         const lineH = 24;
 
-        // Target vertical center: ~200px from the top of the code window
-        const optimalOffset = 200;
+        // Estimate visible code area: video height minus header (~56px),
+        // title text (~60px), caption bar (~60px), and padding (~48px).
+        // For a 720p video this is ~496px; for 1080p it is ~856px.
+        const visibleCodeHeight = Math.max(300, videoHeight - 224);
 
-        // Start scrolling early, keep the active line roughly 200px from the top
-        return Math.max(0, (mid - 1) * lineH - optimalOffset);
+        // Place the highlighted midpoint at roughly 1/3 from the top of
+        // the visible code area so there is always clear visual movement
+        // when the highlight advances — even for early lines (1-9).
+        const targetFromTop = visibleCodeHeight / 3;
+
+        return Math.max(0, (mid - 1) * lineH - targetFromTop);
     }, [highlight, videoHeight]);
 
     const highlightLine = (line: string) => {

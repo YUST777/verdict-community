@@ -7,7 +7,7 @@ import {
     AITutorMockup,
     TestRunnerMockup,
     ExtensionMockup,
-    AnalyticsMockup
+    VideoMockup
 } from "@/components/ui/mockups";
 
 export default function FUIBentoGridDark() {
@@ -52,12 +52,12 @@ export default function FUIBentoGridDark() {
                     graphic={<ExtensionMockup />}
                     className="lg:col-span-2"
                 />
-                {/* ── Card 5: Analytics ── */}
+                {/* ── Card 5: AI Video Generation ── */}
                 <BentoCard
-                    eyebrow="Analytics"
-                    title="Performance insights"
-                    description="See runtime and memory distributions across all accepted solutions. Compare your performance against the global Codeforces community."
-                    graphic={<AnalyticsMockup />}
+                    eyebrow="AI Video"
+                    title="Animated solution walkthroughs"
+                    description="Generate cinematic code walkthroughs with AI narration and step-by-step visual explanations. Watch your solution come alive."
+                    graphic={<VideoMockup />}
                     className="max-lg:rounded-b-4xl lg:col-span-2 lg:rounded-br-4xl"
                 />
             </div>
@@ -93,7 +93,7 @@ export function BentoCard({
                 "bg-white/[0.03] border border-white/[0.08] shadow-2xl shadow-black/40 ring-1 ring-white/[0.05] backdrop-blur-sm"
             )}
         >
-            <div className="relative h-80 sm:h-[26rem] shrink-0 overflow-hidden">
+            <div className="relative h-80 sm:min-h-[26rem] flex-1 overflow-hidden">
                 {graphic}
             </div>
             <div className="relative p-8 z-20 bg-[#0a0a0a]">

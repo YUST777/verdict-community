@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { verifyAuth } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/simple-rate-limit';
+import { getCache, setCache, invalidateCache } from '@/lib/cache';
 import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,31 @@ export async function GET(req: NextRequest) {
 
     const noCache = searchParams.get('noCache') === 'true';
 
-    // 1. Try Cache (skip if noCache or cached data was a bot-protection mock)
+    const redisCacheKey = `cf:mirror:${contestId}-${problemId}`;
+
+    // If noCache requested, invalidate Redis too
+    if (noCache) {
+        invalidateCache(redisCacheKey).catch(() => {});
+    }
+
+    // 0. Try Redis L1 cache (fast, in-memory)
+    if (!noCache) {
+        try {
+            const redisCached = await getCache<MirrorProblemData>(redisCacheKey);
+            if (redisCached) {
+                const title = redisCached?.meta?.title || '';
+                if (!title.includes('Bot Protection') && !title.includes('Unavailable')) {
+                    console.log('[Mirror] Redis L1 cache hit');
+                    logView(req, contestId, problemId).catch(e => console.error('Log error', e));
+                    return NextResponse.json(redisCached);
+                }
+            }
+        } catch {
+            // Redis unavailable, fall through
+        }
+    }
+
+    // 1. Try PostgreSQL L2 cache (skip if noCache or cached data was a bot-protection mock)
     if (!noCache) {
         try {
             const cacheResult = await query(
@@ -38,10 +63,12 @@ export async function GET(req: NextRequest) {
             if (cacheResult.rows.length > 0) {
                 const { data } = cacheResult.rows[0];
                 // Don't serve stale bot-protection mocks from cache
-                const title = (data as any)?.meta?.title || '';
+                const title = (data as { meta?: { title?: string } })?.meta?.title || '';
                 if (title.includes('Bot Protection') || title.includes('Unavailable')) {
                     console.log('[Mirror] Cached mock detected — forcing fresh fetch');
                 } else {
+                    // Populate Redis L1 from PostgreSQL hit
+                    setCache(redisCacheKey, data, 3600).catch(() => {});
                     logView(req, contestId, problemId).catch(e => console.error('Log error', e));
                     return NextResponse.json(data);
                 }
@@ -80,7 +107,7 @@ export async function GET(req: NextRequest) {
     // Mirror gets a short 10s window in case CF unblocks in future.
     const mirrorServiceUrl = process.env.MIRROR_SERVICE_URL || 'http://localhost:3099';
 
-    const mirrorPromise: Promise<any> = (async () => {
+    const mirrorPromise: Promise<MirrorProblemData> = (async () => {
         const resp = await fetch(`${mirrorServiceUrl}/fetch?url=${encodeURIComponent(targetUrl)}`, {
             signal: AbortSignal.timeout(10000)
         });
@@ -91,7 +118,7 @@ export async function GET(req: NextRequest) {
         return d;
     })();
 
-    const waybackPromise: Promise<any> = (async () => {
+    const waybackPromise: Promise<MirrorProblemData> = (async () => {
         const d = await scrapeDirectly(targetUrl);
         if (!d) throw new Error('Wayback: all timestamps failed');
         console.log('[Mirror] Wayback Machine succeeded');
@@ -101,7 +128,7 @@ export async function GET(req: NextRequest) {
     // firstSuccess: resolves with the first non-rejected promise
     const firstSuccess = Promise.any([mirrorPromise, waybackPromise]);
 
-    let data: any = null;
+    let data: MirrorProblemData | null = null;
     try {
         data = await firstSuccess;
     } catch {
@@ -111,7 +138,8 @@ export async function GET(req: NextRequest) {
     if (data) {
         const title = (data?.meta?.title as string) || '';
         if (!title.includes('Bot Protection') && !title.includes('Unavailable')) {
-            cacheAndLog(req, contestId, problemId, data).catch(() => { }); // async, don't block
+            setCache(redisCacheKey, data, 3600).catch(() => {}); // Redis L1
+            cacheAndLog(req, contestId, problemId, data).catch(() => {}); // PostgreSQL L2
         }
         return NextResponse.json(data);
     }
@@ -124,8 +152,16 @@ export async function GET(req: NextRequest) {
 
 // --- Helper Functions ---
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function cacheAndLog(req: NextRequest, contestId: string, problemId: string, data: any) {
+interface MirrorProblemData {
+    meta?: { title?: string; timeLimitMs?: number; memoryLimitMB?: number; sourceUrl?: string };
+    story?: string;
+    inputSpec?: string;
+    outputSpec?: string;
+    note?: string;
+    testCases?: unknown[];
+}
+
+async function cacheAndLog(req: NextRequest, contestId: string, problemId: string, data: MirrorProblemData) {
     try {
         await query(
             `INSERT INTO mirror_problems (contest_id, problem_index, data, updated_at)
@@ -141,7 +177,6 @@ async function cacheAndLog(req: NextRequest, contestId: string, problemId: strin
     }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function scrapeDirectly(url: string) {
     // Strategy 1: Fetch from Wayback Machine (archive.org) — bypasses Cloudflare IP blocks
     try {
@@ -283,9 +318,7 @@ async function fetchAndParse(url: string) {
     const outputs = statement.find('.sample-test .output pre');
 
     inputs.each((i, el) => {
-        // preserve newlines in pre? Cheerio .text() might flatten.
-        // Use html and replace br?
-        const clean = (e: any) => $(e).html()?.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '') || '';
+        const clean = (e: cheerio.Element) => $(e).html()?.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '') || '';
         const input = clean(el);
         const output = clean(outputs.eq(i));
         testCases.push({ id: i + 1, input: input.trim(), output: output.trim() });

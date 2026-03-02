@@ -131,7 +131,7 @@ Verdict is committed to transparency and security. By open-sourcing our entire p
 This repository is optimized for AI-first development. AI agents (like Antigravity) can use the following resources to ship code faster:
 
 - **Workflows**: Standard patterns in `.agents/workflows/` for routes and components.
-- **Architecture**: A complete system map in [DOCS/architecture.md](DOCS/architecture.md).
+- **Architecture**: A complete system map in [docs/architecture.md](docs/architecture.md).
 - **vcl CLI**: A developer helper at `scripts/vcl` (aliased to `vcl`). Use `vcl help` for commands like `status`, `logs`, and `rebuild`.
 
 ---

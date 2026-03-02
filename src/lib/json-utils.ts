@@ -15,7 +15,7 @@ export function extractAndParseJson<T = any>(text: string): T {
     clean = clean.replace(/<think>[\s\S]*?<\/think>/gi, '');
 
     // 2. Extract candidate starting from the first brace
-    let firstBrace = clean.indexOf('{');
+    const firstBrace = clean.indexOf('{');
     if (firstBrace === -1) {
         throw new Error('No valid JSON object found in response');
     }
@@ -34,7 +34,7 @@ export function extractAndParseJson<T = any>(text: string): T {
                     .replace(/,\s*([\]}])/g, '$1'); // Remove trailing commas
 
                 // Fix common invalid escapes like \theta, \alpha, etc.
-                processed = processed.replace(/\\(?![nr"\\]|u[0-9a-fA-F]{4})/g, '\\\\');
+                processed = processed.replace(/\\(?![nr"\\tbfu]|u[0-9a-fA-F]{4})/g, '\\\\');
 
                 // Convert literal tabs to \t since JSON doesn't allow raw tabs in strings
                 processed = processed.replace(/\t/g, '\\t');
@@ -44,13 +44,10 @@ export function extractAndParseJson<T = any>(text: string): T {
 
                 return JSON.parse(processed);
             } catch (err2) {
-                // Attempt 3: Handle literal newlines and carriage returns
+                // Attempt 3: Use state machine to escape newlines ONLY inside JSON strings
                 try {
-                    const multiLineFix = str
-                        .replace(/,\s*([\]}])/g, '$1')
-                        .replace(/\n/g, '\\n')
-                        .replace(/\r/g, '\\r');
-                    return JSON.parse(multiLineFix);
+                    const fixed = escapeNewlinesInJsonStrings(str);
+                    return JSON.parse(fixed);
                 } catch (err3) {
                     return null;
                 }
@@ -121,4 +118,57 @@ export function extractAndParseJson<T = any>(text: string): T {
 
     console.error('[JSON Utils] Failed to parse extracted candidate:', candidate);
     throw new Error('Failed to parse AI response. The JSON structure was malformed.');
+}
+
+/**
+ * State-machine that walks the JSON string character by character
+ * and escapes raw newlines/carriage-returns ONLY when they appear
+ * inside a quoted string value. Structural whitespace between keys
+ * is left untouched.
+ */
+function escapeNewlinesInJsonStrings(input: string): string {
+    const out: string[] = [];
+    let inStr = false;
+    let escaped = false;
+
+    for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+
+        if (escaped) {
+            out.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\' && inStr) {
+            out.push(ch);
+            escaped = true;
+            continue;
+        }
+
+        if (ch === '"') {
+            inStr = !inStr;
+            out.push(ch);
+            continue;
+        }
+
+        if (inStr) {
+            if (ch === '\n') {
+                out.push('\\n');
+                continue;
+            }
+            if (ch === '\r') {
+                out.push('\\r');
+                continue;
+            }
+            if (ch === '\t') {
+                out.push('\\t');
+                continue;
+            }
+        }
+
+        out.push(ch);
+    }
+
+    return out.join('');
 }

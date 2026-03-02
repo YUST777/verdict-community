@@ -68,15 +68,15 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
             <Message from={message.role === 'sources' ? 'assistant' : message.role} className="py-2 w-full">
                 <MessageContent className={cn(
                     "text-left",
-                    isUser ? "max-w-[85%] bg-emerald-600/90 text-white rounded-2xl rounded-tr-sm shadow-md border-0" : "w-full max-w-[95%] bg-[#1E1E24]/90 text-white/90 border border-white/5 rounded-2xl shadow-md"
+                    isUser ? "max-w-[85%] bg-[#2cbb5d] text-white rounded-xl rounded-tr-sm border-0" : "w-full max-w-[95%] bg-[#1a1a1a] text-white/90 border border-white/[0.06] rounded-xl"
                 )}>
                     {message.codeBlock && (
-                        <div className="mb-3 mt-1 rounded-lg bg-black/60 border border-white/10 overflow-hidden text-left shadow-inner">
-                            <div className="px-3 py-2 bg-[#121212]/80 border-b border-white/5 flex items-center justify-between backdrop-blur-sm">
+                        <div className="mb-3 mt-1 rounded-lg bg-[#0d0d0d] border border-white/[0.06] overflow-hidden text-left">
+                            <div className="px-3 py-2 bg-[#161616] border-b border-white/[0.06] flex items-center justify-between ">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-white/50 font-mono uppercase tracking-wider">{message.codeBlock.language}</span>
                                     {message.codeBlock.lineReference && (
-                                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded flex-shrink-0 bg-blue-500/15 border border-blue-500/20 text-blue-300 text-[10px] font-mono">
+                                        <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded flex-shrink-0 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px] font-mono">
                                             <span>@</span>
                                             <span>{message.codeBlock.lineReference.replace('@ ', '').replace('@', '')}</span>
                                         </div>
@@ -121,11 +121,11 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                         {message.videoScript && <InlineVideoExplainer script={message.videoScript as any} />}
                         {message.role === 'sources' && message.sources && message.sources.length > 0 && (
                             <div className="mt-2 space-y-3">
-                                <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">{/[\u0600-\u06FF]/.test(message.content || '') ? 'المصادر اللي اتلقت' : 'Sources Found'}</div>
+                                <div className="text-xs font-semibold text-[#2cbb5d] uppercase tracking-wider mb-2">{/[\u0600-\u06FF]/.test(message.content || '') ? 'المصادر اللي اتلقت' : 'Sources Found'}</div>
                                 <div className="flex flex-wrap gap-3">
                                     {message.sources.map((src, i) => (
                                         <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                            className="flex gap-3 bg-black/40 hover:bg-black/60 border border-white/5 hover:border-white/20 transition-all rounded-xl p-3 max-w-[400px] group">
+                                            className="flex gap-3 bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.06] hover:border-white/[0.10] transition-all rounded-lg p-3 max-w-[400px] group">
                                             {src.type === 'youtube' && src.thumbnail ? (
                                                 <div className="relative w-24 h-16 shrink-0 rounded-md overflow-hidden bg-zinc-900 border border-white/10">
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -164,7 +164,7 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
 
                 {isUser && (
                     <Avatar className="size-8 mt-auto hidden sm:block">
-                        <AvatarFallback className="bg-zinc-800 text-zinc-300 font-bold border border-zinc-700">
+                        <AvatarFallback className="bg-[#1a1a1a] text-[#999] font-bold border border-white/[0.06]">
                             {isAuthenticated && userEmail ? userEmail.charAt(0).toUpperCase() : <User size={13} strokeWidth={2.5} />}
                         </AvatarFallback>
                     </Avatar>

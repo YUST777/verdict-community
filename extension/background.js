@@ -281,7 +281,7 @@ async function checkSubmissionStatus({ contestId, submissionId, urlType, handle 
                     text.match(/<span[^>]*class=["']submissionVerdictWrapper[^"']*["'][^>]*>([^<]+)<\/span>/i);
 
                 if (verdictMatch) {
-                    let rawVerdict = verdictMatch[1].trim();
+                    const rawVerdict = verdictMatch[1].trim();
 
                     // Check if the "verdict" is just a number (this means it's a test number, not a verdict!)
                     if (/^\d+$/.test(rawVerdict)) {
@@ -744,7 +744,7 @@ async function handleSubmission({ contestId, problemIndex, code, language, urlTy
             }
         });
 
-        let finalRes = finalCheck[0]?.result || { success: true };
+        const finalRes = finalCheck[0]?.result || { success: true };
 
         // If we didn't get a submission ID from HTML, OR if it was a duplicate, try the API
         if ((finalRes.success && !finalRes.submissionId) || finalRes.error === 'DUPLICATE_SUBMISSION') {

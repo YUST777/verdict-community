@@ -19,8 +19,9 @@ interface ProblemLeftPanelProps {
     cfData: CFProblemData | null;
     submissions: Submission[];
     submissionsLoading: boolean;
+    statsLoading?: boolean;
     stats: AnalyticsStats | null;
-    cfStats: { rating?: number; solvedCount: number } | null;
+    cfStats: { rating?: number; solvedCount: number; tags?: string[] } | null;
     contestId: string;
     problemId: string;
     whiteboardHeight: number;
@@ -76,6 +77,7 @@ export default function ProblemLeftPanel({
     aiInitialQuestion,
     onClearSelection,
     selectedLineReference,
+    statsLoading,
     ...otherProps
 }: ProblemLeftPanelProps) {
     const router = useRouter();
@@ -120,11 +122,11 @@ export default function ProblemLeftPanel({
                 )}
                 {activeTab === 'submissions' && (
                     <div
-                        className="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar"
+                        className="absolute inset-0 overflow-hidden flex flex-col"
                         data-lenis-prevent="true"
                     >
                         {!handleLoading && !cfHandle ? (
-                            <div className="flex items-center justify-center py-12">
+                            <div className="flex items-center justify-center py-12 px-4">
                                 <HandleInputSection onSave={onHandleSave} compact />
                             </div>
                         ) : (
@@ -146,7 +148,7 @@ export default function ProblemLeftPanel({
                         <AnalyticsView
                             stats={stats}
                             cfStats={cfStats}
-                            loading={submissionsLoading}
+                            loading={statsLoading !== undefined ? statsLoading : submissionsLoading}
                             analyzeComplexity={analyzeComplexity}
                             complexityLoading={complexityLoading}
                         />
@@ -220,4 +222,3 @@ export default function ProblemLeftPanel({
         </div>
     );
 }
-
