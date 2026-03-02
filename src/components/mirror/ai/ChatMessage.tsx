@@ -102,7 +102,12 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                     <div className="text-[13px] sm:text-sm leading-relaxed break-words markdown-body" style={{ unicodeBidi: 'plaintext' }}>
                         {thinkSteps.length > 0 && (
                             <ChainOfThought>
-                                <ChainOfThoughtHeader title={thinkSteps[0].includes('cooking') || thinkSteps[0].includes('بجهز') ? "Tutoring Session" : "Analyzed reasoning process"} />
+                                <ChainOfThoughtHeader title={(() => {
+                                    const first = thinkSteps[0] || '';
+                                    const isAr = /[\u0600-\u06FF]/.test(first);
+                                    if (first.includes('cooking') || first.includes('بجهز')) return isAr ? 'وقت التعليم' : 'Tutoring Session';
+                                    return isAr ? 'ÙÙØ·Ù Ø§ÙÙØ¸Ø§Ù' : 'Analyzed reasoning process';
+                                })()} />
                                 <ChainOfThoughtContent>
                                     {thinkSteps.map((stepContent, idx) => (
                                         <ChainOfThoughtStep key={idx} status={mainContent ? "completed" : (idx === thinkSteps.length - 1 ? "in-progress" : "completed")}>
@@ -116,7 +121,7 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                         {message.videoScript && <InlineVideoExplainer script={message.videoScript as any} />}
                         {message.role === 'sources' && message.sources && message.sources.length > 0 && (
                             <div className="mt-2 space-y-3">
-                                <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">Sources Found</div>
+                                <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">{/[\u0600-\u06FF]/.test(message.content || '') ? 'المصادر اللي اتلقت' : 'Sources Found'}</div>
                                 <div className="flex flex-wrap gap-3">
                                     {message.sources.map((src, i) => (
                                         <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
