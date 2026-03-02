@@ -7,12 +7,12 @@ import { query } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
     try {
-        const auth = await verifyAuth(req);
-        if (!auth.authenticated || !auth.user) {
+        const user = await verifyAuth(req);
+        if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const userRes = await query('SELECT tts_video_count FROM public.users WHERE id = $1', [auth.user.id]);
+        const userRes = await query('SELECT tts_video_count FROM public.users WHERE id = $1', [user.id]);
         const ttsCount = userRes.rows[0]?.tts_video_count || 0;
 
         if (ttsCount >= 3) {
@@ -205,7 +205,7 @@ ${solution}
 Generate the video script following the STRICT PHASE ORDER. Remember: code scenes must contain the FULL source code with precise highlight ranges.${isArabic ? ' ALL text and script fields MUST be in Arabic (العربية).' : ''}`;
 
         // ── LLM call with retry ─────────────────────────────────────────
-        let parsed: any = null;
+        let parsed: Record<string, unknown> = { title: '', scenes: [] };
         let lastError: Error | null = null;
 
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -246,9 +246,9 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
                 }
 
                 break; // Success, exit retry loop
-            } catch (err: any) {
-                lastError = err;
-                console.warn(`[Video Script] Attempt ${attempt + 1} failed:`, err.message);
+            } catch (err: unknown) {
+                lastError = err as Error;
+                console.warn(`[Video Script] Attempt ${attempt + 1} failed:`, (err as Error).message);
                 if (attempt === 1) throw lastError;
             }
         }
@@ -267,19 +267,17 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
 
         // Validate and fix common issues
         const validTypes = ['title', 'problem', 'concept', 'code', 'summary'];
-        parsed.scenes = parsed.scenes
-            .filter((s: any) => s && validTypes.includes(s.type))
-            .map((scene: any, idx: number) => {
-                const scriptText = scene.script || '';
+        parsed.scenes = (parsed.scenes as Array<Record<string, unknown>>)
+            .filter((s: Record<string, unknown>) => s && validTypes.includes(s.type as string))
+            .map((scene: Record<string, unknown>, idx: number) => {
+                const scriptText = (scene.script as string) || '';
                 const wordCount = scriptText.split(/\s+/).filter(Boolean).length;
-                // Minimum duration = enough time to read all words at ~3 words/sec + 2s buffer
                 const minDurationForScript = Math.ceil(wordCount / 3) + 2;
-                const rawDuration = scene.duration || 5;
+                const rawDuration = (scene.duration as number) || 5;
                 const finalDuration = Math.max(minDurationForScript, Math.max(2, Math.min(30, rawDuration)));
 
-                // Truncate text if it exceeds max chars for this scene type
-                let text = scene.text || '';
-                const maxLen = maxTextChars[scene.type] || 80;
+                let text = (scene.text as string) || '';
+                const maxLen = maxTextChars[scene.type as string] || 80;
                 if (text.length > maxLen) {
                     text = text.substring(0, maxLen).trim();
                     // Don't cut mid-word — find last space

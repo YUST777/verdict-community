@@ -106,7 +106,7 @@ export default function ChatMessage({ message, isAuthenticated, userEmail }: Cha
                                     const first = thinkSteps[0] || '';
                                     const isAr = /[\u0600-\u06FF]/.test(first);
                                     if (first.includes('cooking') || first.includes('بجهز')) return isAr ? 'وقت التعليم' : 'Tutoring Session';
-                                    return isAr ? 'ÙÙØ·Ù Ø§ÙÙØ¸Ø§Ù' : 'Analyzed reasoning process';
+                                    return isAr ? 'منطق النظام' : 'Analyzed reasoning process';
                                 })()} />
                                 <ChainOfThoughtContent>
                                     {thinkSteps.map((stepContent, idx) => (
