@@ -1052,7 +1052,7 @@ export default function AIAgentPanel({
                                 onTeachMe={() => handleStartTutor(activeChatTab)}
                                 onExplainVideo={handleExplainVideo}
                                 isVideoLoading={isVideoLoading}
-                                isTutorLoading={isLoadingMessage}
+                                isTutorLoading={isLoadingMessage && isTutorActive}
                                 isTutorActive={isTutorActive}
                                 hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
                             />

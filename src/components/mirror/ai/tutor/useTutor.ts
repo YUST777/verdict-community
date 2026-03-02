@@ -11,6 +11,16 @@ interface Concept {
     type: 'video' | 'article';
 }
 
+interface TutorResponseData {
+    thinking?: string;
+    solution?: string;
+    approach?: string;
+    explanation?: string;
+    concepts?: Concept[];
+    python_scratchpad?: string;
+    passCount?: number;
+}
+
 interface UseTutorProps {
     problemId?: string;
     language: string;
@@ -35,6 +45,15 @@ const SIMPLE_MODE_RULES = `STRICT RULES — Use an ADAPTIVE TEACHING approach fo
 6. **JSON Format**: Return ONLY valid JSON. Return the "solution" key FIRST to ensure it is generated before token limits are hit.
 
 CRITICAL: The "solution" must contain ZERO comments. No // comments, no /* */ comments, no # comments. Not a single comment anywhere. Pure code only.`;
+
+const VERDICT_AR: Record<string, string> = {
+    'Accepted': 'اتقبل',
+    'Wrong Answer': 'إجابة غلط',
+    'Time Limit Exceeded': 'وقت التنفيذ خلص',
+    'Compilation Error': 'غلط ترجمة',
+    'Runtime Error': 'غلط في التنفيذ',
+    'Internal Error': 'غلط من جوا'
+};
 
 const SMART_MODE_RULES = `STRICT RULES — Use an EXPERT TEACHING approach:
 1. **Optimal Solutions**: Write the most optimal solution with best time/space complexity. Use advanced algorithms, STL containers (vector, map, priority_queue, etc.) freely.
@@ -115,13 +134,14 @@ export function useTutor({
 
         const solutionStyle = (typeof window !== 'undefined' ? localStorage.getItem('verdict_solution_style') : 'simple') || 'simple';
         const isSimple = solutionStyle !== 'smart';
+        const isArabic = settings.language === 'ar';
         const styleRules = isSimple ? SIMPLE_MODE_RULES : SMART_MODE_RULES;
 
         const thinkMsgId = `tutor-${Date.now()}`;
         addMessage({
             id: thinkMsgId,
             role: 'assistant',
-            content: '<think>\nReading the problem...\n</think>\n\n🍳 *Getting ready to cook...*',
+            content: isArabic ? '<think>\nقراءة المسألة...\n</think>\n\n🍳 *بجهز أطبخ...*' : '<think>\nReading the problem...\n</think>\n\n🍳 *Getting ready to cook...*',
             timestamp: new Date()
         }, tabId);
 
@@ -155,12 +175,12 @@ export function useTutor({
                 } catch { }
             }
 
-            const isArabic = settings.language === 'ar';
+            const referenceStatusAr = referenceStatus.includes('Verified') ? 'لقيت حل مرجعي. هستخدمه كمرجع.' : 'مفيش حل مرجعي. هحلها من أول وجديد.';
             const languageInstruction = isArabic
-                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Arabic (العربية). Use natural Arabic (Egyptian/tech dialect is fine). The "solution" code itself stays in the programming language (C++/etc), but the "explanation" and "thinking" fields MUST be in Arabic. CRITICAL FORMATTING: Whenever you mix English variables, numbers, mathematical formulas, or code constructs (e.g. O(N), vector, 10^5) inside the Arabic text, you MUST enclose them in markdown backticks (e.g. `O(N)` or `dp[i]`) across ALL fields. This forces Left-To-Right rendering for English interspersed in Right-To-Left Arabic.'
+                ? '\n\nIMPORTANT LANGUAGE RULE: You MUST write ALL explanations, thinking, approach, and concepts in Egyptian Arabic (عامية مصرية). Use natural Egyptian dialect — not formal Arabic (فصحى). The "solution" code itself stays in the programming language (C++/etc), but the "explanation" and "thinking" fields MUST be in Egyptian colloquial. CRITICAL FORMATTING: Whenever you mix English variables, numbers, formulas, or code (e.g. O(N), vector, 10^5) inside the Arabic text, enclose them in markdown backticks (e.g. `O(N)` or `dp[i]`) so direction renders correctly.'
                 : '';
 
-            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\n</think>\n\n*${isArabic ? 'بقرا المسألة وبجهز المكونات...' : 'Reading the problem and gathering ingredients...'}*`, undefined, tabId);
+            updateMessage(thinkMsgId, `<think>\n${isArabic ? 'قراءة المسألة...\n' + referenceStatusAr + '\nبحدد القيود والكيسات الصعبة...' : 'Reading the problem...\n' + referenceStatus + '\nIdentifying constraints and edge cases...'}\n</think>\n\n*${isArabic ? 'بقرا المسألة وبجهز المكونات...' : 'Reading the problem and gathering ingredients...'}*`, undefined, tabId);
             await new Promise(r => setTimeout(r, 400));
 
             const systemPrompt = `You are an elite competitive programming tutor helping a ${isSimple ? 'beginner' : 'skilled programmer'}. You are passionate, slightly quirky, and love 'cooking up' brilliant solutions. You have a lot of 'soul' and personality.
@@ -206,7 +226,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
             ];
-            let currentMessages: any[] = [...initialMessages];
+            const currentMessages: { role: string; content: string }[] = [...initialMessages];
 
             let attempt = 0;
             let scratchpadCount = 0;
@@ -218,9 +238,9 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             let judgePassed = false;
             let judgeResultLine = "";
             let lastPassCount: number | undefined; // preserve across retries (data is overwritten each attempt)
-            let data: any = {};
+            let data: TutorResponseData = {};
 
-            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n🍳 *${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
+            updateMessage(thinkMsgId, `<think>\n${isArabic ? 'قراءة المسألة...\n' + referenceStatusAr + '\nبحدد القيود والكيسات الصعبة...\nبالفسر الطريقة...' : 'Reading the problem...\n' + referenceStatus + '\nIdentifying constraints and edge cases...\nThinking about the approach...'}\n</think>\n\n🍳 *${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
 
             while (attempt < maxAttempts) {
                 attempt++;
@@ -228,7 +248,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 if (attempt > 1) {
                     const passCount = lastPassCount ?? 0;
                     const totalCount = testCases.length;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed (${passCount}/${totalCount} tests passed).\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n*${isArabic ? `بصلح الأخطاء (نجح ${passCount}/${totalCount}). بشتغل على حل...` : `Debugging failing tests (Passed ${passCount}/${totalCount}). Working on a fix...`}*`, undefined, tabId);
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**' + (isArabic ? 'الطريقة:** ' : 'Approach:** ') + finalApproachText : ''}\n\n${isArabic ? `جربت الحل... فشل (اتقبل ${passCount}/${totalCount} من اللي فاتوا).\n\nبعيد أحاول تاني (محاولة ${attempt}/${maxAttempts})...` : `Testing attempted solution... Failed (${passCount}/${totalCount} tests passed).\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...`}\n</think>\n\n*${isArabic ? `بصلح الغلط (اتقبل ${passCount}/${totalCount}). بشتغل على حل...` : `Debugging failing tests (Passed ${passCount}/${totalCount}). Working on a fix...`}*`, undefined, tabId);
                 }
 
                 const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
@@ -278,16 +298,41 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                     const delta = parsedChunk.choices?.[0]?.delta?.content || parsedChunk.choices?.[0]?.message?.content || '';
                                     if (delta) {
                                         rawContent += delta;
-                                        const thinkMatch = rawContent.match(/"thinking"\s*:\s*"((?:[^"\\\\]|\\.)*)/);
-                                        if (thinkMatch && thinkMatch[1]) {
-                                            const partialThink = thinkMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-                                            updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n*${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
-                                        }
                                     }
                                     if (parsedChunk.choices?.[0]?.finish_reason) {
                                         finishReason = parsedChunk.choices[0].finish_reason;
                                     }
-                                } catch (e) { }
+                                } catch (_e) { }
+                            }
+                        }
+
+                        // Parse out partial 'content' and 'thinking' using pure linear string matching (avoiding regex catastrophic backtracking)
+                        let partialContent = '';
+                        if (buffer.trim()) {
+                            const cKey = '"content":';
+                            const cIdx = buffer.indexOf(cKey);
+                            if (cIdx !== -1) {
+                                let cStart = buffer.indexOf('"', cIdx + cKey.length);
+                                if (cStart !== -1) {
+                                    cStart += 1;
+                                    let cEnd = cStart;
+                                    while (cEnd < buffer.length && !(buffer[cEnd] === '"' && buffer[cEnd - 1] !== '\\')) cEnd++;
+                                    partialContent = buffer.substring(cStart, cEnd).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                                }
+                            }
+                        }
+
+                        const streamedSoFar = rawContent + partialContent;
+                        const tKey = '"thinking":';
+                        const tIdx = streamedSoFar.indexOf(tKey);
+                        if (tIdx !== -1) {
+                            let tStart = streamedSoFar.indexOf('"', tIdx + tKey.length);
+                            if (tStart !== -1) {
+                                tStart += 1;
+                                let tEnd = tStart;
+                                while (tEnd < streamedSoFar.length && !(streamedSoFar[tEnd] === '"' && streamedSoFar[tEnd - 1] !== '\\')) tEnd++;
+                                const partialThink = streamedSoFar.substring(tStart, tEnd).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                                updateMessage(thinkMsgId, `<think>\n${partialThink}\n</think>\n\n*${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
                             }
                         }
                     }
@@ -301,7 +346,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                     finishReason = fullObj.choices[0].finish_reason;
                                 }
                             }
-                        } catch (e) { }
+                        } catch (_e) { }
                     }
                 }
 
@@ -314,7 +359,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     const latestThink = isArabic
                         ? "خطأ: تم الوصول للحد الأقصى للكلمات المسموحة. الإجابة اتقطعت. هحاول تاني بتفكير أوجز..."
                         : "Error: Hit maximum token limit. The output was cut off mid-sentence. Retrying with a more concise thought process...";
-                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
+                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة تصليح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
                     updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'خلصت الكلمات المسموحة. بحاول تاني باختصار' : 'Ran out of tokens. Retrying more concisely'}...*`, undefined, tabId);
                     continue;
                 }
@@ -324,15 +369,15 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 }
 
                 try {
-                    data = extractAndParseJson(rawContent);
-                } catch (parseErr: any) {
+                    data = extractAndParseJson<TutorResponseData>(rawContent);
+                } catch (parseErr: unknown) {
                     currentMessages.push({ role: 'assistant', content: rawContent });
                     currentMessages.push({
                         role: 'user',
-                        content: `Your response was invalid JSON or truncated: ${parseErr.message}. Please try again and ensure you close all JSON brackets and provide the full solution.`
+                        content: `Your response was invalid JSON or truncated: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. Please try again and ensure you close all JSON brackets and provide the full solution.`
                     });
-                    const latestThink = isArabic ? "خطأ في قراءة رد الذكاء الاصطناعي: " + parseErr.message : "Error parsing response: " + parseErr.message;
-                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
+                    const latestThink = isArabic ? "غلط في قراءة رد البوت. تفاصيل تقنية: " + (parseErr instanceof Error ? parseErr.message : String(parseErr)) : "Error parsing response: " + (parseErr instanceof Error ? parseErr.message : String(parseErr));
+                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة تصليح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
                     updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'النص اتقطع. بحاول تاني' : 'JSON Truncated. Retrying'}...*`, undefined, tabId);
                     continue;
                 }
@@ -345,8 +390,8 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             role: 'user',
                             content: `You have reached the maximum number of Python Scratchpad executions (3) for this problem. You MUST now proceed with the final Option 1 JSON schema and provide your C++ solution.`
                         });
-                        const latestThink = isArabic ? "خطأ: وصلت للحد الأقصى للتجارب. بكتب الحل النهائي..." : "Error: Maximum scratchpad limit reached. Retrying with final C++ solution...";
-                        finalThinkingText += `\n\n**-- ${isArabic ? 'وصلت للحد الأقصى للتجارب' : 'Max Scratchpads Reached'} --**\n` + latestThink;
+                        const latestThink = isArabic ? "غلط: وصلت لآخر عدد تجارب. بكتب الحل النهائي..." : "Error: Maximum scratchpad limit reached. Retrying with final C++ solution...";
+                        finalThinkingText += `\n\n**-- ${isArabic ? 'وصلت لآخر عدد تجارب' : 'Max Scratchpads Reached'} --**\n` + latestThink;
                         updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'خلصت محاولات التجربة. هكتب الحل النهائي' : 'Scratchpad limit reached. Proceeding with solution'}...*`, undefined, tabId);
                         attempt--;
                         continue;
@@ -384,7 +429,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             role: 'user',
                             content: `Your Python scratchpad executed successfully. Output:\n\n${scratchOutput}\n\nPlease use this insight to write the final optimal C++ solution.`
                         });
-                    } catch (e: any) {
+                    } catch (_e: unknown) {
                         currentMessages.push({ role: 'assistant', content: rawContent });
                         currentMessages.push({
                             role: 'user',
@@ -401,29 +446,29 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         role: 'user',
                         content: `Your response did not include a valid "solution" string field.`
                     });
-                    const latestThink = isArabic ? "خطأ: مفيش حل أو الحل مش مكتوب صح. بحاول تاني..." : "Error: Invalid or missing solution field. Retrying...";
-                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
-                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'تنسيق الحل غير صحيح. بحاول تاني' : 'Invalid solution format. Retrying'}...*`, undefined, tabId);
+                    const latestThink = isArabic ? "غلط: مفيش حل أو الحل مش مكتوب صح. بحاول تاني..." : "Error: Invalid or missing solution field. Retrying...";
+                    finalThinkingText += (attempt === 1 ? '' : `\n\n**-- ${isArabic ? 'محاولة تصليح' : 'Fixing Attempt'} ${attempt} --**\n`) + latestThink;
+                    updateMessage(thinkMsgId, `<think>\n${finalThinkingText}\n</think>\n\n⚠️ *${isArabic ? 'الحل مش مكتوب صح. بحاول تاني' : 'Invalid solution format. Retrying'}...*`, undefined, tabId);
                     continue;
                 }
 
-                let cleanSolution = data.solution
+                const cleanSolution = data.solution
                     .replace(/\/\/.*$/gm, '')
                     .replace(/\/\*[\s\S]*?\*\//g, '')
                     .replace(/^\s*\n/gm, '');
 
-                const latestThink = data.thinking || (isArabic ? 'بحلل المشكلة وبكتب الحل.' : 'Analyzing the problem and formulating a solution.');
+                const latestThink = data.thinking || (isArabic ? 'بحلل المسألة وبكتب الحل.' : 'Analyzing the problem and formulating a solution.');
                 if (attempt === 1) {
                     finalThinkingText = latestThink;
                 } else {
-                    finalThinkingText += `\n\n**-- ${isArabic ? 'محاولة الإصلاح' : 'Fixing Attempt'} ${attempt} --**\n` + latestThink;
+                    finalThinkingText += `\n\n**-- ${isArabic ? 'محاولة تصليح' : 'Fixing Attempt'} ${attempt} --**\n` + latestThink;
                 }
 
                 finalApproachText = data.approach || '';
                 finalExplanation = data.explanation || '';
                 finalSolution = cleanSolution;
 
-                const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
+                const thinkBase = `${finalThinkingText}${finalApproachText ? '\n\n**' + (isArabic ? 'الطريقة:** ' : 'Approach:** ') + finalApproachText : ''}`;
                 const testMsgInternal = isArabic ? `بجرب الحل على منصة التحكيم (محاولة ${attempt}/${maxAttempts})...` : `Testing attempted solution against Judge0 (Attempt ${attempt}/${maxAttempts})...`;
                 updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${testMsgInternal}\n</think>\n\n⚙️ *${testMsgInternal}*`, undefined, tabId);
 
@@ -449,34 +494,44 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         judgePassed = judgeData.passed;
                         const judgeVerdict = judgeData.verdict;
                         if (judgePassed) {
-                            judgeResultLine = isArabic ? `**${judgeVerdict}** — كل التيستات (${testCases.length}) نجحت` : `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
+                            const verdictLabel = isArabic ? (VERDICT_AR[judgeVerdict] || judgeVerdict) : judgeVerdict;
+                            judgeResultLine = isArabic ? `**${verdictLabel}** — كل الاختبارات (${testCases.length}) اتقبلت` : `**${judgeVerdict}** — All ${testCases.length} test${testCases.length > 1 ? 's' : ''} passed`;
                         } else {
-                            const failedCase = judgeData.results?.find((r: any) => !r.passed);
-                            let judgeDetails = failedCase ? ` (Test ${failedCase.testCase}: ${failedCase.verdict})` : '';
+                            const failedCase = judgeData.results?.find((r: { passed?: boolean }) => !r.passed);
+                            let judgeDetails = failedCase ? (isArabic ? ` (اختبار ${failedCase.testCase}: ${VERDICT_AR[failedCase.verdict] || failedCase.verdict})` : ` (Test ${failedCase.testCase}: ${failedCase.verdict})`) : '';
                             if (failedCase?.compileError) {
-                                judgeDetails += `\n\nCompiler Output:\n${failedCase.compileError.substring(0, 1000)}`;
+                                judgeDetails += isArabic ? `\n\nمخرجات الترجمة:\n` : `\n\nCompiler Output:\n`;
+                                judgeDetails += failedCase.compileError.substring(0, 1000);
                             } else if (failedCase?.runtimeError) {
-                                judgeDetails += `\n\nRuntime Error Output:\n${failedCase.runtimeError.substring(0, 1000)}`;
+                                judgeDetails += isArabic ? `\n\nمخرجات غلط التنفيذ:\n` : `\n\nRuntime Error Output:\n`;
+                                judgeDetails += failedCase.runtimeError.substring(0, 1000);
                             }
-                            judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
-                            lastPassCount = judgeData.passedCount;
-                            data.passCount = judgeData.passedCount;
+                            judgeResultLine = `**${isArabic ? (VERDICT_AR[judgeData.verdict] || judgeData.verdict) : judgeData.verdict}**${judgeDetails}`;
+                            lastPassCount = judgeData.testsPassed;
+                            data.passCount = judgeData.testsPassed;
                         }
                     } else {
                         judgePassed = false;
-                        judgeResultLine = isArabic ? `**خطأ في منصة التحكيم**` : `**Judge Error**`;
+                        judgeResultLine = isArabic ? `**غلط في منصة التحكيم**` : `**Judge Error**`;
                     }
-                } catch (err) {
+                } catch (_err) {
                     judgePassed = false;
-                    judgeResultLine = isArabic ? `**منصة التحكيم غير متاحة**` : `**Judge unavailable**`;
+                    judgeResultLine = isArabic ? `**منصة التحكيم مش شغالة**` : `**Judge unavailable**`;
                 }
 
                 if (judgePassed && referenceCode && finalSolution && attempt < maxAttempts) {
-                    const passWaitInternal = isArabic ? `${testMsgInternal} نجح في التيستات العادية!\n\nبنشئ 5 حالات اختبار معقدة عشان أختصم الحل...` : `${testMsgInternal} Passed sample tests!\n\nGenerating 5 tricky edge cases for stress-testing...`;
-                    updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${passWaitInternal}\n</think>\n\n🕵️ *${isArabic ? "استنى، مخلصتش تقييم!" : "Wait, I'm not done!"}*`, undefined, tabId);
+                    // Only run fuzzer in smart mode. In simple mode the problem is "not that deep" — Judge0 pass is enough.
+                    const shouldFuzz = !isSimple;
+                    if (!shouldFuzz) {
+                        break;
+                    }
+
+                    const edgeCaseCount = 2;
+                    const passWaitInternal = isArabic ? `${testMsgInternal} اتقبل في الاختبارات العادية!\n\nبنشئ ${edgeCaseCount} كيسات صعبة عشان أختبر الحل...` : `${testMsgInternal} Passed sample tests!\n\nGenerating ${edgeCaseCount} tricky edge cases for stress-testing...`;
+                    updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${passWaitInternal}\n</think>\n\n🕵️ *${isArabic ? "استنى، مخلصتش التقييم!" : "Wait, I'm not done!"}*`, undefined, tabId);
 
                     try {
-                        const edgeCasePrompt = `Generate exactly 5 tricky edge-case inputs for this problem. Return ONLY a JSON object containing an "inputs" array of 5 strings.`;
+                        const edgeCasePrompt = `Generate exactly ${edgeCaseCount} tricky edge-case inputs for this problem. Return ONLY a JSON object containing an "inputs" array of ${edgeCaseCount} strings.`;
                         const edgeRes = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
                             method: 'POST',
                             headers: {
@@ -487,7 +542,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                 model: settings.model,
                                 response_format: { type: "json_object" },
                                 messages: [
-                                    { role: 'system', content: 'You are a strict test case generator. Return ONLY {"inputs": ["input1", "input2", ...]}' },
+                                    { role: 'system', content: `You are a strict test case generator. Return ONLY {"inputs": ["input1", "input2"]} with exactly ${edgeCaseCount} inputs.` },
                                     { role: 'user', content: edgeCasePrompt }
                                 ]
                             }),
@@ -499,7 +554,8 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                             const edgeContent = edgeData.choices?.[0]?.message?.content || '{}';
                             const edgeObj = extractAndParseJson(edgeContent);
                             if (edgeObj && edgeObj.inputs && Array.isArray(edgeObj.inputs)) {
-                                const passFuzzInternal = isArabic ? `${testMsgInternal} نجح!\n\nتم استخراج 5 حالات صعبة.` : `${testMsgInternal} Passed sample tests!\n\nGenerated 5 edge cases.`;
+                                const edgeInputs = edgeObj.inputs.slice(0, edgeCaseCount);
+                                const passFuzzInternal = isArabic ? `${testMsgInternal} اتقبل!\n\nاستخرجت ${edgeInputs.length} كيسات صعبة.` : `${testMsgInternal} Passed sample tests!\n\nGenerated ${edgeInputs.length} edge cases.`;
                                 updateMessage(thinkMsgId, `<think>\n${thinkBase}\n\n${passFuzzInternal}\n</think>\n\n🏎️ *${isArabic ? "بقارن نواتج الكود بتاعي مع الحل المرجعي..." : "Fuzzing my code against the verified solution..."}*`, undefined, tabId);
 
                                 const fuzzRes = await fetch('/api/judge/fuzz', {
@@ -509,16 +565,16 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                         aiSolution: finalSolution,
                                         referenceSolution: referenceCode,
                                         language: language,
-                                        edgeCases: edgeObj.inputs
+                                        edgeCases: edgeInputs
                                     }),
                                     signal
                                 });
 
                                 if (fuzzRes.ok) {
                                     const fuzzData = await fuzzRes.json();
-                                        if (!fuzzData.passed && fuzzData.failingCase) {
+                                    if (!fuzzData.passed && fuzzData.failingCase) {
                                         judgePassed = false;
-                                        judgeResultLine = isArabic ? `**إجابة خاطئة على حالة اختبار صعبة (Edge Case)**` : `**Wrong Answer on hidden edge case**`;
+                                        judgeResultLine = isArabic ? `**إجابة غلط في كيس صعب**` : `**Wrong Answer on hidden edge case**`;
                                         lastPassCount = testCases.length;
                                         data.passCount = testCases.length;
                                         currentMessages.push({ role: 'assistant', content: rawContent });
@@ -531,7 +587,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                 }
                             }
                         }
-                    } catch (e) { }
+                    } catch (_e) { }
                 }
 
                 if (judgePassed || attempt === maxAttempts) {
@@ -548,26 +604,26 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             const hasValidSolution = finalSolution.trim().length > 0;
 
             if (hasValidSolution) {
-            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\n*${isArabic ? 'بكتب الحل...' : 'Writing solution...'}*`, undefined, tabId);
+                updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**' + (isArabic ? 'الطريقة:** ' : 'Approach:** ') + finalApproachText : ''}\n</think>\n\n*${isArabic ? 'بكتب الحل...' : 'Writing solution...'}*`, undefined, tabId);
 
-            await new Promise(r => setTimeout(r, 300));
-            updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nWriting code...\n</think>\n\n*${isArabic ? 'بكتب الكود في المحرر...' : 'Writing solution code to editor...'}*`, undefined, tabId);
+                await new Promise(r => setTimeout(r, 300));
+                updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**' + (isArabic ? 'الطريقة:** ' : 'Approach:** ') + finalApproachText : ''}\n\n${isArabic ? 'كتابة الكود...' : 'Writing code...'}\n</think>\n\n*${isArabic ? 'بكتب الكود في المحرر...' : 'Writing solution code to editor...'}*`, undefined, tabId);
 
-            await streamCodeToEditor(finalSolution, tabId);
+                await streamCodeToEditor(finalSolution, tabId);
             }
 
-            const thinkBaseFinal = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
-            const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\n${isArabic ? 'تم تأليف الكود بنجاح' : 'Code written successfully'}\n\n${judgeResultLine}\n</think>`;
+            const thinkBaseFinal = `${finalThinkingText}${finalApproachText ? '\n\n**' + (isArabic ? 'الطريقة:** ' : 'Approach:** ') + finalApproachText : ''}`;
+            const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\n${isArabic ? 'الكود اتكتب بنجاح' : 'Code written successfully'}\n\n${judgeResultLine}\n</think>`;
 
             let combinedMessage = '';
             if (!hasValidSolution) {
-                combinedMessage = finalThinkBlock + `\n\n${isArabic ? 'ماقدرتش أطلع حل صالح بعد عدة محاولات. جرب تاني أو اطلب تلميح في الشات.' : `I couldn't produce a valid solution after ${maxAttempts} attempts. Please try again or ask for a hint in the chat.`}`;
+                combinedMessage = finalThinkBlock + `\n\n${isArabic ? 'ماقدرتش أطلع حل يعدي. جرب تاني أو اطلب تلميح في الشات.' : `I couldn't produce a valid solution after ${maxAttempts} attempts. Please try again or ask for a hint in the chat.`}`;
                 updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             } else if (judgePassed) {
-                combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.' : 'The solution has been written to the editor and passes all test cases.'}`;
+                combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر وكل الاختبارات اتقبلت.' : 'The solution has been written to the editor and passes all test cases.'}`;
                 updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             } else {
-                combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل ممكن يكون محتاج شوية تعديلات. اطلب مني أصلحه في الشات لو حابب.' : 'The solution might need adjustments. Try asking me to fix it in the chat.'}`;
+                combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل ممكن محتاج شوية تعديلات. قول لي أصلحه في الشات لو حابب.' : 'The solution might need adjustments. Try asking me to fix it in the chat.'}`;
                 updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             }
 
@@ -583,7 +639,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                         contextType: 'teach_me'
                     })
                 }).catch(() => { });
-            } catch (e) { }
+            } catch (_e) { }
 
             let finalConcepts = data.concepts || [];
             try {
@@ -595,34 +651,35 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 });
                 if (ytRes.ok) {
                     const ytData = await ytRes.json();
-                    const ytVideo = ytData.results?.find((r: any) => r.type === 'youtube');
+                    const ytVideo = ytData.results?.find((r: { type?: string }) => r.type === 'youtube');
                     if (ytVideo) {
+                        const v = ytVideo as { title?: string; url?: string };
                         finalConcepts = [
                             {
-                                title: ytVideo.title,
-                                type: 'video' as any,
-                                url: ytVideo.url
+                                title: v.title ?? 'Video',
+                                type: 'video' as const,
+                                url: v.url ?? ''
                             },
                             ...finalConcepts
                         ];
                     }
                 }
-            } catch (e) { }
+            } catch (_e) { }
 
             if (finalConcepts.length > 0) {
                 setConcepts(finalConcepts, tabId);
             }
 
-        } catch (err: any) {
-            if (err.name === 'AbortError' || err.message === 'signal is aborted without reason') {
-                updateMessage(thinkMsgId, settings.language === 'ar' ? 'تم إيقاف جلسة التعليم.' : `Tutor session was stopped.`, undefined, tabId);
+        } catch (_err: unknown) {
+            if (_err instanceof Error && (_err.name === 'AbortError' || _err.message === 'signal is aborted without reason')) {
+                updateMessage(thinkMsgId, settings.language === 'ar' ? 'جلسة التعليم اتوقفت.' : `Tutor session was stopped.`, undefined, tabId);
             } else {
                 setIsLoadingInParent(false, tabId);
                 setIsTutorActive(false, tabId);
                 addMessage({
                     id: `err-${Date.now()}`,
                     role: 'assistant',
-                    content: `${settings.language === 'ar' ? 'حصل خطأ' : 'Error'}: ${err.message}.`,
+                    content: `${settings.language === 'ar' ? 'حصل غلط' : 'Error'}: ${_err instanceof Error ? _err.message : String(_err)}.`,
                     timestamp: new Date()
                 }, tabId);
             }
@@ -645,7 +702,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             if (abortControllers.current[tabId]) {
                 try {
                     abortControllers.current[tabId]?.abort();
-                } catch (e) {
+                } catch (_e) {
                     // Ignore already aborted or restricted signals
                 }
                 abortControllers.current[tabId] = null;
@@ -658,7 +715,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 if (abortControllers.current[id]) {
                     try {
                         abortControllers.current[id]?.abort();
-                    } catch (e) { }
+                    } catch (_e) { }
                     abortControllers.current[id] = null;
                 }
             });
