@@ -381,11 +381,10 @@ export default function AIAgentPanel({
         startTutor(tabId);
     }, [problemId, language, startTutor, activeChatTab]);
 
-    // Auto-start Tutor if requested
+    // Auto-start Tutor is disabled. User must explicitly click "Teach Me".
     useEffect(() => {
-        if (autoStart && !isTutorActive && messages.length === 0 && !isLoadingMessage) {
-            startTutor(activeChatTab);
-        }
+        // Intentionally left empty to avoid auto-starting the tutor based on heuristics.
+        // Teach Me should only run when the user clicks the button.
     }, [autoStart, isTutorActive, messages.length, isLoadingMessage, startTutor, activeChatTab]);
 
     // Helper function to update last interaction response length
@@ -484,22 +483,8 @@ export default function AIAgentPanel({
         const promptToSend = (overridePrompt || inputByTab[tabId] || '').trim();
         if (!promptToSend || isLoadingByTab[tabId]) return;
 
-        // Detect "teach me" to auto-trigger tutor
-        if (promptToSend.toLowerCase().includes('teach me') && (onSolveProblem || onAiCodeUpdate)) {
-            // Still show the user message in chat
-            const userMsg: Message = {
-                id: Date.now().toString(),
-                role: 'user',
-                content: promptToSend,
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, userMsg], tabId);
-            if (!overridePrompt) setInput('', tabId);
-
-            // Start tutor after adding user message so it appears chronologically correct
-            handleStartTutor(tabId);
-            return;
-        }
+        // Teach Me runs ONLY when user clicks the "Teach Me" button — not on text in chat.
+        // Normal chat and Teach Me are separate flows with separate API behavior.
 
         // Check LLM Configuration
         if (!settings.enabled || !settings.apiKey) {
@@ -578,9 +563,6 @@ export default function AIAgentPanel({
             if (hasSelectedCode) {
                 contentString += `\n\nCode Context:\n\`\`\`${language}\n${selectedCode}\n\`\`\`\n`;
             }
-            if (problemDescription && !currentTabMessages.length) {
-                contentString = `Problem Description: ${problemDescription}\n\n` + contentString;
-            }
 
             chatMessages.push({ role: 'user', content: contentString });
 
@@ -591,15 +573,19 @@ export default function AIAgentPanel({
                 : 'When writing code solutions, prefer simple and readable code that is easy to understand. Avoid over-optimizing — a clean O(n²) solution is fine if it fits the constraints. Focus on clear logic over performance tricks.';
 
             const isArabic = settings.language === 'ar';
-            const baseSystemPrompt = isArabic
-                ? 'أنت مساعد بالذكاء الاصطناعي متخصص في البرمجة التنافسية. اشرح بوضوح وبإيجاز. تحدث بالعربية الطبيعية (لهجة مصرية/تقنية مقبولة). عند شرح الأكواد، اهتم بتحليل التعقيد (الوقت والذاكرة). اكتب الكود بالانجليزي لكن كل الشروحات والتعليقات بالعربي. قاعدة تنسيق هامة جداً: عند كتابة أي مصطلحات إنجليزية، أو أرقام، أو معادلات رياضية، أو متغيرات برمجية داخل النص العربي، يجب عليك وضعها داخل علامات التنصيص البرمجية (backticks) مثل `O(N)` أو `dp[i]` لمنع انعكاس اتجاه الجملة.'
-                : 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.';
+            let baseSystemPrompt = isArabic
+                ? 'أنت مساعد ذكاء اصطناعي متخصص في البرمجة التنافسية. تعامل مع المستخدم بلطف. تكلم بالعامية المصرية (مصري/تقني). لا تقم بشرح المسألة أبداً ما لم يطلب المستخدم منك ذلك بصراحة أو يطلب تلميحاً. لما تشرح أكواد، اهتم بتحليل التعقيد (الوقت والذاكرة). اكتب الكود بالإنجليزي بس كل الشروحات والتعليقات بالعامية. قاعدة تنسيق: لما تكتب مصطلحات إنجليزية أو أرقام أو معادلات أو متغيرات برمجية جوا النص العربي، حطها جوا علامات تنصيص برمجية زي `O(N)` أو `dp[i]` عشان اتجاه الجملة يبقى صح.'
+                : 'You are a friendly coding and competitive programming assistant. Do not explain the problem unless the user explicitly asks for help or a hint. When asked about code, provide clear and concise explanations. Keep complexity (time and space) in mind.';
+
+            if (problemDescription) {
+                baseSystemPrompt += `\n\nContext: The user is currently looking at the following problem. Do NOT explain or solve this problem simply because it is provided in the context. Wait for the user to ask a specific question.\n\n<problem_description>\n${problemDescription}\n</problem_description>`;
+            }
 
             const tutorInstruction = '\n\n' + CODE_TUTOR_CHAT_APPENDIX;
 
             const thinkInstruction = 'Always enclose your detailed, step-by-step thinking process inside <think>...</think> tags. After your thought process, provide a concise final summary and explanation as your main response.';
 
-            let currentMessages = [
+            const currentMessages = [
                 { role: 'system', content: baseSystemPrompt + tutorInstruction + '\n\n' + styleInstruction + '\n\n' + thinkInstruction },
                 ...chatMessages
             ];
@@ -1029,7 +1015,7 @@ export default function AIAgentPanel({
                             className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.13] border border-emerald-500/20 rounded-2xl text-emerald-400 text-[12px] font-medium transition-all group"
                         >
                             <BrainCircuit size={14} strokeWidth={2} />
-                            {isArabic ? 'إعداد الـ LLM الخاص بك' : 'Configure Bring Your Own LLM'}
+                            {isArabic ? 'إعداد النموذج بتاعك' : 'Configure Bring Your Own LLM'}
                         </button>
                     )}
 
@@ -1045,7 +1031,7 @@ export default function AIAgentPanel({
                                     className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white font-medium rounded-lg text-[12px] transition-colors"
                                 >
                                     <BrainCircuit size={14} strokeWidth={2} />
-                                    <span>{isArabic ? 'استخدم الـ LLM الخاص بك' : 'Bring your own LLM'}</span>
+                                    <span>{isArabic ? 'استخدم النموذج بتاعك' : 'Bring your own LLM'}</span>
                                 </button>
                             </div>
                         </div>
@@ -1056,7 +1042,7 @@ export default function AIAgentPanel({
                                 onChange={setInput}
                                 isLoading={isLoadingMessage}
                                 placeholder={
-                                    !settings.enabled || !settings.apiKey ? (isArabic ? 'برجاء إعداد الـ LLM أولاً...' : 'Configure LLM first...')
+                                    !settings.enabled || !settings.apiKey ? (isArabic ? 'اعمل إعداد للنموذج الأول...' : 'Configure LLM first...')
                                         : selectedCode && selectedLineReference ? (isArabic ? 'اسأل عن الكود المحدد...' : 'Ask about the selected code...')
                                             : (isArabic ? 'اسأل أي شيء...' : 'Ask anything...')
                                 }
