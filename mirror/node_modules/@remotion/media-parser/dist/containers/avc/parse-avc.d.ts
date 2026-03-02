@@ -1,0 +1,50 @@
+import type { AvcState } from '../../state/avc/avc-state';
+import type { MediaParserAvcDeltaFrameInfo, MediaParserAvcKeyframeInfo } from '../../webcodec-sample-types';
+type VuiParameters = {
+    sar_width: number | null;
+    sar_height: number | null;
+    overscan_appropriate_flag: number | null;
+    video_format: number | null;
+    video_full_range_flag: boolean | null;
+    colour_primaries: number | null;
+    transfer_characteristics: number | null;
+    matrix_coefficients: number | null;
+    chroma_sample_loc_type_top_field: number | null;
+    chroma_sample_loc_type_bottom_field: number | null;
+};
+export type SpsInfo = {
+    profile: number;
+    compatibility: number;
+    level: number;
+    seq_parameter_set_id: number;
+    separate_colour_plane_flag: number | null;
+    bit_depth_luma_minus8: number | null;
+    bit_depth_chroma_minus8: number | null;
+    qpprime_y_zero_transform_bypass_flag: number | null;
+    log2_max_frame_num_minus4: number;
+    log2_max_pic_order_cnt_lsb_minus4: number | null;
+    max_num_ref_frames: number | null;
+    gaps_in_frame_num_value_allowed_flag: number | null;
+    pic_width_in_mbs_minus1: number;
+    pic_height_in_map_units_minus1: number;
+    mb_adaptive_frame_field_flag: number | null;
+    direct_8x8_inference_flag: number | null;
+    frame_crop_left_offset: number | null;
+    frame_crop_right_offset: number | null;
+    frame_crop_top_offset: number | null;
+    frame_crop_bottom_offset: number | null;
+    vui_parameters: VuiParameters | null;
+    pic_order_cnt_type: number;
+};
+export type AvcProfileInfo = {
+    spsData: SpsInfo;
+    sps: Uint8Array;
+    type: 'avc-profile';
+};
+export type AvcPPs = {
+    type: 'avc-pps';
+    pps: Uint8Array;
+};
+export type AvcInfo = AvcProfileInfo | AvcPPs | MediaParserAvcKeyframeInfo | MediaParserAvcDeltaFrameInfo;
+export declare const parseAvc: (buffer: Uint8Array, avcState: AvcState) => AvcInfo[];
+export {};

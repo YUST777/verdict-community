@@ -1,0 +1,26 @@
+import type { GitSource, PackageManager, RenderDefaults } from '@remotion/studio-shared';
+import type { StaticFile } from 'remotion';
+export declare const indexHtml: ({ publicPath, editorName, inputProps, envVariables, staticHash, remotionRoot, studioServerCommand, renderQueue, completedClientRenders, numberOfAudioTags, publicFiles, includeFavicon, title, renderDefaults, publicFolderExists, gitSource, projectName, installedDependencies, packageManager, audioLatencyHint, logLevel, mode, }: {
+    staticHash: string;
+    publicPath: string;
+    editorName: string | null;
+    inputProps: object | null;
+    envVariables?: Record<string, string> | undefined;
+    remotionRoot: string;
+    studioServerCommand: string | null;
+    renderQueue: unknown;
+    completedClientRenders?: unknown;
+    numberOfAudioTags: number;
+    audioLatencyHint: AudioContextLatencyCategory;
+    publicFiles: StaticFile[];
+    publicFolderExists: string | null;
+    includeFavicon: boolean;
+    title: string;
+    renderDefaults: RenderDefaults | undefined;
+    gitSource: GitSource | null;
+    projectName: string;
+    installedDependencies: string[] | null;
+    packageManager: "unknown" | PackageManager;
+    logLevel: "error" | "info" | "trace" | "verbose" | "warn";
+    mode: "bundle" | "dev";
+}) => string;

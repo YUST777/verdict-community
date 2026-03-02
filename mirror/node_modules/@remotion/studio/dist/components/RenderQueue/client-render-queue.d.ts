@@ -1,0 +1,21 @@
+import type { ComponentType } from 'react';
+import type { CalculateMetadataFunction } from 'remotion';
+import type { ClientStillRenderJob, ClientVideoRenderJob } from './client-side-render-types';
+export type CompositionRef = {
+    component: ComponentType<Record<string, unknown>>;
+    calculateMetadata: CalculateMetadataFunction<Record<string, unknown>> | null;
+    width: number;
+    height: number;
+    fps: number;
+    durationInFrames: number;
+    defaultProps: Record<string, unknown>;
+};
+export declare const registerCompositionForJob: (jobId: string, compositionRef: CompositionRef) => void;
+export declare const getCompositionForJob: (jobId: string) => CompositionRef | undefined;
+export declare const cleanupCompositionForJob: (jobId: string) => void;
+export declare const generateJobId: () => string;
+export declare const getAbortController: (jobId: string) => AbortController;
+export declare const deleteAbortController: (jobId: string) => void;
+export declare const cancelAbortController: (jobId: string) => void;
+export type AddClientStillJobParams = Omit<ClientStillRenderJob, 'id' | 'startedAt' | 'status'>;
+export type AddClientVideoJobParams = Omit<ClientVideoRenderJob, 'id' | 'startedAt' | 'status'>;

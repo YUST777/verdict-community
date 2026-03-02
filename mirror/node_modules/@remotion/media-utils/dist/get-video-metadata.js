@@ -1,0 +1,67 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getVideoMetadata = void 0;
+/* eslint-disable @typescript-eslint/no-use-before-define */
+const is_remote_asset_1 = require("./is-remote-asset");
+const media_tag_error_handling_1 = require("./media-tag-error-handling");
+const p_limit_1 = require("./p-limit");
+const cache = {};
+const limit = (0, p_limit_1.pLimit)(3);
+const fn = (src) => {
+    if (cache[src]) {
+        return Promise.resolve(cache[src]);
+    }
+    if (typeof document === 'undefined') {
+        throw new Error('getVideoMetadata() is only available in the browser.');
+    }
+    const video = document.createElement('video');
+    video.src = src;
+    return new Promise((resolve, reject) => {
+        const onError = () => {
+            (0, media_tag_error_handling_1.onMediaError)({
+                error: video.error,
+                src,
+                cleanup,
+                reject,
+                api: 'getVideoMetadata()',
+            });
+        };
+        const onLoadedMetadata = () => {
+            const pixels = video.videoHeight * video.videoWidth;
+            if (pixels === 0) {
+                reject(new Error(`Unable to determine video metadata for ${src}`));
+                return;
+            }
+            if (!Number.isFinite(video.duration)) {
+                reject(new Error(`Unable to determine video duration for ${src} - got Infinity. Re-encoding this video may fix this issue.`));
+                return;
+            }
+            const metadata = {
+                durationInSeconds: video.duration,
+                width: video.videoWidth,
+                height: video.videoHeight,
+                aspectRatio: video.videoWidth / video.videoHeight,
+                isRemote: (0, is_remote_asset_1.isRemoteAsset)(src),
+            };
+            resolve(metadata);
+            cache[src] = metadata;
+            cleanup();
+        };
+        const cleanup = () => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('error', onError);
+            video.remove();
+        };
+        video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+        video.addEventListener('error', onError, { once: true });
+    });
+};
+/**
+ * @description Takes a src to a video, loads it and returns metadata for the specified source.
+ * @see [Documentation](https://remotion.dev/docs/get-video-metadata)
+ * @deprecated Use `parseMedia()` instead: https://www.remotion.dev/docs/miscellaneous/parse-media-vs-get-video-metadata
+ */
+const getVideoMetadata = (src) => {
+    return limit(fn, src);
+};
+exports.getVideoMetadata = getVideoMetadata;

@@ -1,0 +1,29 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EditorContexts = void 0;
+const jsx_runtime_1 = require("react/jsx-runtime");
+const player_1 = require("@remotion/player");
+const client_id_1 = require("../helpers/client-id");
+const folders_1 = require("../state/folders");
+const highest_z_index_1 = require("../state/highest-z-index");
+const keybindings_1 = require("../state/keybindings");
+const preview_size_1 = require("../state/preview-size");
+const sidebar_1 = require("../state/sidebar");
+const VisualControls_1 = require("../visual-controls/VisualControls");
+const CheckerboardProvider_1 = require("./CheckerboardProvider");
+const ExpandedTracksProvider_1 = require("./ExpandedTracksProvider");
+const get_zod_if_possible_1 = require("./get-zod-if-possible");
+const MediaVolumeProvider_1 = require("./MediaVolumeProvider");
+const ModalsProvider_1 = require("./ModalsProvider");
+const ClientRenderQueueProcessor_1 = require("./RenderQueue/ClientRenderQueueProcessor");
+const context_1 = require("./RenderQueue/context");
+const SetTimelineInOutProvider_1 = require("./SetTimelineInOutProvider");
+const ShowGuidesProvider_1 = require("./ShowGuidesProvider");
+const ShowRulersProvider_1 = require("./ShowRulersProvider");
+const ZoomGesturesProvider_1 = require("./ZoomGesturesProvider");
+const EditorContexts = ({ children, readOnlyStudio }) => {
+    return (jsx_runtime_1.jsx(get_zod_if_possible_1.ZodProvider, { children: jsx_runtime_1.jsx(VisualControls_1.VisualControlsProvider, { children: jsx_runtime_1.jsx(client_id_1.PreviewServerConnection, { readOnlyStudio: readOnlyStudio, children: jsx_runtime_1.jsxs(context_1.RenderQueueContextProvider, { children: [
+                        jsx_runtime_1.jsx(ClientRenderQueueProcessor_1.ClientRenderQueueProcessor, {}), jsx_runtime_1.jsx(keybindings_1.KeybindingContextProvider, { children: jsx_runtime_1.jsx(CheckerboardProvider_1.CheckerboardProvider, { children: jsx_runtime_1.jsx(ZoomGesturesProvider_1.ZoomGesturesProvider, { children: jsx_runtime_1.jsx(ShowRulersProvider_1.ShowRulersProvider, { children: jsx_runtime_1.jsx(ShowGuidesProvider_1.ShowGuidesProvider, { children: jsx_runtime_1.jsx(preview_size_1.PreviewSizeProvider, { children: jsx_runtime_1.jsx(ModalsProvider_1.ModalsProvider, { children: jsx_runtime_1.jsx(MediaVolumeProvider_1.MediaVolumeProvider, { children: jsx_runtime_1.jsx(player_1.PlayerInternals.PlayerEmitterProvider, { currentPlaybackRate: null, children: jsx_runtime_1.jsx(sidebar_1.SidebarContextProvider, { children: jsx_runtime_1.jsx(folders_1.FolderContextProvider, { children: jsx_runtime_1.jsx(highest_z_index_1.HighestZIndexProvider, { children: jsx_runtime_1.jsx(SetTimelineInOutProvider_1.SetTimelineInOutProvider, { children: jsx_runtime_1.jsx(ExpandedTracksProvider_1.ExpandedTracksProvider, { children: children }) }) }) }) }) }) }) }) }) }) }) }) }) })
+                    ] }) }) }) }));
+};
+exports.EditorContexts = EditorContexts;

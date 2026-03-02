@@ -1,0 +1,5 @@
+Contact: mailto:security@verdict.run
+Preferred-Languages: en, ar
+Canonical: https://verdict.run/.well-known/security.txt
+Policy: https://verdict.run/security-policy
+Expires: 2027-01-01T00:00:00.000Z

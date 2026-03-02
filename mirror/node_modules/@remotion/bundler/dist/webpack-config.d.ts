@@ -1,0 +1,20 @@
+import type { Configuration } from 'webpack';
+export type WebpackConfiguration = Configuration;
+export type WebpackOverrideFn = (currentConfiguration: WebpackConfiguration) => WebpackConfiguration | Promise<WebpackConfiguration>;
+export declare const webpackConfig: ({ entry, userDefinedComponent, outDir, environment, webpackOverride, onProgress, enableCaching, maxTimelineTracks, remotionRoot, keyboardShortcutsEnabled, bufferStateDelayInMilliseconds, poll, experimentalClientSideRenderingEnabled, experimentalVisualModeEnabled, askAIEnabled, }: {
+    entry: string;
+    userDefinedComponent: string;
+    outDir: string | null;
+    environment: "development" | "production";
+    webpackOverride: WebpackOverrideFn;
+    onProgress?: ((f: number) => void) | undefined;
+    enableCaching?: boolean | undefined;
+    maxTimelineTracks: number | null;
+    keyboardShortcutsEnabled: boolean;
+    bufferStateDelayInMilliseconds: number | null;
+    remotionRoot: string;
+    poll: number | null;
+    askAIEnabled: boolean;
+    experimentalClientSideRenderingEnabled: boolean;
+    experimentalVisualModeEnabled: boolean;
+}) => Promise<[string, Configuration]>;

@@ -217,15 +217,16 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             let finalExplanation = "";
             let judgePassed = false;
             let judgeResultLine = "";
+            let lastPassCount: number | undefined; // preserve across retries (data is overwritten each attempt)
             let data: any = {};
 
-            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n� *${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
+            updateMessage(thinkMsgId, `<think>\nReading the problem...\n${referenceStatus}\nIdentifying constraints and edge cases...\nThinking about the approach...\n</think>\n\n🍳 *${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
 
             while (attempt < maxAttempts) {
                 attempt++;
 
                 if (attempt > 1) {
-                    const passCount = data.passCount || 0;
+                    const passCount = lastPassCount ?? 0;
                     const totalCount = testCases.length;
                     updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nTesting attempted solution... Failed (${passCount}/${totalCount} tests passed).\n\nRetrying approach (Attempt ${attempt}/${maxAttempts})...\n</think>\n\n*${isArabic ? `بصلح الأخطاء (نجح ${passCount}/${totalCount}). بشتغل على حل...` : `Debugging failing tests (Passed ${passCount}/${totalCount}). Working on a fix...`}*`, undefined, tabId);
                 }
@@ -458,6 +459,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                                 judgeDetails += `\n\nRuntime Error Output:\n${failedCase.runtimeError.substring(0, 1000)}`;
                             }
                             judgeResultLine = `**${judgeVerdict}**${judgeDetails}`;
+                            lastPassCount = judgeData.passedCount;
                             data.passCount = judgeData.passedCount;
                         }
                     } else {
@@ -514,9 +516,10 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
 
                                 if (fuzzRes.ok) {
                                     const fuzzData = await fuzzRes.json();
-                                    if (!fuzzData.passed && fuzzData.failingCase) {
+                                        if (!fuzzData.passed && fuzzData.failingCase) {
                                         judgePassed = false;
                                         judgeResultLine = isArabic ? `**إجابة خاطئة على حالة اختبار صعبة (Edge Case)**` : `**Wrong Answer on hidden edge case**`;
+                                        lastPassCount = testCases.length;
                                         data.passCount = testCases.length;
                                         currentMessages.push({ role: 'assistant', content: rawContent });
                                         currentMessages.push({
@@ -542,18 +545,25 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 }
             }
 
+            const hasValidSolution = finalSolution.trim().length > 0;
+
+            if (hasValidSolution) {
             updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n</think>\n\n*${isArabic ? 'بكتب الحل...' : 'Writing solution...'}*`, undefined, tabId);
 
             await new Promise(r => setTimeout(r, 300));
             updateMessage(thinkMsgId, `<think>\n${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}\n\nWriting code...\n</think>\n\n*${isArabic ? 'بكتب الكود في المحرر...' : 'Writing solution code to editor...'}*`, undefined, tabId);
 
             await streamCodeToEditor(finalSolution, tabId);
+            }
 
             const thinkBaseFinal = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
             const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\n${isArabic ? 'تم تأليف الكود بنجاح' : 'Code written successfully'}\n\n${judgeResultLine}\n</think>`;
 
             let combinedMessage = '';
-            if (judgePassed) {
+            if (!hasValidSolution) {
+                combinedMessage = finalThinkBlock + `\n\n${isArabic ? 'ماقدرتش أطلع حل صالح بعد عدة محاولات. جرب تاني أو اطلب تلميح في الشات.' : `I couldn't produce a valid solution after ${maxAttempts} attempts. Please try again or ask for a hint in the chat.`}`;
+                updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
+            } else if (judgePassed) {
                 combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.' : 'The solution has been written to the editor and passes all test cases.'}`;
                 updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             } else {

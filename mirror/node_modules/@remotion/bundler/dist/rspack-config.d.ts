@@ -1,0 +1,21 @@
+import type { Configuration } from '@rspack/core';
+import type { WebpackOverrideFn } from './webpack-config';
+export type RspackConfiguration = Configuration;
+export declare const rspackConfig: ({ entry, userDefinedComponent, outDir, environment, webpackOverride, onProgress, enableCaching, maxTimelineTracks, remotionRoot, keyboardShortcutsEnabled, bufferStateDelayInMilliseconds, poll, experimentalClientSideRenderingEnabled, experimentalVisualModeEnabled, askAIEnabled, }: {
+    entry: string;
+    userDefinedComponent: string;
+    outDir: string | null;
+    environment: "development" | "production";
+    webpackOverride: WebpackOverrideFn;
+    onProgress?: ((f: number) => void) | undefined;
+    enableCaching?: boolean | undefined;
+    maxTimelineTracks: number | null;
+    keyboardShortcutsEnabled: boolean;
+    bufferStateDelayInMilliseconds: number | null;
+    remotionRoot: string;
+    poll: number | null;
+    askAIEnabled: boolean;
+    experimentalClientSideRenderingEnabled: boolean;
+    experimentalVisualModeEnabled: boolean;
+}) => Promise<[string, import("@rspack/core").RspackOptions]>;
+export declare const createRspackCompiler: (config: import("@rspack/core").RspackOptions) => import("@rspack/core").Compiler;

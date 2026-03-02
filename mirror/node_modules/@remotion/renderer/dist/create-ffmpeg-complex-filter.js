@@ -1,0 +1,24 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createFfmpegComplexFilter = void 0;
+const create_ffmpeg_merge_filter_1 = require("./create-ffmpeg-merge-filter");
+const ffmpeg_filter_file_1 = require("./ffmpeg-filter-file");
+const createFfmpegComplexFilter = async ({ filters, downloadMap, }) => {
+    if (filters.length === 0) {
+        return {
+            complexFilterFlag: null,
+            cleanup: () => undefined,
+            complexFilter: null,
+        };
+    }
+    const complexFilter = (0, create_ffmpeg_merge_filter_1.createFfmpegMergeFilter)({
+        inputs: filters,
+    });
+    const { file, cleanup } = await (0, ffmpeg_filter_file_1.makeFfmpegFilterFileStr)(complexFilter, downloadMap);
+    return {
+        complexFilterFlag: ['-filter_complex_script', file],
+        cleanup,
+        complexFilter,
+    };
+};
+exports.createFfmpegComplexFilter = createFfmpegComplexFilter;

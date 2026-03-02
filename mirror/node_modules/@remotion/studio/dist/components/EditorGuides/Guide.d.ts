@@ -1,0 +1,12 @@
+import type { Guide } from '../../state/editor-guides';
+declare const _default: import("react").NamedExoticComponent<{
+    guide: Guide;
+    canvasDimensions: {
+        left: number;
+        top: number;
+        width: number;
+        height: number;
+    };
+    scale: number;
+}>;
+export default _default;

@@ -1,0 +1,34 @@
+import type { VideoConfig } from 'remotion/no-react';
+import type { BrowserExecutable } from './browser-executable';
+import type { BrowserLog } from './browser-log';
+import type { HeadlessBrowser } from './browser/Browser';
+import type { OnLog } from './browser/BrowserPage';
+import type { ChromiumOptions } from './open-browser';
+import type { ToOptions } from './options/option';
+import type { optionsMap } from './options/options-map';
+import type { RemotionServer } from './prepare-server';
+import type { RequiredInputPropsInV5 } from './v5-required-input-props';
+type InternalGetCompositionsOptions = {
+    serializedInputPropsWithCustomSchema: string;
+    envVariables: Record<string, string>;
+    puppeteerInstance: HeadlessBrowser | undefined;
+    onBrowserLog: null | ((log: BrowserLog) => void);
+    browserExecutable: BrowserExecutable | null;
+    chromiumOptions: ChromiumOptions;
+    port: number | null;
+    server: RemotionServer | undefined;
+    indent: boolean;
+    serveUrlOrWebpackUrl: string;
+    onLog: OnLog;
+} & ToOptions<typeof optionsMap.getCompositions>;
+export type GetCompositionsOptions = RequiredInputPropsInV5 & {
+    envVariables?: Record<string, string>;
+    puppeteerInstance?: HeadlessBrowser;
+    onBrowserLog?: (log: BrowserLog) => void;
+    browserExecutable?: BrowserExecutable;
+    chromiumOptions?: ChromiumOptions;
+    port?: number | null;
+} & Partial<ToOptions<typeof optionsMap.getCompositions>>;
+export declare const internalGetCompositions: (args_0: InternalGetCompositionsOptions) => Promise<VideoConfig[]>;
+export declare const getCompositions: (serveUrlOrWebpackUrl: string, config?: GetCompositionsOptions | undefined) => Promise<VideoConfig[]>;
+export {};

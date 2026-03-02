@@ -1,0 +1,21 @@
+import type { MediaParserController } from './controller/media-parser-controller';
+import type { PrefetchCache } from './fetch';
+import type { AllOptions, ParseMediaFields } from './fields';
+import type { BufferIterator } from './iterator/buffer-iterator';
+import type { MediaParserLogLevel } from './log';
+import type { ParseMediaSrc } from './options';
+import type { MediaParserReaderInterface } from './readers/reader';
+import type { CurrentReader } from './state/current-reader';
+export declare const seekForward: ({ seekTo, userInitiated, iterator, fields, logLevel, currentReader, readerInterface, src, controller, discardReadBytes, prefetchCache, }: {
+    seekTo: number;
+    userInitiated: boolean;
+    iterator: BufferIterator;
+    fields: Partial<AllOptions<ParseMediaFields>>;
+    logLevel: MediaParserLogLevel;
+    currentReader: CurrentReader;
+    readerInterface: MediaParserReaderInterface;
+    src: ParseMediaSrc;
+    controller: MediaParserController;
+    discardReadBytes: (force: boolean) => Promise<void>;
+    prefetchCache: PrefetchCache;
+}) => Promise<void>;

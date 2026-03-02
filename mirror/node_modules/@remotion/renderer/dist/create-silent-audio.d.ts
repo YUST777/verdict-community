@@ -1,0 +1,9 @@
+import type { CancelSignal } from './make-cancel-signal';
+export declare const createSilentAudio: ({ outName, indent, logLevel, binariesDirectory, cancelSignal, chunkLengthInSeconds, }: {
+    chunkLengthInSeconds: number;
+    outName: string;
+    indent: boolean;
+    logLevel: "error" | "info" | "trace" | "verbose" | "warn";
+    binariesDirectory: string | null;
+    cancelSignal: CancelSignal | undefined;
+}) => Promise<void>;

@@ -1,0 +1,29 @@
+{
+  "name": "Verdict",
+  "short_name": "Verdict",
+  "description": "Verdict - The Ultimate Competitive Programming Platform",
+  "start_url": "/dashboard?v=1.6",
+  "display": "standalone",
+  "background_color": "#0B0B0C",
+  "theme_color": "#10B981",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/logo.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/logo.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "education",
+    "productivity"
+  ],
+  "lang": "en"
+}

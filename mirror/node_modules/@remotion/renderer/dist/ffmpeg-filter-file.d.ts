@@ -1,0 +1,13 @@
+import type { DownloadMap } from './assets/download-map';
+import type { FilterWithoutPaddingApplied } from './stringify-ffmpeg-filter';
+export declare const makeFfmpegFilterFile: (complexFilter: FilterWithoutPaddingApplied, downloadMap: DownloadMap) => Promise<{
+    file: string;
+    cleanup: () => void;
+}> | {
+    file: null;
+    cleanup: () => undefined;
+};
+export declare const makeFfmpegFilterFileStr: (complexFilter: string, downloadMap: DownloadMap) => Promise<{
+    file: string;
+    cleanup: () => void;
+}>;

@@ -1,0 +1,22 @@
+import type { AudioCodec, Codec } from '@remotion/renderer';
+import React from 'react';
+import type { RenderType } from './RenderModalAdvanced';
+export declare const RenderModalAudio: React.FC<{
+    readonly muted: boolean;
+    readonly setMuted: React.Dispatch<React.SetStateAction<boolean>>;
+    readonly renderMode: RenderType;
+    readonly enforceAudioTrack: boolean;
+    readonly setEnforceAudioTrackState: React.Dispatch<React.SetStateAction<boolean>>;
+    readonly forSeamlessAacConcatenation: boolean;
+    readonly setForSeamlessAacConcatenation: React.Dispatch<React.SetStateAction<boolean>>;
+    readonly shouldHaveCustomTargetAudioBitrate: boolean;
+    readonly setShouldHaveCustomTargetAudioBitrate: React.Dispatch<React.SetStateAction<boolean>>;
+    readonly setCustomTargetAudioBitrateValue: React.Dispatch<React.SetStateAction<string>>;
+    readonly customTargetAudioBitrate: string;
+    readonly audioCodec: AudioCodec;
+    readonly setAudioCodec: (newAudioCodec: AudioCodec) => void;
+    readonly codec: Codec;
+    readonly setSeparateAudioTo: React.Dispatch<React.SetStateAction<string | null>>;
+    readonly separateAudioTo: string | null;
+    readonly outName: string;
+}>;

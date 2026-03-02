@@ -1,0 +1,22 @@
+import type { CSSProperties } from 'react';
+import type { AnyZodObject, CompProps, LogLevel } from 'remotion';
+import type { ThumbnailMethods } from './player-methods.js';
+import type { ErrorFallback, RenderLoading } from './PlayerUI.js';
+import type { PropsIfHasProps } from './utils/props-if-has-props.js';
+export type ThumbnailProps<Schema extends AnyZodObject, Props extends Record<string, unknown>> = PropsIfHasProps<Schema, Props> & CompProps<Props> & {
+    readonly frameToDisplay: number;
+    readonly style?: CSSProperties;
+    readonly durationInFrames: number;
+    readonly compositionWidth: number;
+    readonly compositionHeight: number;
+    readonly fps: number;
+    readonly overflowVisible?: boolean;
+    readonly errorFallback?: ErrorFallback;
+    readonly renderLoading?: RenderLoading;
+    readonly className?: string;
+    readonly overrideInternalClassName?: string;
+    readonly logLevel?: LogLevel;
+    readonly noSuspense?: boolean;
+};
+export type ThumbnailPropsWithoutZod<Props extends Record<string, unknown>> = ThumbnailProps<AnyZodObject, Props>;
+export declare const Thumbnail: <Schema extends AnyZodObject, Props extends Record<string, unknown>>(props: ThumbnailProps<Schema, Props> & import("react").RefAttributes<ThumbnailMethods>) => import("react").ReactElement<unknown, string | import("react").JSXElementConstructor<any>> | null;

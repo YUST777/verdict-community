@@ -1,0 +1,29 @@
+{
+    "name": "@types/dom-mediacapture-transform",
+    "version": "0.1.11",
+    "description": "TypeScript definitions for dom-mediacapture-transform",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/dom-mediacapture-transform",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Ben Wagner",
+            "githubUsername": "dogben",
+            "url": "https://github.com/dogben"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/dom-mediacapture-transform"
+    },
+    "scripts": {},
+    "dependencies": {
+        "@types/dom-webcodecs": "*"
+    },
+    "peerDependencies": {},
+    "typesPublisherContentHash": "fbca03cc978fa5b984e8e1618ebaf5073766cb5348229fe9c45e1f888df7b2f8",
+    "typeScriptVersion": "5.8",
+    "nonNpm": true
+}

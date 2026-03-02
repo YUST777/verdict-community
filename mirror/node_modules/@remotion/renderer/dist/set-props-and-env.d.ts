@@ -1,0 +1,23 @@
+import type { Page } from './browser/BrowserPage';
+import type { LogLevel } from './log-level';
+type SetPropsAndEnv = {
+    serializedInputPropsWithCustomSchema: string;
+    envVariables: Record<string, string> | undefined;
+    page: Page;
+    serveUrl: string;
+    initialFrame: number;
+    timeoutInMilliseconds: number | undefined;
+    darkMode: boolean;
+    proxyPort: number;
+    retriesRemaining: number;
+    audioEnabled: boolean;
+    videoEnabled: boolean;
+    indent: boolean;
+    logLevel: LogLevel;
+    onServeUrlVisited: () => void;
+    isMainTab: boolean;
+    mediaCacheSizeInBytes: number | null;
+    initialMemoryAvailable: number | null;
+};
+export declare const setPropsAndEnv: (params: SetPropsAndEnv) => Promise<unknown>;
+export {};

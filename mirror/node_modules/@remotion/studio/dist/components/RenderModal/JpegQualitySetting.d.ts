@@ -1,0 +1,4 @@
+export declare const JpegQualitySetting: React.FC<{
+    jpegQuality: number;
+    setJpegQuality: (value: React.SetStateAction<number>) => void;
+}>;

@@ -1,0 +1,11 @@
+import type React from 'react';
+export declare const outerModalStyle: React.CSSProperties;
+export declare const container: React.CSSProperties;
+export declare const optionsPanel: React.CSSProperties;
+export declare const horizontalLayout: React.CSSProperties;
+export declare const leftSidebar: React.CSSProperties;
+export declare const horizontalTab: React.CSSProperties;
+export declare const iconContainer: React.CSSProperties;
+export declare const icon: React.CSSProperties;
+export declare const buttonStyle: React.CSSProperties;
+export declare const flexer: React.CSSProperties;

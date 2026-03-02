@@ -1,0 +1,4 @@
+import type { AvailableOptions } from '@remotion/renderer/client';
+export declare const OptionExplainerBubble: React.FC<{
+    id: AvailableOptions;
+}>;

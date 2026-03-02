@@ -1,0 +1,54 @@
+import type { VideoConfig } from 'remotion/no-react';
+import type { RenderMediaOnDownload } from './assets/download-and-map-assets-to-file';
+import type { DownloadMap } from './assets/download-map';
+import type { HeadlessBrowser } from './browser/Browser';
+import type { Page } from './browser/BrowserPage';
+import type { CountType } from './get-frame-padded-index';
+import type { CancelSignal } from './make-cancel-signal';
+import type { Pool } from './pool';
+import type { FrameAndAssets, OnArtifact } from './render-frames';
+import type { BrowserReplacer } from './replace-browser';
+export declare const renderFrameAndRetryTargetClose: ({ retriesLeft, attempt, assets, imageFormat, binariesDirectory, cancelSignal, composition, countType, downloadMap, frameDir, framesToRender, jpegQuality, onArtifact, onDownload, onError, outputDir, poolPromise, scale, stoppedSignal, timeoutInMilliseconds, indent, logLevel, makeBrowser, makeNewPage, browserReplacer, concurrencyOrFramesToRender, framesRenderedObj, lastFrame, onFrameBuffer, onFrameUpdate, nextFrameToRender, imageSequencePattern, trimLeftOffset, trimRightOffset, allFramesAndExtraFrames, }: {
+    retriesLeft: number;
+    attempt: number;
+    imageFormat: "jpeg" | "none" | "png";
+    cancelSignal: CancelSignal | undefined;
+    binariesDirectory: string | null;
+    poolPromise: Promise<Pool>;
+    jpegQuality: number;
+    frameDir: string;
+    scale: number;
+    countType: CountType;
+    assets: FrameAndAssets[];
+    framesToRender: number[];
+    onArtifact: OnArtifact | null;
+    onDownload: RenderMediaOnDownload | null;
+    downloadMap: DownloadMap;
+    composition: Omit<VideoConfig, "defaultProps" | "props">;
+    onError: (err: Error) => void;
+    stoppedSignal: {
+        stopped: boolean;
+    };
+    timeoutInMilliseconds: number;
+    outputDir: string | null;
+    indent: boolean;
+    logLevel: "error" | "info" | "trace" | "verbose" | "warn";
+    makeBrowser: () => Promise<HeadlessBrowser>;
+    makeNewPage: (frame: number, pageIndex: number) => Promise<Page>;
+    browserReplacer: BrowserReplacer;
+    concurrencyOrFramesToRender: number;
+    lastFrame: number;
+    framesRenderedObj: {
+        count: number;
+    };
+    onFrameBuffer: ((buffer: Buffer, frame: number) => void) | null | undefined;
+    onFrameUpdate: ((framesRendered: number, frameIndex: number, timeToRenderInMilliseconds: number) => void) | null;
+    nextFrameToRender: {
+        getNextFrame: (_pageIndex: number) => number;
+        returnFrame: (frame: number) => void;
+    };
+    imageSequencePattern: string | null;
+    trimLeftOffset: number;
+    trimRightOffset: number;
+    allFramesAndExtraFrames: number[];
+}) => Promise<void>;

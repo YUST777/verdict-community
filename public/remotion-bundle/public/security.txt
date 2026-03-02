@@ -1,0 +1,13 @@
+# Security Policy for ICPC HUE
+# https://verdict.run
+
+Contact: mailto:verdict@hours.edu
+Expires: 2027-01-01T00:00:00.000Z
+Preferred-Languages: en, ar
+Canonical: https://verdict.run/.well-known/security.txt
+
+# ICPC HUE is a student-led competitive programming community
+# at Horus University, Egypt. This is NOT the official global
+# ICPC organization (icpc.global).
+
+# For security concerns, please contact us at the email above.

@@ -1,0 +1,1 @@
+export declare const humanReadableCodec: (codec: "aac" | "gif" | "h264" | "h264-mkv" | "h264-ts" | "h265" | "mp3" | "prores" | "vp8" | "vp9" | "wav") => "AAC" | "GIF" | "H.264" | "H.264 (Matroska)" | "H.264 (Transport Stream)" | "H.265" | "MP3" | "ProRes" | "VP8" | "VP9" | "Waveform";

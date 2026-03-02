@@ -1,0 +1,11 @@
+declare function useAssetDragEvents({ name, parentFolder, dropLocation, setDropLocation }: {
+    name: string | null;
+    parentFolder: string | null;
+    dropLocation: string | null;
+    setDropLocation: React.Dispatch<React.SetStateAction<string | null>>;
+}): {
+    isDropDiv: boolean;
+    onDragEnter: () => void;
+    onDragLeave: () => void;
+};
+export default useAssetDragEvents;

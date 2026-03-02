@@ -1,0 +1,20 @@
+import type { PointerEvent } from 'react';
+import React from 'react';
+import type { SubMenu } from '../NewComposition/ComboBox';
+export type SubMenuActivated = false | 'with-mouse' | 'without-mouse';
+export declare const MenuSubItem: React.FC<{
+    readonly label: React.ReactNode;
+    readonly id: string;
+    readonly onActionChosen: (id: string, e: PointerEvent<HTMLDivElement>) => void;
+    readonly selected: boolean;
+    readonly onItemSelected: (id: string) => void;
+    readonly keyHint: string | null;
+    readonly leaveLeftSpace: boolean;
+    readonly leftItem: React.ReactNode;
+    readonly subMenu: SubMenu | null;
+    readonly onQuitMenu: () => void;
+    readonly onNextMenu: () => void;
+    readonly subMenuActivated: SubMenuActivated;
+    readonly setSubMenuActivated: React.Dispatch<React.SetStateAction<SubMenuActivated>>;
+    readonly disabled?: boolean;
+}>;

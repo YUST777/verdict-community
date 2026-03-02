@@ -1,0 +1,15 @@
+import type { Quality } from 'mediabunny';
+import { type OutputFormat } from 'mediabunny';
+export type WebRendererVideoCodec = 'h264' | 'h265' | 'vp8' | 'vp9' | 'av1';
+export type WebRendererContainer = 'mp4' | 'webm';
+export type WebRendererAudioCodec = 'aac' | 'opus';
+export type WebRendererQuality = 'very-low' | 'low' | 'medium' | 'high' | 'very-high';
+export declare const codecToMediabunnyCodec: (codec: WebRendererVideoCodec) => "av1" | "avc" | "hevc" | "vp8" | "vp9";
+export declare const containerToMediabunnyContainer: (container: WebRendererContainer) => OutputFormat;
+export declare const getDefaultVideoCodecForContainer: (container: WebRendererContainer) => WebRendererVideoCodec;
+export declare const getQualityForWebRendererQuality: (quality: WebRendererQuality) => Quality;
+export declare const getMimeType: (container: WebRendererContainer) => string;
+export declare const getDefaultAudioCodecForContainer: (container: WebRendererContainer) => WebRendererAudioCodec;
+export declare const getSupportedVideoCodecsForContainer: (container: WebRendererContainer) => WebRendererVideoCodec[];
+export declare const getSupportedAudioCodecsForContainer: (container: WebRendererContainer) => WebRendererAudioCodec[];
+export declare const audioCodecToMediabunnyAudioCodec: (audioCodec: WebRendererAudioCodec) => "aac" | "ac3" | "alaw" | "eac3" | "flac" | "mp3" | "opus" | "pcm-f32" | "pcm-f32be" | "pcm-f64" | "pcm-f64be" | "pcm-s16" | "pcm-s16be" | "pcm-s24" | "pcm-s24be" | "pcm-s32" | "pcm-s32be" | "pcm-s8" | "pcm-u8" | "ulaw" | "vorbis";

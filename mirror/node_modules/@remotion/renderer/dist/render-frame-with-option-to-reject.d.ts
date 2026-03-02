@@ -1,0 +1,46 @@
+import type { RenderMediaOnDownload } from './assets/download-and-map-assets-to-file';
+import type { DownloadMap } from './assets/download-map';
+import type { Page } from './browser/BrowserPage';
+import type { CountType } from './get-frame-padded-index';
+import type { CancelSignal } from './make-cancel-signal';
+import type { FrameAndAssets, OnArtifact } from './render-frames';
+export declare const renderFrameWithOptionToReject: ({ reject, width, height, compId, attempt, stoppedSignal, indent, logLevel, timeoutInMilliseconds, outputDir, onFrameBuffer, imageFormat, onError, lastFrame, jpegQuality, frameDir, scale, countType, assets, framesToRender, onArtifact, onDownload, downloadMap, binariesDirectory, cancelSignal, framesRenderedObj, onFrameUpdate, frame, page, imageSequencePattern, fps, trimLeftOffset, trimRightOffset, allFramesAndExtraFrames, }: {
+    reject: (err: Error) => void;
+    width: number;
+    height: number;
+    compId: string;
+    attempt: number;
+    stoppedSignal: {
+        stopped: boolean;
+    };
+    timeoutInMilliseconds: number;
+    indent: boolean;
+    logLevel: "error" | "info" | "trace" | "verbose" | "warn";
+    outputDir: string | null;
+    onFrameBuffer: ((buffer: Buffer, frame: number) => void) | null | undefined;
+    imageFormat: "jpeg" | "none" | "png";
+    onError: (err: Error) => void;
+    lastFrame: number;
+    jpegQuality: number;
+    frameDir: string;
+    scale: number;
+    countType: CountType;
+    assets: FrameAndAssets[];
+    framesToRender: number[];
+    onArtifact: OnArtifact | null;
+    onDownload: RenderMediaOnDownload | null;
+    downloadMap: DownloadMap;
+    binariesDirectory: string | null;
+    cancelSignal: CancelSignal | undefined;
+    framesRenderedObj: {
+        count: number;
+    };
+    onFrameUpdate: ((framesRendered: number, frameIndex: number, timeToRenderInMilliseconds: number) => void) | null;
+    frame: number;
+    page: Page;
+    imageSequencePattern: string | null;
+    fps: number;
+    trimLeftOffset: number;
+    trimRightOffset: number;
+    allFramesAndExtraFrames: number[];
+}) => Promise<undefined>;

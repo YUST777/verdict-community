@@ -1,0 +1,25 @@
+import type { Codec, LogLevel } from '@remotion/renderer';
+import React from 'react';
+import type { _InternalTypes, VideoConfig } from 'remotion';
+import type { SegmentedControlItem } from '../SegmentedControl';
+import type { RenderType } from './RenderModalAdvanced';
+export declare const RenderModalBasic: React.FC<{
+    readonly renderMode: RenderType;
+    readonly imageFormatOptions: SegmentedControlItem[];
+    readonly codec: Codec;
+    readonly setVideoCodec: (newCodec: Codec) => void;
+    readonly outName: string;
+    readonly proResProfile: _InternalTypes['ProResProfile'] | null;
+    readonly setProResProfile: React.Dispatch<React.SetStateAction<_InternalTypes['ProResProfile']>>;
+    readonly frame: number;
+    readonly setFrame: React.Dispatch<React.SetStateAction<number>>;
+    readonly resolvedComposition: VideoConfig;
+    readonly setOutName: (value: React.SetStateAction<string>) => void;
+    readonly setEndFrame: React.Dispatch<React.SetStateAction<number | null>>;
+    readonly startFrame: number;
+    readonly endFrame: number;
+    readonly setStartFrame: React.Dispatch<React.SetStateAction<number | null>>;
+    readonly validationMessage: string | null;
+    readonly setVerboseLogging: React.Dispatch<React.SetStateAction<LogLevel>>;
+    readonly logLevel: LogLevel;
+}>;

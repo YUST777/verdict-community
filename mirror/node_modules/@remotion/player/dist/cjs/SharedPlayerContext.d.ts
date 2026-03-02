@@ -1,0 +1,20 @@
+import type { ComponentType, LazyExoticComponent } from 'react';
+import React from 'react';
+import type { LogLevel, TimelineContextValue } from 'remotion';
+export declare const PLAYER_COMP_ID = "player-comp";
+export declare const SharedPlayerContexts: React.FC<{
+    readonly children: React.ReactNode;
+    readonly timelineContext: TimelineContextValue;
+    readonly fps: number;
+    readonly compositionWidth: number;
+    readonly compositionHeight: number;
+    readonly durationInFrames: number;
+    readonly component: LazyExoticComponent<ComponentType<unknown>>;
+    readonly numberOfSharedAudioTags: number;
+    readonly initiallyMuted: boolean;
+    readonly logLevel: LogLevel;
+    readonly audioLatencyHint: AudioContextLatencyCategory;
+    readonly volumePersistenceKey?: string;
+    readonly inputProps: Record<string, unknown>;
+    readonly audioEnabled: boolean;
+}>;

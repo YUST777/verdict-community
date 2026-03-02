@@ -1,0 +1,9 @@
+import fs from 'node:fs';
+export declare function copyDir({ src, dest, onSymlinkDetected, onProgress, copiedBytes, lastReportedProgress }: {
+    src: string;
+    dest: string;
+    onSymlinkDetected: (entry: fs.Dirent, dir: string) => void;
+    onProgress: (bytes: number) => void;
+    copiedBytes: number;
+    lastReportedProgress: number;
+}): Promise<number>;

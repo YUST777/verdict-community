@@ -1,0 +1,148 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.InitialCompositionLoader = exports.useSelectComposition = exports.useSelectAsset = void 0;
+const react_1 = require("react");
+const remotion_1 = require("remotion");
+const mobile_layout_1 = require("../helpers/mobile-layout");
+const url_state_1 = require("../helpers/url-state");
+const folders_1 = require("../state/folders");
+const sidebar_1 = require("../state/sidebar");
+const CompositionSelector_1 = require("./CompositionSelector");
+const ExplorerPanel_1 = require("./ExplorerPanel");
+const load_canvas_content_from_url_1 = require("./load-canvas-content-from-url");
+const use_static_files_1 = require("./use-static-files");
+const useSelectAsset = () => {
+    const { setCanvasContent } = (0, react_1.useContext)(remotion_1.Internals.CompositionSetters);
+    const { setAssetFoldersExpanded } = (0, react_1.useContext)(folders_1.FolderContext);
+    return (asset) => {
+        var _a;
+        setCanvasContent({ type: 'asset', asset });
+        (_a = ExplorerPanel_1.explorerSidebarTabs.current) === null || _a === void 0 ? void 0 : _a.selectAssetsPanel();
+        setAssetFoldersExpanded((ex) => {
+            const split = asset.split('/');
+            const keysToExpand = split.map((_, i) => {
+                return split.slice(0, i).join('/');
+            });
+            const newState = {
+                ...ex,
+            };
+            for (const key of keysToExpand) {
+                newState[key] = true;
+            }
+            return newState;
+        });
+    };
+};
+exports.useSelectAsset = useSelectAsset;
+const useSelectComposition = () => {
+    const { setCompositionFoldersExpanded } = (0, react_1.useContext)(folders_1.FolderContext);
+    const { setCanvasContent } = (0, react_1.useContext)(remotion_1.Internals.CompositionSetters);
+    const isMobileLayout = (0, mobile_layout_1.useMobileLayout)();
+    const { setSidebarCollapsedState } = (0, react_1.useContext)(sidebar_1.SidebarContext);
+    return (0, react_1.useCallback)((c, push) => {
+        var _a;
+        if (push) {
+            (0, url_state_1.pushUrl)(`/${c.id}`);
+        }
+        (_a = ExplorerPanel_1.explorerSidebarTabs.current) === null || _a === void 0 ? void 0 : _a.selectCompositionPanel();
+        setCanvasContent({ type: 'composition', compositionId: c.id });
+        const { folderName, parentFolderName } = c;
+        if (folderName !== null) {
+            setCompositionFoldersExpanded((ex) => {
+                const keysToExpand = (0, CompositionSelector_1.getKeysToExpand)(folderName, parentFolderName);
+                const newState = {
+                    ...ex,
+                };
+                for (const key of keysToExpand) {
+                    newState[key] = true;
+                }
+                return newState;
+            });
+            if (isMobileLayout) {
+                setSidebarCollapsedState({ left: 'collapsed', right: 'collapsed' });
+            }
+        }
+    }, [
+        isMobileLayout,
+        setCanvasContent,
+        setCompositionFoldersExpanded,
+        setSidebarCollapsedState,
+    ]);
+};
+exports.useSelectComposition = useSelectComposition;
+const InitialCompositionLoader = () => {
+    const { compositions, canvasContent } = (0, react_1.useContext)(remotion_1.Internals.CompositionManager);
+    const { setCanvasContent } = (0, react_1.useContext)(remotion_1.Internals.CompositionSetters);
+    const selectComposition = (0, exports.useSelectComposition)();
+    const selectAsset = (0, exports.useSelectAsset)();
+    const staticFiles = (0, use_static_files_1.useStaticFiles)();
+    (0, react_1.useEffect)(() => {
+        const canvasContentFromUrl = (0, load_canvas_content_from_url_1.deriveCanvasContentFromUrl)();
+        if (canvasContent) {
+            // If the URL points to a different composition than the one currently
+            // displayed, switch to it. This handles the case where the URL is
+            // updated externally (e.g. after duplicating a composition).
+            if (canvasContentFromUrl &&
+                canvasContentFromUrl.type === 'composition' &&
+                canvasContent.type === 'composition' &&
+                canvasContentFromUrl.compositionId !== canvasContent.compositionId) {
+                const exists = compositions.find((c) => c.id === canvasContentFromUrl.compositionId);
+                if (exists) {
+                    selectComposition(exists, false);
+                }
+            }
+            return;
+        }
+        if (canvasContentFromUrl && canvasContentFromUrl.type === 'composition') {
+            const exists = compositions.find((c) => c.id === canvasContentFromUrl.compositionId);
+            if (exists) {
+                selectComposition(exists, false);
+            }
+            return;
+        }
+        if (canvasContentFromUrl && canvasContentFromUrl.type === 'asset') {
+            selectAsset(canvasContentFromUrl.asset);
+            return;
+        }
+        if (canvasContentFromUrl && canvasContentFromUrl.type === 'output') {
+            setCanvasContent(canvasContentFromUrl);
+            return;
+        }
+        if (compositions.length > 0) {
+            selectComposition(compositions[0], true);
+        }
+    }, [
+        compositions,
+        canvasContent,
+        selectComposition,
+        setCanvasContent,
+        selectAsset,
+    ]);
+    (0, react_1.useEffect)(() => {
+        const onchange = () => {
+            const newCanvas = (0, load_canvas_content_from_url_1.deriveCanvasContentFromUrl)();
+            if (newCanvas && newCanvas.type === 'composition') {
+                const newComp = (0, url_state_1.getRoute)().substring(1);
+                const exists = compositions.find((c) => c.id === newComp);
+                if (exists) {
+                    selectComposition(exists, false);
+                }
+                return;
+            }
+            if (newCanvas && newCanvas.type === 'asset') {
+                const exists = staticFiles.find((file) => {
+                    return file.name === newCanvas.asset;
+                });
+                if (exists) {
+                    setCanvasContent(newCanvas);
+                }
+                return;
+            }
+            setCanvasContent(newCanvas);
+        };
+        window.addEventListener('popstate', onchange);
+        return () => window.removeEventListener('popstate', onchange);
+    }, [compositions, selectComposition, setCanvasContent, staticFiles]);
+    return null;
+};
+exports.InitialCompositionLoader = InitialCompositionLoader;

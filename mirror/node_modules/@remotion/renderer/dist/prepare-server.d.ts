@@ -1,0 +1,32 @@
+import type { RenderMediaOnDownload } from './assets/download-and-map-assets-to-file';
+import type { DownloadMap } from './assets/download-map';
+import type { SourceMapGetter } from './browser/source-map-getter';
+import type { Compositor } from './compositor/compositor';
+import type { LogLevel } from './log-level';
+export type RemotionServer = {
+    serveUrl: string;
+    closeServer: (force: boolean) => Promise<unknown>;
+    offthreadPort: number;
+    compositor: Compositor;
+    sourceMap: SourceMapGetter;
+    downloadMap: DownloadMap;
+};
+type PrepareServerOptions = {
+    webpackConfigOrServeUrl: string;
+    port: number | null;
+    remotionRoot: string;
+    offthreadVideoThreads: number;
+    logLevel: LogLevel;
+    indent: boolean;
+    offthreadVideoCacheSizeInBytes: number | null;
+    binariesDirectory: string | null;
+    forceIPv4: boolean;
+};
+export declare const prepareServer: ({ webpackConfigOrServeUrl, port, remotionRoot, offthreadVideoThreads, logLevel, indent, offthreadVideoCacheSizeInBytes, binariesDirectory, forceIPv4, }: PrepareServerOptions) => Promise<RemotionServer>;
+export declare const makeOrReuseServer: (server: RemotionServer | undefined, config: PrepareServerOptions, { onDownload, }: {
+    onDownload: RenderMediaOnDownload | null;
+}) => Promise<{
+    server: RemotionServer;
+    cleanupServer: (force: boolean) => Promise<unknown>;
+}>;
+export {};

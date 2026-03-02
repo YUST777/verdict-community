@@ -1,0 +1,27 @@
+import type { MediaParserLogLevel } from './log';
+import type { M3uPlaylistContext } from './options';
+import type { SeekingHints } from './seeking-hints';
+import type { AvcState } from './state/avc/avc-state';
+import type { IsoBaseMediaState } from './state/iso-base-media/iso-state';
+import type { M3uState } from './state/m3u-state';
+import type { WebmState } from './state/matroska/webm';
+import type { RiffState } from './state/riff';
+import type { StructureState } from './state/structure';
+import type { TransportStreamState } from './state/transport-stream/transport-stream';
+import type { MediaSectionState } from './state/video-section';
+import type { SeekResolution } from './work-on-seek-request';
+export declare const getSeekingByte: ({ info, time, logLevel, currentPosition, isoState, transportStream, webmState, mediaSection, m3uPlaylistContext, structure, riffState, m3uState, avcState, }: {
+    info: SeekingHints;
+    time: number;
+    logLevel: MediaParserLogLevel;
+    currentPosition: number;
+    isoState: IsoBaseMediaState;
+    transportStream: TransportStreamState;
+    webmState: WebmState;
+    mediaSection: MediaSectionState;
+    structure: StructureState;
+    m3uPlaylistContext: M3uPlaylistContext | null;
+    riffState: RiffState;
+    m3uState: M3uState;
+    avcState: AvcState;
+}) => Promise<SeekResolution>;
