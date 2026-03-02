@@ -46,7 +46,7 @@
         {
             "resources": [
                 "icons/*",
-                "logo.webp"
+                "logo.svg"
             ],
             "matches": [
                 "*://verdict.run/*",

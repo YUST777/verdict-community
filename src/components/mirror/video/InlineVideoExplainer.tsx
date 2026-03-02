@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { Player } from '@remotion/player';
-import { Play, Loader2, RefreshCcw } from 'lucide-react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
+import { Player, PlayerRef } from '@remotion/player';
+import { Play, Loader2, RefreshCcw, Download } from 'lucide-react';
 import { ExplainerComposition, VideoScript } from './ExplainerComposition';
 
 interface InlineVideoExplainerProps {
@@ -14,6 +14,38 @@ export default function InlineVideoExplainer({ script }: InlineVideoExplainerPro
         () => script?.scenes.reduce((acc, s) => acc + s.duration, 0) || 5,
         [script]
     );
+
+    const [isSharing, setIsSharing] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const handleShare = async () => {
+        if (!script) return;
+        setIsSharing(true);
+
+        try {
+            const res = await fetch('/api/ai/video/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script }),
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to generate share link.');
+            }
+
+            const data = await res.json();
+            const shareUrl = `${window.location.origin}${data.url}`;
+
+            await navigator.clipboard.writeText(shareUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+
+        } catch (error: any) {
+            alert(error.message);
+        } finally {
+            setIsSharing(false);
+        }
+    };
 
     if (!script || !script.scenes || script.scenes.length === 0) {
         return (
@@ -33,6 +65,23 @@ export default function InlineVideoExplainer({ script }: InlineVideoExplainerPro
                     </div>
                     <span className="text-[11px] font-semibold text-white/50 tracking-wider uppercase">Video Walkthrough</span>
                 </div>
+
+                {/* Share Button */}
+                <button
+                    onClick={handleShare}
+                    disabled={isSharing || copied}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${copied
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                        : isSharing
+                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 cursor-not-allowed'
+                            : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
+                        }`}
+                >
+                    {isSharing ? <Loader2 size={12} className="animate-spin" /> : copied ? <Download size={12} className="opacity-0" /> : <Download size={12} style={{ transform: 'rotate(-90deg)' }} />}
+                    <span className="text-[11px] font-medium tracking-wide">
+                        {copied ? 'Link Copied!' : isSharing ? 'Generating Link...' : 'Share Video'}
+                    </span>
+                </button>
             </div>
 
             <div className="aspect-video relative bg-black/60 flex items-center justify-center overflow-hidden">

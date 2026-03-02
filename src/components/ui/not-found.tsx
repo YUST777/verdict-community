@@ -28,7 +28,7 @@ const ICONS = {
 const Logo = () => (
     <Link href="/" className="absolute z-50 top-8 left-8 flex items-center gap-2 hover:opacity-80 transition-opacity">
         <Image
-            src="/icons/logo.webp"
+            src="/icons/logo.svg"
             alt="Verdict Logo"
             width={28}
             height={28}

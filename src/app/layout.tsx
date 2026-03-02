@@ -41,9 +41,9 @@ export const metadata: Metadata = {
   },
   metadataBase: new URL("https://verdict.run"),
   icons: {
-    icon: "/icons/logo.webp",
-    shortcut: "/icons/logo.webp",
-    apple: "/icons/logo.webp",
+    icon: "/icons/logo.svg",
+    shortcut: "/icons/logo.svg",
+    apple: "/icons/logo.svg",
   },
   openGraph: {
     title: "Verdict.run — Solve Problems Without Limits",

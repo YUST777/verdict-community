@@ -16,7 +16,7 @@ function Footer() {
                     <div className="flex items-center justify-between mb-6">
                         <Link href="/" className="flex items-center gap-2">
                             <Image
-                                src="/icons/logo.webp"
+                                src="/icons/logo.svg"
                                 alt="Verdict Logo"
                                 width={28}
                                 height={28}
@@ -70,7 +70,7 @@ function Footer() {
                         <div className="col-span-4 flex flex-col gap-6">
                             <Link href="/" className="flex items-center gap-2">
                                 <Image
-                                    src="/icons/logo.webp"
+                                    src="/icons/logo.svg"
                                     alt="Verdict Logo"
                                     width={32}
                                     height={32}

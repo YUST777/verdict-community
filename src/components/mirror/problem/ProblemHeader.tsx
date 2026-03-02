@@ -141,7 +141,7 @@ export default function ProblemHeader({
                     <div className="relative flex items-center group">
                         <div className="opacity-80 hover:opacity-100 transition-opacity cursor-default">
                             <Image
-                                src="/icons/logo.webp"
+                                src="/icons/logo.svg"
                                 alt="Verdict"
                                 width={24}
                                 height={24}

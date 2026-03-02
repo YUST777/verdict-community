@@ -103,7 +103,7 @@ function PreviewWidget() {
                                         {submissionState === 'submitting' || submissionState === 'judging' ? (
                                             <div className="absolute inset-0 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
                                         ) : (
-                                            <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                            <Image src="/icons/logo.svg" alt="Logo" fill className="object-contain" />
                                         )}
                                     </div>
                                     <span className={`text-xs transition-colors ${submissionState === 'accepted' ? 'text-emerald-400' : 'text-white/70'}`}>
@@ -172,7 +172,7 @@ function PreviewWidget() {
                                         className={`p-1.5 rounded transition-colors ${showExtension ? 'text-emerald-400 bg-emerald-500/10' : 'text-emerald-400/60 hover:text-emerald-400 hover:bg-white/5'}`}
                                     >
                                         <div className="w-5 h-5 relative">
-                                            <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                            <Image src="/icons/logo.svg" alt="Logo" fill className="object-contain" />
                                         </div>
                                     </button>
                                 </Tooltip>
@@ -189,7 +189,7 @@ function PreviewWidget() {
                                         >
                                             <div className="flex items-center gap-3 p-4 border-b border-white/10">
                                                 <div className="w-10 h-10 relative">
-                                                    <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                                    <Image src="/icons/logo.svg" alt="Logo" fill className="object-contain" />
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-semibold text-white">Verdict.run Helper</div>
@@ -682,7 +682,7 @@ function PreviewWidget() {
                                     <span className="flex items-center gap-0.5"><HardDrive className="w-2.5 h-2.5" /> 256MB</span>
                                 </div>
                                 <div className="w-5 h-5 relative">
-                                    <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                    <Image src="/icons/logo.svg" alt="Logo" fill className="object-contain" />
                                 </div>
                             </div>
                         </div>
@@ -762,7 +762,7 @@ function PreviewWidget() {
                             className="flex-1 sm:flex-none sm:w-auto inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-medium text-[13px] sm:text-base rounded-xl border border-white/10 transition-all hover:scale-105 overflow-hidden"
                         >
                             <div className="w-4 h-4 sm:w-5 sm:h-5 relative shrink-0">
-                                <Image src="/icons/logo.webp" alt="Logo" fill className="object-contain" />
+                                <Image src="/icons/logo.svg" alt="Logo" fill className="object-contain" />
                             </div>
                             <span className="truncate text-center">Download Extension</span>
                         </Link>

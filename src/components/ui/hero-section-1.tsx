@@ -334,7 +334,7 @@ const Logo = ({ className }: { className?: string }) => {
     return (
         <div className={cn("flex items-center gap-2", className)}>
             <Image
-                src="/icons/logo.webp"
+                src="/icons/logo.svg"
                 alt="Verdict logo"
                 width={28}
                 height={28}

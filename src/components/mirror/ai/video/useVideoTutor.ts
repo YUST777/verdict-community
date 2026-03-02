@@ -89,7 +89,8 @@ export function useVideoTutor({
                     code: s.code,
                     highlight: s.highlight,
                     duration: s.duration || 5,
-                    svg: s.svg
+                    svg: s.svg,
+                    audioData: s.audioData
                 }))
             };
 

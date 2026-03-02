@@ -6,6 +6,7 @@ import { Loader2, Wand2, Code, Settings, BrainCircuit, Globe, X, Youtube, BookOp
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { loadAIPreferences, inferPreferencesFromProfile, AILearningPreferences } from '@/lib/ai-personalization';
+import { CODE_TUTOR_CHAT_APPENDIX } from '@/lib/ai-code-tutor-instructions';
 
 import AIPreferencesModal from './AIPreferencesModal';
 import SignInModal from '@/components/auth/SignInModal';
@@ -537,6 +538,21 @@ export default function AIAgentPanel({
 
         setMessages(prev => [...prev, userMessage], tabId);
 
+        // Async log to explicitly track user message
+        const logContent = hasSelectedCode ? `${promptToSend}\n\nCode Context:\n\`\`\`${language}\n${selectedCode}\n\`\`\`` : promptToSend;
+        try {
+            fetch('/api/ai/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    problemId: problemDescription?.substring(0, 50) || 'unknown',
+                    role: 'user',
+                    content: logContent,
+                    contextType: 'chat'
+                })
+            }).catch(() => { });
+        } catch (e) { }
+
         // Clear input only if it wasn't an override prompt
         if (!overridePrompt) {
             setInput('', tabId);
@@ -579,10 +595,12 @@ export default function AIAgentPanel({
                 ? 'أنت مساعد بالذكاء الاصطناعي متخصص في البرمجة التنافسية. اشرح بوضوح وبإيجاز. تحدث بالعربية الطبيعية (لهجة مصرية/تقنية مقبولة). عند شرح الأكواد، اهتم بتحليل التعقيد (الوقت والذاكرة). اكتب الكود بالانجليزي لكن كل الشروحات والتعليقات بالعربي. قاعدة تنسيق هامة جداً: عند كتابة أي مصطلحات إنجليزية، أو أرقام، أو معادلات رياضية، أو متغيرات برمجية داخل النص العربي، يجب عليك وضعها داخل علامات التنصيص البرمجية (backticks) مثل `O(N)` أو `dp[i]` لمنع انعكاس اتجاه الجملة.'
                 : 'You are a helpful coding and competitive programming assistant. When asked about code, provide clear and concise explanations. Under the hood you have access to a variety of coding tools. When explaining competitive programming answers, keep complexity (time and space) in mind.';
 
+            const tutorInstruction = '\n\n' + CODE_TUTOR_CHAT_APPENDIX;
+
             const thinkInstruction = 'Always enclose your detailed, step-by-step thinking process inside <think>...</think> tags. After your thought process, provide a concise final summary and explanation as your main response.';
 
             let currentMessages = [
-                { role: 'system', content: baseSystemPrompt + '\n\n' + styleInstruction + '\n\n' + thinkInstruction },
+                { role: 'system', content: baseSystemPrompt + tutorInstruction + '\n\n' + styleInstruction + '\n\n' + thinkInstruction },
                 ...chatMessages
             ];
 
@@ -820,6 +838,20 @@ export default function AIAgentPanel({
             // Ensure final content is set
             updateMessage(streamMsgId, finalAiResponse, undefined, tabId);
 
+            // Log final AI message to explicitly track the response
+            try {
+                fetch('/api/ai/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problemId: problemDescription?.substring(0, 50) || 'unknown',
+                        role: 'assistant',
+                        content: finalAiResponse,
+                        contextType: 'chat'
+                    })
+                }).catch(() => { });
+            } catch (e) { }
+
             // Update last interaction with response length for learning
             updateLastInteractionResponse(finalAiResponse.length);
 
@@ -909,7 +941,7 @@ export default function AIAgentPanel({
                         {messages.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
                                 <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center mb-4 relative overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
-                                    <Image src="/icons/logo.webp" alt="Verdict" fill sizes="56px" className="object-contain p-2.5 opacity-80" />
+                                    <Image src="/icons/logo.svg" alt="Verdict" fill sizes="56px" className="object-contain p-2.5 opacity-80" />
                                 </div>
                                 <h3 className="text-base font-semibold text-white/80 mb-1.5">{isArabic ? 'كيف يمكنني مساعدتك؟' : 'How can I help?'}</h3>
                                 <p className="text-xs text-white/35 max-w-[220px] leading-relaxed">
@@ -1238,18 +1270,49 @@ function AIContextUsageTracker({ messages, modelName, problemDescription, userCo
         }
 
         let isMounted = true;
-        import('gpt-tokenizer').then(({ encode }) => {
-            if (!isMounted) return;
-            const tokens = encode(txt).length;
-            ctx.setUsageData({
-                inputTokens: tokens,
-                outputTokens: 0,
-                maxTokens: maxTokens,
-                totalTokens: tokens
-            });
-        }).catch((err: any) => console.error('[Token Count Error]', err?.message || err));
 
-        return () => { isMounted = false; };
+        const fetchTokens = async () => {
+            try {
+                // To keep the UI snappy for small edits, provide an immediate rough estimate before the server returns
+                const roughEstimate = Math.ceil(txt.length / 4);
+                // Assume 0 tokens if not loaded yet, so we just use rough estimate
+                ctx.setUsageData({
+                    inputTokens: roughEstimate,
+                    maxTokens: maxTokens,
+                    totalTokens: roughEstimate
+                });
+
+                const res = await fetch('/api/tokenize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: txt, model: modelName })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted && data.count) {
+                        ctx.setUsageData({
+                            inputTokens: data.count,
+                            outputTokens: 0,
+                            maxTokens: maxTokens,
+                            totalTokens: data.count
+                        });
+                    }
+                }
+            } catch (err: any) {
+                console.error('[Token Count Error]', err?.message || err);
+            }
+        };
+
+        // Debounce actual server request by 500ms to avoid overwhelming rate limits (like Gemini)
+        const timeoutId = setTimeout(() => {
+            fetchTokens();
+        }, 500);
+
+        return () => {
+            isMounted = false;
+            clearTimeout(timeoutId);
+        };
     }, [messages, modelName, problemDescription, userCode, ctx.setUsageData]);
 
     return null;

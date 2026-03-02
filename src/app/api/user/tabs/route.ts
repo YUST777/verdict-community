@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
         // Auto-create table if it doesn't exist
         await query(`
             CREATE TABLE IF NOT EXISTS user_tabs (
-                user_id UUID PRIMARY KEY,
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 tabs JSONB DEFAULT '[]'::jsonb,
                 updated_at TIMESTAMP DEFAULT NOW()
             );
@@ -24,14 +24,21 @@ export async function GET(req: NextRequest) {
         );
 
         if (result.rows.length === 0) {
-            // First time, return empty tabs
             return NextResponse.json({ data: [] });
         }
 
         return NextResponse.json({ data: result.rows[0].tabs || [] });
     } catch (error) {
         console.error('[User Tabs GET Error]', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        console.error('[User Tabs GET Error Details]', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
+        });
+        return NextResponse.json({ 
+            error: 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
+        }, { status: 500 });
     }
 }
 
@@ -51,7 +58,7 @@ export async function POST(req: NextRequest) {
 
         await query(`
             CREATE TABLE IF NOT EXISTS user_tabs (
-                user_id UUID PRIMARY KEY,
+                user_id INTEGER PRIMARY KEY,
                 tabs JSONB DEFAULT '[]'::jsonb,
                 updated_at TIMESTAMP DEFAULT NOW()
             );
@@ -71,6 +78,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('[User Tabs POST Error]', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        console.error('[User Tabs POST Error Details]', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
+        });
+        return NextResponse.json({ 
+            error: 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
+        }, { status: 500 });
     }
 }

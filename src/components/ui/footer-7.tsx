@@ -64,7 +64,7 @@ export const Footer = () => {
                         {/* Logo */}
                         <Link href="/" className="flex items-center gap-2">
                             <Image
-                                src="/icons/logo.webp"
+                                src="/icons/logo.svg"
                                 alt="Verdict Logo"
                                 width={28}
                                 height={28}

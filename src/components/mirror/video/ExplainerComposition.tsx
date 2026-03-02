@@ -1,14 +1,11 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig, interpolate, spring, Img, staticFile } from 'remotion';
-import { loadFont } from "@remotion/google-fonts/Inter";
+import { AbsoluteFill, Sequence, useCurrentFrame, useVideoConfig, interpolate, spring, Img, staticFile, Audio } from 'remotion';
 
-const { fontFamily } = loadFont("normal", {
-    weights: ["400", "700", "900"],
-    subsets: ["latin"],
-    ignoreTooManyRequestsWarning: true
-});
+// Use standard font-family string fallback instead of async loader for server-side reliability
+const fontFamily = "Inter, sans-serif";
+
 
 export interface Scene {
     id: string;
@@ -19,6 +16,7 @@ export interface Scene {
     svg?: string;
     code?: string;
     highlight?: [number, number];
+    audioData?: string;
 }
 
 export interface VideoScript {
@@ -52,7 +50,7 @@ const BrandingWatermark: React.FC<{ isRtlText: boolean }> = ({ isRtlText }) => {
     return (
         <div className={`absolute ${positionClass} z-50 flex items-center gap-2.5 opacity-40`}>
             <Img
-                src={staticFile('icons/logo.webp')}
+                src={staticFile('icons/logo.svg')}
                 className="w-6 h-6 rounded"
             />
             <span className="text-white font-bold tracking-wider text-[14px]">verdict.run</span>
@@ -62,11 +60,11 @@ const BrandingWatermark: React.FC<{ isRtlText: boolean }> = ({ isRtlText }) => {
 
 
 // ─── Shared caption bar (word-by-word reveal) ─────────────────────────────
-const CaptionBar: React.FC<{ script: string }> = ({ script }) => {
+const CaptionBar: React.FC<{ script: string }> = ({ script = '' }) => {
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
 
-    const words = script.split(' ');
+    const words = script ? script.split(' ') : [];
     const wordsPerSecond = 3.0;
     const totalRevealFrames = Math.max(1, (words.length / wordsPerSecond) * fps);
     const wordsToShow = Math.min(
@@ -153,7 +151,7 @@ const TitleScene: React.FC<{ title: string, script: string }> = ({ title, script
                     style={{
                         opacity: titleOpacity,
                         transform: `translateY(${titleY}px)`,
-                        direction: textDir(title),
+                        direction: textDir(title || ''),
                         letterSpacing: rtl ? '0' : '-0.03em',
                     }}
                 >
@@ -190,14 +188,14 @@ const ProblemScene: React.FC<{ text: string, script: string, svg?: string }> = (
                 <PillBadge label={rtl ? '\u0627\u0644\u0645\u0633\u0623\u0644\u0629' : 'Problem'} color="emerald" isRtlText={rtl} />
             </div>
 
-            <div className={`relative z-10 px-20 max-w-[1100px] flex ${svg ? (rtl ? 'flex-row-reverse' : 'flex-row') : 'flex-col'} items-center gap-12`} style={{ direction: textDir(text), alignSelf: svg ? 'center' : (rtl ? 'flex-end' : 'flex-start') }}>
+            <div className={`relative z-10 px-20 max-w-[1100px] flex ${svg ? (rtl ? 'flex-row-reverse' : 'flex-row') : 'flex-col'} items-center gap-12`} style={{ direction: textDir(text || ''), alignSelf: svg ? 'center' : (rtl ? 'flex-end' : 'flex-start') }}>
                 <div className="flex-1">
                     <p
                         className="text-[52px] font-[900] text-white leading-[1.15]"
                         style={{
                             opacity: textOpacity,
                             transform: `translateY(${textY}px)`,
-                            textAlign: textAlign(text),
+                            textAlign: textAlign(text || ''),
                             letterSpacing: rtl ? '0' : '-0.02em',
                         }}
                     >
@@ -267,7 +265,7 @@ const ConceptScene: React.FC<{ text: string, script: string, svg?: string }> = (
                     style={{
                         opacity: textOpacity,
                         transform: `scale(${textScale})`,
-                        direction: textDir(text),
+                        direction: textDir(text || ''),
                         textAlign: 'center',
                         letterSpacing: rtl ? '0' : '-0.02em',
                     }}
@@ -296,16 +294,19 @@ const CodeScene: React.FC<{ text: string, code: string, highlight?: [number, num
     const badgeOpacity = opacity;
     const codeSlide = spring({ frame, fps, config: { damping: 18, stiffness: 80 } });
 
-    const lines = useMemo(() => code.split('\n'), [code]);
+    const lines = useMemo(() => (code || '').split('\n'), [code]);
 
     const { height: videoHeight } = useVideoConfig();
     const scrollOffset = useMemo(() => {
         if (!highlight) return 0;
         const mid = (highlight[0] + highlight[1]) / 2;
         const lineH = 24;
-        // Approximate container height: video height minus padding (32px*2), header (~50px), badge (~50px), caption bar (~60px)
-        const containerH = videoHeight - 32 - 32 - 50 - 50 - 60;
-        return Math.max(0, (mid - 1) * lineH - containerH / 2 + lineH / 2);
+
+        // Target vertical center: ~200px from the top of the code window
+        const optimalOffset = 200;
+
+        // Start scrolling early, keep the active line roughly 200px from the top
+        return Math.max(0, (mid - 1) * lineH - optimalOffset);
     }, [highlight, videoHeight]);
 
     const highlightLine = (line: string) => {
@@ -438,7 +439,7 @@ const SummaryScene: React.FC<{ text: string, script: string }> = ({ text, script
                     style={{
                         opacity: textOpacity,
                         transform: `translateY(${textY}px)`,
-                        direction: textDir(text),
+                        direction: textDir(text || ''),
                         textAlign: 'center',
                         letterSpacing: rtl ? '0' : '-0.02em',
                     }}
@@ -459,7 +460,7 @@ const SummaryScene: React.FC<{ text: string, script: string }> = ({ text, script
 };
 
 // ─── Main Composition ─────────────────────────────────────────────────────
-export const ExplainerComposition: React.FC<VideoScript> = ({ title, scenes }) => {
+export const ExplainerComposition: React.FC<VideoScript> = ({ title, scenes = [] }) => {
     // Pre-calculate cumulative start frames to avoid mutable variables during render
     const sceneFrames = useMemo(() => {
         let cumulative = 0;
@@ -490,6 +491,7 @@ export const ExplainerComposition: React.FC<VideoScript> = ({ title, scenes }) =
                                 script={scene.script}
                             />
                         )}
+                        {scene.audioData && <Audio src={scene.audioData} />}
                     </Sequence>
                 );
             })}

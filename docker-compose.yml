@@ -29,29 +29,27 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
-        REDIS_PASSWORD: ${REDIS_PASSWORD}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
+        REDIS_PASSWORD: ${REDIS_PASSWORD:-yourredispassword}
     image: verdict-frontend:latest
     container_name: verdict-frontend
     ports:
       - "3002:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_SITE_URL=https://verdict.run
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
       - REDIS_HOST=verdict-redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-yourredispassword}
       - JUDGE0_URL=http://verdict-judge0-server:2358
       - MIRROR_SERVICE_URL=http://verdict-mirror:3099
-      - SMTP_SERVER=icpchue-mailserver
-      - SMTP_PORT=25
     env_file:
       - .env
     networks:
-      - icpchue-network
       - verdict-network
+      - icpchue-network
     restart: always
     logging:
       driver: json-file
@@ -72,9 +70,8 @@ services:
   verdict-redis:
     image: redis:7.2-alpine
     container_name: verdict-redis
-    command: ["redis-server", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD:-yourredispassword}"]
     networks:
-      - icpchue-network
       - verdict-network
     restart: always
 
@@ -95,8 +92,8 @@ services:
       - verdict-judge0-db
       - verdict-redis
     networks:
-      - icpchue-network
       - verdict-network
+      - icpchue-network
     restart: always
     security_opt:
       - seccomp:unconfined
@@ -114,7 +111,6 @@ services:
       - verdict-judge0-db
       - verdict-redis
     networks:
-      - icpchue-network
       - verdict-network
     restart: always
     security_opt:
@@ -133,7 +129,6 @@ services:
       - verdict-judge0-db
       - verdict-redis
     networks:
-      - icpchue-network
       - verdict-network
     restart: always
     security_opt:
@@ -150,7 +145,6 @@ services:
     volumes:
       - verdict-judge0-db-data:/var/lib/postgresql/data
     networks:
-      - icpchue-network
       - verdict-network
     restart: always
 
@@ -158,11 +152,12 @@ services:
 # NETWORKS
 # ===========================================
 networks:
+  verdict-network:
+    driver: bridge
+  # Attach verdict-frontend so nginx (icpchue) can proxy verdict.run. Create with: docker network create icpchue_icpchue-network
   icpchue-network:
     external: true
     name: icpchue_icpchue-network
-  verdict-network:
-    driver: bridge
 
 # ===========================================
 # VOLUMES

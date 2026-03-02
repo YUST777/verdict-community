@@ -59,20 +59,18 @@ export async function GET(req: NextRequest) {
             userId = newUserResult.rows[0].id;
         }
 
-        // Redirect to return URL or problemsets
+        // Redirect to return URL or problemsets — same-origin only (no open redirect)
         let redirectPath = '/problemsets';
 
         if (returnUrl) {
             try {
                 const returnUrlObj = new URL(returnUrl);
                 const baseUrlObj = new URL(baseUrl);
-                if (returnUrlObj.hostname === baseUrlObj.hostname ||
-                    returnUrlObj.hostname === 'localhost' ||
-                    returnUrlObj.hostname.endsWith('.verdict.run')) {
+                if (returnUrlObj.hostname === baseUrlObj.hostname) {
                     redirectPath = returnUrlObj.pathname + returnUrlObj.search;
                 }
             } catch {
-                // Invalid URL
+                // Invalid URL — ignore
             }
         }
 

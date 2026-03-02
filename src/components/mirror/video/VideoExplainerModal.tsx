@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
-import { X, Play, Loader2 } from 'lucide-react';
+import { X, Play, Loader2, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExplainerComposition, VideoScript } from './ExplainerComposition';
 
@@ -31,6 +31,37 @@ export default function VideoExplainerModal({ isOpen, onClose, script, isLoading
         () => script?.scenes.reduce((acc, s) => acc + s.duration, 0) || 5,
         [script]
     );
+
+    const [isSharing, setIsSharing] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const handleShare = async () => {
+        if (!script) return;
+        setIsSharing(true);
+
+        try {
+            const res = await fetch('/api/ai/video/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script }),
+            });
+
+            if (!res.ok) {
+                throw new Error('Failed to generate share link.');
+            }
+
+            const data = await res.json();
+            const shareUrl = `${window.location.origin}${data.url}`;
+
+            await navigator.clipboard.writeText(shareUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error: any) {
+            alert(error.message);
+        } finally {
+            setIsSharing(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -62,20 +93,40 @@ export default function VideoExplainerModal({ isOpen, onClose, script, isLoading
                                 <p className="text-[10px] text-white/30 truncate max-w-[300px]">{script?.title || 'Generating script...'}</p>
                             </div>
                         </div>
-                        <button
-                            onClick={onClose}
-                            onKeyDown={(e) => {
-                                // Prevent space from triggering the close button if it has focus
-                                if (e.key === ' ' || e.key === 'Spacebar') {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                }
-                            }}
-                            tabIndex={-1}
-                            className="p-2 rounded-xl hover:bg-white/5 text-white/25 hover:text-white transition-colors"
-                        >
-                            <X size={18} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {/* Share Button */}
+                            {script && !isLoading && (
+                                <button
+                                    onClick={handleShare}
+                                    disabled={isSharing || copied}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${copied
+                                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                                        : isSharing
+                                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-400 cursor-not-allowed'
+                                            : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
+                                        }`}
+                                >
+                                    {isSharing ? <Loader2 size={12} className="animate-spin" /> : copied ? <Download size={12} className="opacity-0" /> : <Download size={12} style={{ transform: 'rotate(-90deg)' }} />}
+                                    <span className="text-[11px] font-medium tracking-wide">
+                                        {copied ? 'Link Copied!' : isSharing ? 'Generating Link...' : 'Share Video'}
+                                    </span>
+                                </button>
+                            )}
+
+                            <button
+                                onClick={onClose}
+                                onKeyDown={(e) => {
+                                    if (e.key === ' ' || e.key === 'Spacebar') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }
+                                }}
+                                tabIndex={-1}
+                                className="p-2 rounded-xl hover:bg-white/5 text-white/25 hover:text-white transition-colors"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex-1 relative bg-black flex items-center justify-center">

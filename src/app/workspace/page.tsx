@@ -260,7 +260,7 @@ export default function WorkspaceNewTabPage() {
 
                     {/* Logo — top right */}
                     <div className="absolute top-4 right-5 z-20 flex items-center gap-2">
-                        <Image src="/icons/logo.webp" alt="Verdict" width={24} height={24} className="size-6" />
+                        <Image src="/icons/logo.svg" alt="Verdict" width={24} height={24} className="size-6" />
                         <span className="text-sm font-bold tracking-tight text-white/60">verdict.run</span>
                     </div>
 

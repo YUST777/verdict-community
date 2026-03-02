@@ -141,7 +141,7 @@ export function SidebarTabs({ isOpen, onClose, currentUrl }: SidebarTabsProps) {
                     <Link href="/">
                         <div className="opacity-80 hover:opacity-100 transition-opacity cursor-pointer">
                             <Image
-                                src="/icons/logo.webp"
+                                src="/icons/logo.svg"
                                 alt="Verdict"
                                 width={24}
                                 height={24}

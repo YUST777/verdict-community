@@ -39,7 +39,7 @@ function Navbar() {
                         <Link href="/" className="flex items-center gap-2 shrink-0 group cursor-pointer">
                             <div className="relative w-8 h-8 flex items-center justify-center">
                                 <Image
-                                    src="/icons/logo.webp"
+                                    src="/icons/logo.svg"
                                     alt="Verdict Logo"
                                     width={32}
                                     height={32}

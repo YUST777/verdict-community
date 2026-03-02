@@ -33,7 +33,7 @@ extension/
 ├── content_script.js  # Injected into Verdict.run pages
 ├── popup.html         # Extension popup UI
 ├── popup.js           # Popup logic
-├── logo.webp          # Branding
+├── logo.svg          # Branding
 └── icons/             # Extension icons
     ├── icon16.png
     ├── icon48.png

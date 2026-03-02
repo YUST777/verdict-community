@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useLLM } from '@/lib/useLLM';
 import { extractAndParseJson } from '@/lib/json-utils';
+import { CODE_TUTOR_PEDAGOGY } from '@/lib/ai-code-tutor-instructions';
 
 interface Concept {
     title: string;
@@ -164,6 +165,8 @@ export function useTutor({
 
             const systemPrompt = `You are an elite competitive programming tutor helping a ${isSimple ? 'beginner' : 'skilled programmer'}. You are passionate, slightly quirky, and love 'cooking up' brilliant solutions. You have a lot of 'soul' and personality.
 
+${CODE_TUTOR_PEDAGOGY}
+
 ${styleRules}
 
 You MUST respond with ONLY valid JSON (no markdown, no backticks wrapping). You have TWO options depending on the problem type:
@@ -190,6 +193,7 @@ The "solution" field (in Option 1) must contain the FULL compilable code (with i
 The "solution" must have ZERO comments — no //, no /* */, no #comments. Pure code only.
 The code must be written in ${language}.
 The "explanation" is separate from the code — put ALL explanations there, NOT as code comments.
+In the "explanation" field, use your tutoring style: explain the approach in steps, name key concepts (e.g., "we use a two-pointer technique here"), mention time/space complexity, and point out one or two edge cases so the learner understands why the solution is correct.
 CRITICAL: Do NOT use over-engineered intermediate pruning logic (e.g., stopping if current_product > 1000) unless absolutely necessary for performance, as it often leads to wrong answers for negative numbers or large results. Use robust 64-bit integers (long long in C++) and check for exact equality at the end.
 
 REFERENCE SOLUTION GUIDANCE: If a verified reference solution is provided, you MUST maintain its algorithmic complexity. If the reference is O(n log n), do NOT downgrade to O(n²) even in "simple" mode, as it will likely fail for large inputs. Adapt the reference solution's core logic into your style while ensuring it remains highly efficient.
@@ -548,11 +552,28 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             const thinkBaseFinal = `${finalThinkingText}${finalApproachText ? '\n\n**Approach:** ' + finalApproachText : ''}`;
             const finalThinkBlock = `<think>\n${thinkBaseFinal}\n\n${isArabic ? 'تم تأليف الكود بنجاح' : 'Code written successfully'}\n\n${judgeResultLine}\n</think>`;
 
+            let combinedMessage = '';
             if (judgePassed) {
-                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.' : 'The solution has been written to the editor and passes all test cases.'}`, undefined, tabId);
+                combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل اتكتب في المحرر ونجح في كل التيستات.' : 'The solution has been written to the editor and passes all test cases.'}`;
+                updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             } else {
-                updateMessage(thinkMsgId, finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل ممكن يكون محتاج شوية تعديلات. اطلب مني أصلحه في الشات لو حابب.' : 'The solution might need adjustments. Try asking me to fix it in the chat.'}`, undefined, tabId);
+                combinedMessage = finalThinkBlock + `\n\n${finalExplanation}\n\n${isArabic ? 'الحل ممكن يكون محتاج شوية تعديلات. اطلب مني أصلحه في الشات لو حابب.' : 'The solution might need adjustments. Try asking me to fix it in the chat.'}`;
+                updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             }
+
+            // Explicitly log this robust Teach Me AI payload
+            try {
+                fetch('/api/ai/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problemId: problemId || 'unknown',
+                        role: 'assistant',
+                        content: combinedMessage,
+                        contextType: 'teach_me'
+                    })
+                }).catch(() => { });
+            } catch (e) { }
 
             let finalConcepts = data.concepts || [];
             try {

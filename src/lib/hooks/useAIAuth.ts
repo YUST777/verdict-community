@@ -17,20 +17,11 @@ interface UseAIAuthReturn {
     checkAuth: () => Promise<boolean>;
     getHeaders: () => Record<string, string>;
     handleAuthError: (response: Response) => Promise<{ needsAuth: boolean; newCsrfToken?: string }>;
-    isLocalhost: boolean;
 }
-
-// Check if running on localhost
-const checkIsLocalhost = () => {
-    if (typeof window === 'undefined') return false;
-    const host = window.location.hostname;
-    return host === 'localhost' || host === '127.0.0.1';
-};
 
 export function useAIAuth(): UseAIAuthReturn {
     const { user: authUser, loading: authLoading, isAuthenticated: authIsAuthenticated, refreshSession } = useAuth();
     const [csrfToken, setCsrfToken] = useState<string | null>(null);
-    const [isLocalhost] = useState(checkIsLocalhost);
 
     // Map AuthContext user to AuthUser
     const user: AuthUser | null = authUser ? {
@@ -110,7 +101,6 @@ export function useAIAuth(): UseAIAuthReturn {
         csrfToken,
         checkAuth,
         getHeaders,
-        handleAuthError,
-        isLocalhost
+        handleAuthError
     };
 }
