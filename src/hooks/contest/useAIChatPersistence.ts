@@ -268,12 +268,8 @@ export function useAIChatPersistence(
 
     // ── saveAiCode: persist AI generated code for the tab ────────────
     const saveAiCode = useCallback((tabId: string, aiCode: string) => {
-        console.log('[AIChat] Executing saveAiCode for tab:', tabId, 'code length:', aiCode?.length, 'auth:', isAuthenticated);
         setAiCodeByTab(prev => ({ ...prev, [tabId]: aiCode }));
-        if (!isAuthenticated || !problemId) {
-            console.warn('[AIChat] Skipping saveAiCode because not authenticated or missing problemId');
-            return;
-        }
+        if (!isAuthenticated || !problemId) return;
 
         fetch('/api/ai/chat/history', {
             method: 'PATCH',
@@ -283,15 +279,8 @@ export function useAIChatPersistence(
                 tabId,
                 aiCode
             })
-        }).then(async res => {
-            if (!res.ok) {
-                const text = await res.text();
-                console.error('[AIChat] Failed to persist AI code on server. Status:', res.status, text);
-            } else {
-                console.log('[AIChat] Successfully saved AI code to server for tab:', tabId);
-            }
         }).catch(err => {
-            console.error('[AIChat] Network error persisting AI code:', err?.message || err);
+            console.warn('[AIChat] Failed to persist AI code:', err?.message || err);
         });
     }, [isAuthenticated, problemId]);
 

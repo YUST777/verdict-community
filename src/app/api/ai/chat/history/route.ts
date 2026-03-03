@@ -142,7 +142,6 @@ export async function POST(req: NextRequest) {
 
         const body = await req.json();
         const { problemId, tabId, tabLabel, message } = body;
-        console.log('[DEBUG] POST received tabId:', tabId, 'message id:', message?.id);
 
         if (!problemId || !tabId || !message || !message.role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -222,7 +221,6 @@ export async function PATCH(req: NextRequest) {
 
         const body = await req.json();
         const { problemId, tabId, metadata, aiCode } = body;
-        console.log('[DEBUG] PATCH received tabId:', tabId, 'aiCode length:', aiCode?.length, 'metadata:', !!metadata);
 
         if (!problemId || !tabId || (!metadata && aiCode === undefined)) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
