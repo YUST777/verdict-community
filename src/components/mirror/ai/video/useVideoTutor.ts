@@ -8,10 +8,11 @@ import { VideoScript } from '../../video';
 interface UseVideoTutorProps {
     language: string;
     problemDescription?: string;
-    addMessage: (message: any, tabId?: string) => void;
-    updateMessage: (id: string, content: string, videoScript?: VideoScript, tabId?: string) => void;
+    addMessage: (message: any, tabId?: string, skipPersist?: boolean) => void;
+    updateMessage: (id: string, content: string, videoScript?: VideoScript, tabId?: string, persist?: boolean) => void;
     setIsVideoLoading: (loading: boolean, tabId?: string) => void;
     setIsTutorActive: (active: boolean, tabId?: string) => void;
+    saveMessage?: (tabId: string, tabLabel: string, message: { id: string; role: string; content: string; contextType?: string; codeBlock?: any; sources?: any[]; videoScript?: any }) => void;
 }
 
 export function useVideoTutor({
@@ -20,7 +21,8 @@ export function useVideoTutor({
     addMessage,
     updateMessage,
     setIsVideoLoading,
-    setIsTutorActive
+    setIsTutorActive,
+    saveMessage
 }: UseVideoTutorProps) {
     const { settings } = useLLM();
     const abortControllers = useRef<Record<string, AbortController | null>>({});
@@ -51,7 +53,7 @@ export function useVideoTutor({
             role: 'assistant',
             content: `<think>\n${settings.language === 'ar' ? 'توليد سيناريو فيديو لشرح الكود سطراً سطراً...' : 'Generating line-by-line video explanation script...'}\n</think>\n\n🎬 *${settings.language === 'ar' ? 'بجهز فيديو شرح المسألة...' : 'Preparing video explanation...'}*`,
             timestamp: new Date()
-        }, tabId);
+        }, tabId, true); // skipPersist: placeholder, will be updated with final content
 
         try {
             // Reconnect to the high-quality internal API that handles SVGs and Arabic formatting
@@ -94,11 +96,13 @@ export function useVideoTutor({
                 }))
             };
 
-            updateMessage(videoMsgId, `<think>\n${settings.language === 'ar' ? 'تم توليد سيناريو الفيديو بنجاح.' : 'Video script generated successfully via API.'}\n</think>\n\n🎥 ${settings.language === 'ar' ? 'الفيديو جاهز للمراجعة!' : 'Your video explanation is ready!'}`, videoScript, tabId);
+            // Persist the final video message with videoScript metadata
+            const finalVideoContent = `<think>\n${settings.language === 'ar' ? 'تم توليد سيناريو الفيديو بنجاح.' : 'Video script generated successfully via API.'}\n</think>\n\n🎥 ${settings.language === 'ar' ? 'الفيديو جاهز للمراجعة!' : 'Your video explanation is ready!'}`;
+            updateMessage(videoMsgId, finalVideoContent, videoScript, tabId, true); // persist=true
 
         } catch (err: any) {
             if (err.name === 'AbortError' || err.message === 'signal is aborted without reason') {
-                updateMessage(videoMsgId, settings.language === 'ar' ? 'توليد الفيديو اتوقف.' : `Video generation stopped.`, undefined, tabId);
+                updateMessage(videoMsgId, settings.language === 'ar' ? 'توليد الفيديو اتوقف.' : `Video generation stopped.`, undefined, tabId, true);
             } else {
                 addMessage({
                     id: `err-video-${Date.now()}`,
@@ -112,7 +116,7 @@ export function useVideoTutor({
             setIsTutorActive(false, tabId);
             abortControllers.current[tabId] = null;
         }
-    }, [language, problemDescription, settings, addMessage, updateMessage, setIsVideoLoading, setIsTutorActive]);
+    }, [language, problemDescription, settings, addMessage, updateMessage, setIsVideoLoading, setIsTutorActive, saveMessage]);
 
     const stopVideoTutor = useCallback((tabId?: string) => {
         if (tabId) {

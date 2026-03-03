@@ -19,6 +19,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  *
  * On message send:
  *   - Fire-and-forget POST to /api/ai/chat/history (individual message, normalized).
+ *     POST now uses UPSERT on client_id, so re-saving the same message updates it.
  *   - Debounced POST to /api/workspace/sync (full JSONB blob, backup).
  */
 export function useAIChatPersistence(
@@ -84,6 +85,15 @@ export function useAIChatPersistence(
                                 }));
                             }
                             setMessagesByTab(hydrated);
+
+                            // Load concepts from normalized tables
+                            if (histData.conceptsByTab) {
+                                setConceptsByTab(prev => ({
+                                    ...prev,
+                                    ...histData.conceptsByTab
+                                }));
+                            }
+
                             setIsLoaded(true);
                             return; // Successfully loaded from normalized tables
                         }
@@ -185,6 +195,7 @@ export function useAIChatPersistence(
     }, [messagesByTab, chatTabs, conceptsByTab, inputByTab, problemId, isLoaded, isAuthenticated]);
 
     // ── saveMessage: persist a single message to normalized tables ───
+    // Now uses UPSERT on client_id — safe to call multiple times for same message.
     const saveMessage = useCallback((
         tabId: string,
         tabLabel: string,
@@ -223,6 +234,23 @@ export function useAIChatPersistence(
         });
     }, [isAuthenticated, problemId]);
 
+    // ── saveConcepts: persist concepts to conversation metadata ──────
+    const saveConcepts = useCallback((tabId: string, concepts: any[]) => {
+        if (!isAuthenticated || !problemId || !concepts || concepts.length === 0) return;
+
+        fetch('/api/ai/chat/history', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                problemId,
+                tabId,
+                metadata: { concepts }
+            })
+        }).catch(err => {
+            console.warn('[AIChat] Failed to persist concepts:', err?.message || err);
+        });
+    }, [isAuthenticated, problemId]);
+
     // ── deleteConversation: remove a tab from normalized tables ──────
     const deleteConversation = useCallback((tabId: string) => {
         if (!isAuthenticated || !problemId) return;
@@ -247,6 +275,7 @@ export function useAIChatPersistence(
         setChatTabs,
         isLoaded,
         saveMessage,
+        saveConcepts,
         deleteConversation
     };
 }

@@ -107,6 +107,7 @@ export default function AIAgentPanel({
         setChatTabs,
         isLoaded,
         saveMessage,
+        saveConcepts,
         deleteConversation
     } = useAIChatPersistence(
         problemId || 'unknown',
@@ -292,7 +293,7 @@ export default function AIAgentPanel({
     // (removed local storage useEffect logic as it is now handled by useAIChatPersistence)
 
     // Message helpers for hook
-    const addMessage = useCallback((msg: { id: string; role: 'assistant' | 'user' | 'sources'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string }; sources?: any[] }, tabId: string = activeChatTab) => {
+    const addMessage = useCallback((msg: { id: string; role: 'assistant' | 'user' | 'sources'; content: string; timestamp: Date; codeBlock?: { code: string; language: string; lineReference?: string }; sources?: any[]; videoScript?: any }, tabId: string = activeChatTab, skipPersist: boolean = false) => {
         setMessagesByTab(prev => {
             const prevMsgs = prev[tabId] || [];
             return {
@@ -300,9 +301,22 @@ export default function AIAgentPanel({
                 [tabId]: [...prevMsgs, msg]
             };
         });
-    }, [activeChatTab]);
+        // Auto-persist unless skipPersist is true (for streaming messages that will be updated)
+        if (!skipPersist && msg.content) {
+            const currentTab = chatTabs.find(t => t.id === tabId);
+            saveMessage(tabId, currentTab?.label || 'Chat', {
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                contextType: 'chat',
+                ...(msg.codeBlock ? { codeBlock: msg.codeBlock } : {}),
+                ...(msg.sources ? { sources: msg.sources } : {}),
+                ...(msg.videoScript ? { videoScript: msg.videoScript } : {}),
+            });
+        }
+    }, [activeChatTab, chatTabs, saveMessage]);
 
-    const updateMessage = useCallback((id: string, content: string, videoScript?: VideoScript, tabId: string = activeChatTab) => {
+    const updateMessage = useCallback((id: string, content: string, videoScript?: VideoScript, tabId: string = activeChatTab, persist: boolean = false) => {
         setMessagesByTab(prev => {
             const prevMsgs = prev[tabId] || [];
             return {
@@ -310,7 +324,18 @@ export default function AIAgentPanel({
                 [tabId]: prevMsgs.map(m => m.id === id ? { ...m, content, videoScript: videoScript || m.videoScript } : m)
             };
         });
-    }, [activeChatTab]);
+        // Persist updated message to DB when persist=true (final state)
+        if (persist && content) {
+            const currentTab = chatTabs.find(t => t.id === tabId);
+            saveMessage(tabId, currentTab?.label || 'Chat', {
+                id,
+                role: 'assistant',
+                content,
+                contextType: 'chat',
+                ...(videoScript ? { videoScript } : {}),
+            });
+        }
+    }, [activeChatTab, chatTabs, saveMessage]);
 
     // AI Hooks
     const sharedHookProps = {
@@ -340,6 +365,8 @@ export default function AIAgentPanel({
                 return { ...prev, [tabId]: nextVal };
             });
         },
+        saveMessage,
+        saveConcepts,
     });
 
     const { startVideoTutor, stopVideoTutor } = useVideoTutor({
@@ -348,7 +375,8 @@ export default function AIAgentPanel({
         problemDescription,
         setIsVideoLoading: (loading, tabId = activeChatTab) => {
             setIsVideoLoading(loading); // This one is still local state
-        }
+        },
+        saveMessage,
     });
 
     // Tutor Usage Tracking (Once per problem per language)
@@ -526,32 +554,10 @@ export default function AIAgentPanel({
             })
         };
 
-        setMessages(prev => [...prev, userMessage], tabId);
+        // addMessage auto-persists the user message
+        addMessage(userMessage, tabId);
 
-        // Persist user message to normalized tables (fire-and-forget)
-        const currentTab = chatTabs.find(t => t.id === tabId);
-        saveMessage(tabId, currentTab?.label || 'Chat', {
-            id: userMessage.id,
-            role: 'user',
-            content: promptToSend,
-            contextType: 'chat',
-            ...(hasSelectedCode ? { codeBlock: userMessage.codeBlock } : {}),
-        });
 
-        // Also log to legacy ai_messages audit trail
-        const logContent = hasSelectedCode ? `${promptToSend}\n\nCode Context:\n\`\`\`${language}\n${selectedCode}\n\`\`\`` : promptToSend;
-        try {
-            fetch('/api/ai/log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    problemId: problemDescription?.substring(0, 50) || 'unknown',
-                    role: 'user',
-                    content: logContent,
-                    contextType: 'chat'
-                })
-            }).catch(() => { });
-        } catch (e) { }
 
         // Clear input only if it wasn't an override prompt
         if (!overridePrompt) {
@@ -613,7 +619,7 @@ export default function AIAgentPanel({
                 role: 'assistant',
                 content: '',
                 timestamp: new Date()
-            }, tabId);
+            }, tabId, true); // skipPersist=true: empty placeholder, will be updated with final content
             // Hide loading dots ONLY when we start streaming the actual response!
 
             const tools = [
@@ -740,16 +746,8 @@ export default function AIAgentPanel({
                                         timestamp: new Date(),
                                         sources: searchData.results
                                     };
-                                    setMessages(prev => [...prev, srcMsg]);
-                                    // Persist sources to normalized tables
-                                    const srcTab = chatTabs.find(t => t.id === tabId);
-                                    saveMessage(tabId, srcTab?.label || 'Chat', {
-                                        id: srcMsg.id,
-                                        role: 'sources',
-                                        content: '',
-                                        contextType: 'chat',
-                                        sources: searchData.results,
-                                    });
+                                    // addMessage auto-persists the sources message
+                                    addMessage(srcMsg, tabId);
                                 }
                                 return {
                                     tool_call_id: toolCall.id,
@@ -845,31 +843,10 @@ export default function AIAgentPanel({
                 updateMessage(streamMsgId, streamed, undefined, tabId);
                 await new Promise(r => setTimeout(r, 18));
             }
-            // Ensure final content is set
-            updateMessage(streamMsgId, finalAiResponse, undefined, tabId);
+            // Ensure final content is set and persist to DB
+            updateMessage(streamMsgId, finalAiResponse, undefined, tabId, true);
 
-            // Persist assistant message to normalized tables
-            const activeTab = chatTabs.find(t => t.id === tabId);
-            saveMessage(tabId, activeTab?.label || 'Chat', {
-                id: streamMsgId,
-                role: 'assistant',
-                content: finalAiResponse,
-                contextType: 'chat',
-            });
 
-            // Also log to legacy ai_messages audit trail
-            try {
-                fetch('/api/ai/log', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        problemId: problemDescription?.substring(0, 50) || 'unknown',
-                        role: 'assistant',
-                        content: finalAiResponse,
-                        contextType: 'chat'
-                    })
-                }).catch(() => { });
-            } catch (e) { }
 
             // Update last interaction with response length for learning
             updateLastInteractionResponse(finalAiResponse.length);

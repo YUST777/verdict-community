@@ -30,7 +30,7 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-placeholder}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
         REDIS_PASSWORD: ${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
     image: verdict-frontend:latest

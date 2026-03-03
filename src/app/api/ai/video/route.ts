@@ -12,12 +12,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const userRes = await query('SELECT tts_video_count FROM public.users WHERE id = $1', [user.id]);
-        const ttsCount = userRes.rows[0]?.tts_video_count || 0;
 
-        if (ttsCount >= 3) {
-            return NextResponse.json({ error: 'Free campaign limit reached (3/3 videos).' }, { status: 403 });
-        }
 
         const {
             problemDescription,
@@ -343,61 +338,73 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
                 };
             });
 
+
+        // TTS is gated by the free campaign limit (3 free TTS videos per user).
+        // Video generation itself is always allowed - users pay with their own LLM tokens.
         const ttsApiKey = process.env.GOOGLE_TTS_API_KEY;
+        let ttsUsed = false;
+
         if (ttsApiKey) {
-            const isArabic = settings?.language === 'ar';
-            const voiceConfig = isArabic
-                ? { languageCode: 'ar-XA', name: 'ar-XA-Standard-B', ssmlGender: 'MALE' }
-                : { languageCode: 'en-US', name: 'en-US-Standard-A', ssmlGender: 'MALE' };
+            const userRes = await query('SELECT tts_video_count FROM public.users WHERE id = $1', [user.id]);
+            const ttsCount = userRes.rows[0]?.tts_video_count || 0;
 
-            parsed.scenes = await Promise.all(
-                parsed.scenes.map(async (scene: any) => {
-                    if (!scene.script) return scene;
+            if (ttsCount < 3) {
+                const isArabic = settings?.language === 'ar';
+                const voiceConfig = isArabic
+                    ? { languageCode: 'ar-XA', name: 'ar-XA-Standard-B', ssmlGender: 'MALE' }
+                    : { languageCode: 'en-US', name: 'en-US-Standard-A', ssmlGender: 'MALE' };
 
-                    // Strip markdown and punctuation that causes TTS to read symbols literally
-                    const cleanScript = scene.script.replace(/[`*"\'?!\[\](){}_+]/g, '').replace(/-/g, ' ');
+                parsed.scenes = await Promise.all(
+                    parsed.scenes.map(async (scene: any) => {
+                        if (!scene.script) return scene;
 
-                    try {
-                        const ttsRes = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${ttsApiKey}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                input: { text: cleanScript },
-                                voice: voiceConfig,
-                                audioConfig: { audioEncoding: 'MP3' }
-                            })
-                        });
+                        const cleanScript = scene.script.replace(/[`*"'?!\[\](){}_+]/g, '').replace(/-/g, ' ');
 
-                        if (ttsRes.ok) {
-                            const data = await ttsRes.json();
-                            if (data.audioContent) {
-                                const buffer = Buffer.from(data.audioContent, 'base64');
-                                const exactDuration = await mp3Duration(buffer);
+                        try {
+                            const ttsRes = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${ttsApiKey}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    input: { text: cleanScript },
+                                    voice: voiceConfig,
+                                    audioConfig: { audioEncoding: 'MP3' }
+                                })
+                            });
 
-                                return {
-                                    ...scene,
-                                    audioData: `data:audio/mp3;base64,${data.audioContent}`,
-                                    // Add a generous 1.5s padding to the exact duration to ensure it doesn't cut off abruptly
-                                    // and gives the viewer time to parse the visual text before switching scenes.
-                                    duration: exactDuration + 1.5
-                                };
+                            if (ttsRes.ok) {
+                                const data = await ttsRes.json();
+                                if (data.audioContent) {
+                                    const buffer = Buffer.from(data.audioContent, 'base64');
+                                    const exactDuration = await mp3Duration(buffer);
+                                    ttsUsed = true;
+
+                                    return {
+                                        ...scene,
+                                        audioData: `data:audio/mp3;base64,${data.audioContent}`,
+                                        duration: exactDuration + 1.5
+                                    };
+                                }
+                            } else {
+                                console.error('[Google TTS API Error]', await ttsRes.text());
                             }
-                        } else {
-                            console.error('[Google TTS API Error]', await ttsRes.text());
+                        } catch (err) {
+                            console.error('[Google TTS network error]', err);
                         }
-                    } catch (err) {
-                        console.error('[Google TTS network error]', err);
-                    }
-                    return scene;
-                })
-            );
+                        return scene;
+                    })
+                );
+            }
+            // If ttsCount >= 3, TTS is skipped - video still works with text transcription only
         }
 
         if (parsed.scenes.length === 0) {
             throw new Error('No valid scenes were generated');
         }
 
-        await query('UPDATE public.users SET tts_video_count = COALESCE(tts_video_count, 0) + 1 WHERE id = $1', [user.id]);
+        // Only count against TTS limit when TTS was actually used
+        if (ttsUsed) {
+            await query('UPDATE public.users SET tts_video_count = COALESCE(tts_video_count, 0) + 1 WHERE id = $1', [user.id]);
+        }
 
         return NextResponse.json(parsed);
 

@@ -34,6 +34,8 @@ interface UseTutorProps {
     setConcepts: (concepts: Concept[] | ((prev: Concept[]) => Concept[]), tabId?: string) => void;
     setIsTutorActive: (active: boolean, tabId?: string) => void;
     setIsLoading: (loading: boolean, tabId?: string) => void;
+    saveMessage?: (tabId: string, tabLabel: string, message: { id: string; role: string; content: string; contextType?: string; codeBlock?: any; sources?: any[]; videoScript?: any }) => void;
+    saveConcepts?: (tabId: string, concepts: any[]) => void;
 }
 
 const SIMPLE_MODE_RULES = `STRICT RULES — Use an ADAPTIVE TEACHING approach for this learner:
@@ -119,7 +121,9 @@ export function useTutor({
     updateMessage,
     setConcepts,
     setIsTutorActive,
-    setIsLoading: setIsLoadingInParent
+    setIsLoading: setIsLoadingInParent,
+    saveMessage,
+    saveConcepts
 }: UseTutorProps) {
     const [variants, setVariants] = useState<any[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
@@ -186,7 +190,7 @@ export function useTutor({
             role: 'assistant',
             content: isArabic ? '<think>\nقراءة المسألة...\n</think>\n\n🍳 *بجهز أطبخ...*' : '<think>\nReading the problem...\n</think>\n\n🍳 *Getting ready to cook...*',
             timestamp: new Date()
-        }, tabId);
+        }, tabId, true); // skipPersist: placeholder, will be updated with final content
 
         if (onAiCodeUpdate) {
             onAiCodeUpdate(`// Analyzing problem...\n// Generating ${isSimple ? 'simple' : 'optimal'} solution...`);
@@ -288,6 +292,23 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
             let lastPassCount: number | undefined; // preserve across retries (data is overwritten each attempt)
             let data: TutorResponseData = {};
 
+            // Dataset collection
+            const datasetStartTime = Date.now();
+            const attemptResults: Array<{
+                attempt: number;
+                verdict: string;
+                passed: boolean;
+                tests_passed: number;
+                tests_total: number;
+                time_ms: number | null;
+                memory_kb: number | null;
+                compile_error: string | null;
+                runtime_error: string | null;
+                fuzz_tested: boolean;
+                fuzz_passed: boolean | null;
+                fuzz_failing_input: string | null;
+            }> = [];
+
             updateMessage(thinkMsgId, `<think>\n${isArabic ? 'قراءة المسألة...\n' + referenceStatusAr + '\nبحدد القيود والكيسات الصعبة...\nبالفسر الطريقة...' : 'Reading the problem...\n' + referenceStatus + '\nIdentifying constraints and edge cases...\nThinking about the approach...'}\n</think>\n\n🍳 *${isArabic ? 'بجهز أطبخ...' : 'Getting ready to cook...'}*`, undefined, tabId);
 
             while (attempt < maxAttempts) {
@@ -308,7 +329,7 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     body: JSON.stringify({
                         model: settings.model,
                         response_format: { type: "json_object" },
-                        max_tokens: 4096,
+                        max_tokens: 16384,
                         messages: currentMessages,
                         stream: true
                     }),
@@ -558,6 +579,23 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                     judgeResultLine = isArabic ? `**منصة التحكيم مش شغالة**` : `**Judge unavailable**`;
                 }
 
+                // Collect attempt data for dataset (before fuzz may override)
+                const currentAttemptData: typeof attemptResults[0] = {
+                    attempt,
+                    verdict: judgePassed ? 'Accepted' : (judgeResultLine.replace(/\*\*/g, '').split(' — ')[0] || 'Unknown'),
+                    passed: judgePassed,
+                    tests_passed: lastPassCount ?? (judgePassed ? testCases.length : 0),
+                    tests_total: testCases.length,
+                    time_ms: null,
+                    memory_kb: null,
+                    compile_error: null,
+                    runtime_error: null,
+                    fuzz_tested: false,
+                    fuzz_passed: null,
+                    fuzz_failing_input: null,
+                };
+                attemptResults.push(currentAttemptData);
+
                 if (judgePassed && referenceCode && finalSolution && attempt < maxAttempts) {
                     // Only run fuzzer in smart mode. In simple mode the problem is "not that deep" — Judge0 pass is enough.
                     const shouldFuzz = !isSimple;
@@ -611,11 +649,22 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
 
                                 if (fuzzRes.ok) {
                                     const fuzzData = await fuzzRes.json();
+                                    // Update dataset: fuzz was tested
+                                    if (attemptResults.length > 0) {
+                                        attemptResults[attemptResults.length - 1].fuzz_tested = true;
+                                        attemptResults[attemptResults.length - 1].fuzz_passed = fuzzData.passed;
+                                    }
+
                                     if (!fuzzData.passed && fuzzData.failingCase) {
                                         judgePassed = false;
                                         judgeResultLine = isArabic ? `**إجابة غلط في كيس صعب**` : `**Wrong Answer on hidden edge case**`;
                                         lastPassCount = testCases.length;
                                         data.passCount = testCases.length;
+                                        if (attemptResults.length > 0) {
+                                            attemptResults[attemptResults.length - 1].fuzz_failing_input = fuzzData.failingCase.input || null;
+                                            attemptResults[attemptResults.length - 1].passed = false;
+                                            attemptResults[attemptResults.length - 1].verdict = 'Wrong Answer (fuzz)';
+                                        }
                                         currentMessages.push({ role: 'assistant', content: rawContent });
                                         currentMessages.push({
                                             role: 'user',
@@ -666,19 +715,63 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
                 updateMessage(thinkMsgId, combinedMessage, undefined, tabId);
             }
 
-            // Explicitly log this robust Teach Me AI payload
-            try {
-                fetch('/api/ai/log', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        problemId: problemId || 'unknown',
-                        role: 'assistant',
-                        content: combinedMessage,
-                        contextType: 'teach_me'
-                    })
-                }).catch(() => { });
-            } catch (_e) { }
+            // Persist the final Teach Me message to normalized DB
+            if (saveMessage) {
+                saveMessage(tabId, 'Chat', {
+                    id: thinkMsgId,
+                    role: 'assistant',
+                    content: combinedMessage,
+                    contextType: 'teach_me',
+                });
+            }
+
+
+
+            // Save solution to dataset for future AI training
+            if (hasValidSolution) {
+                try {
+                    const [dsContestId, dsProblemIndex] = (problemId || '').split('-');
+                    // Detect LLM provider from baseURL
+                    let llmProvider = 'unknown';
+                    try {
+                        const host = new URL(settings.baseURL || '').hostname;
+                        if (host.includes('openai')) llmProvider = 'openai';
+                        else if (host.includes('anthropic')) llmProvider = 'anthropic';
+                        else if (host.includes('googleapis')) llmProvider = 'google';
+                        else if (host.includes('groq')) llmProvider = 'groq';
+                        else if (host.includes('openrouter')) llmProvider = 'openrouter';
+                        else if (host.includes('together')) llmProvider = 'together';
+                        else if (host.includes('fireworks')) llmProvider = 'fireworks';
+                        else if (host.includes('mistral')) llmProvider = 'mistral';
+                        else if (host.includes('deepseek')) llmProvider = 'deepseek';
+                        else llmProvider = host;
+                    } catch { }
+
+                    fetch('/api/ai/solutions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            problemId: problemId || 'unknown',
+                            contestId: dsContestId || null,
+                            problemIndex: dsProblemIndex || null,
+                            solutionCode: finalSolution,
+                            language,
+                            solutionStyle: isSimple ? 'simple' : 'smart',
+                            llmModel: settings.model || null,
+                            llmProvider,
+                            thinking: finalThinkingText || null,
+                            approach: finalApproachText || null,
+                            explanation: finalExplanation || null,
+                            attempts: attemptResults,
+                            totalAttempts: attempt,
+                            successfulAttempt: judgePassed ? attempt : null,
+                            totalWallTimeMs: Date.now() - datasetStartTime,
+                            hadReference: !!referenceCode,
+                            referenceCode: referenceCode || null,
+                        })
+                    }).catch(() => { });
+                } catch (_e) { }
+            }
 
             let finalConcepts = data.concepts || [];
             try {
@@ -707,6 +800,10 @@ SPECIAL INSTRUCTION FOR MULTIPLE SOLUTIONS: If the problem allows multiple valid
 
             if (finalConcepts.length > 0) {
                 setConcepts(finalConcepts, tabId);
+                // Persist concepts to conversation metadata
+                if (saveConcepts) {
+                    saveConcepts(tabId, finalConcepts);
+                }
             }
 
         } catch (_err: unknown) {

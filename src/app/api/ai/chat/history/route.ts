@@ -14,6 +14,10 @@ import { query } from '@/lib/db';
  *   messagesByTab: {
  *     "default": [{ id, role, content, timestamp, metadata }, ...],
  *     ...
+ *   },
+ *   conceptsByTab: {
+ *     "default": [{ title, url, type }, ...],
+ *     ...
  *   }
  * }
  *
@@ -34,7 +38,7 @@ export async function GET(req: NextRequest) {
 
         // 1. Load all conversations (tabs) for this user + problem
         const convResult = await query(
-            `SELECT id, tab_id, title, created_at, updated_at
+            `SELECT id, tab_id, title, metadata, created_at, updated_at
              FROM public.ai_conversations
              WHERE user_id = $1 AND problem_id = $2
              ORDER BY created_at ASC`,
@@ -42,13 +46,13 @@ export async function GET(req: NextRequest) {
         );
 
         if (convResult.rows.length === 0) {
-            return NextResponse.json({ tabs: [], messagesByTab: {} });
+            return NextResponse.json({ tabs: [], messagesByTab: {}, conceptsByTab: {} });
         }
 
         // 2. Load messages for ALL conversations in one query (batched, not N+1)
         const conversationIds = convResult.rows.map((r: any) => r.id);
         const msgResult = await query(
-            `SELECT m.conversation_id, m.id, m.role, m.content, m.context_type,
+            `SELECT m.conversation_id, m.client_id, m.role, m.content, m.context_type,
                     m.metadata, m.created_at, m.ordinal
              FROM public.ai_messages m
              WHERE m.conversation_id = ANY($1)
@@ -59,6 +63,7 @@ export async function GET(req: NextRequest) {
         // 3. Build the response shape
         const tabs: { id: string; label: string }[] = [];
         const messagesByTab: Record<string, any[]> = {};
+        const conceptsByTab: Record<string, any[]> = {};
 
         // Map conversation UUID -> tab_id for message grouping
         const convIdToTabId: Record<string, string> = {};
@@ -68,6 +73,12 @@ export async function GET(req: NextRequest) {
             tabs.push({ id: tabId, label: title });
             convIdToTabId[conv.id] = tabId;
             messagesByTab[tabId] = [];
+
+            // Load concepts from conversation metadata
+            const convMeta = conv.metadata || {};
+            if (convMeta.concepts && Array.isArray(convMeta.concepts)) {
+                conceptsByTab[tabId] = convMeta.concepts;
+            }
         }
 
         for (const msg of msgResult.rows) {
@@ -76,7 +87,7 @@ export async function GET(req: NextRequest) {
 
             const metadata = msg.metadata || {};
             messagesByTab[tabId].push({
-                id: msg.id,
+                id: msg.client_id || msg.id,
                 role: msg.role,
                 content: msg.content,
                 timestamp: msg.created_at,
@@ -88,7 +99,7 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        return NextResponse.json({ tabs, messagesByTab });
+        return NextResponse.json({ tabs, messagesByTab, conceptsByTab });
     } catch (error) {
         console.error('[Chat History GET Error]', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -98,15 +109,17 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/ai/chat/history
  *
- * Saves a single message to the normalized tables.
+ * Saves (or upserts) a single message to the normalized tables.
  * Upserts the conversation row (creates if needed).
+ * If a message with the same client_id already exists in the conversation,
+ * it is UPDATED (content + metadata). Otherwise it is INSERTed.
  *
  * Body: {
  *   problemId: string,
  *   tabId: string,          // client-side tab ID
  *   tabLabel: string,       // tab display label (e.g. "Chat 1")
  *   message: {
- *     id: string,
+ *     id: string,           // client-side message ID (used as client_id)
  *     role: 'user' | 'assistant' | 'sources',
  *     content: string,
  *     contextType?: 'chat' | 'teach_me' | 'video_explainer',
@@ -126,8 +139,13 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { problemId, tabId, tabLabel, message } = body;
 
-        if (!problemId || !tabId || !message || !message.role || !message.content) {
+        if (!problemId || !tabId || !message || !message.role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Allow empty content for sources messages (they have sources in metadata)
+        if (!message.content && !message.sources) {
+            return NextResponse.json({ error: 'Missing content' }, { status: 400 });
         }
 
         // 1. Upsert conversation (ON CONFLICT on user_id, problem_id, tab_id)
@@ -148,18 +166,74 @@ export async function POST(req: NextRequest) {
         if (message.sources) metadata.sources = message.sources;
         if (message.videoScript) metadata.videoScript = message.videoScript;
 
-        // 3. Insert message with atomic ordinal (prevents race condition)
+        // 3. Upsert message by client_id (prevents duplicates on re-save)
         const ct = message.contextType || 'chat';
-        await query(
-            `INSERT INTO public.ai_messages (conversation_id, role, content, context_type, metadata, ordinal)
-             VALUES ($1, $2, $3, $4, $5, (SELECT COALESCE(MAX(ordinal), 0) + 1 FROM public.ai_messages WHERE conversation_id = $1))`,
-            [conversationId, message.role, message.content, ct,
-             Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '{}']
-        );
+        const clientId = message.id || null;
+        const metadataJson = Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '{}';
+
+        if (clientId) {
+            // Use upsert: INSERT ... ON CONFLICT (conversation_id, client_id) DO UPDATE
+            await query(
+                `INSERT INTO public.ai_messages (conversation_id, client_id, role, content, context_type, metadata, ordinal)
+                 VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(ordinal), 0) + 1 FROM public.ai_messages WHERE conversation_id = $1))
+                 ON CONFLICT (conversation_id, client_id) WHERE client_id IS NOT NULL
+                 DO UPDATE SET content = EXCLUDED.content,
+                               metadata = EXCLUDED.metadata,
+                               context_type = EXCLUDED.context_type`,
+                [conversationId, clientId, message.role, message.content || '', ct, metadataJson]
+            );
+        } else {
+            // No client_id, just insert (legacy behavior)
+            await query(
+                `INSERT INTO public.ai_messages (conversation_id, role, content, context_type, metadata, ordinal)
+                 VALUES ($1, $2, $3, $4, $5, (SELECT COALESCE(MAX(ordinal), 0) + 1 FROM public.ai_messages WHERE conversation_id = $1))`,
+                [conversationId, message.role, message.content || '', ct, metadataJson]
+            );
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('[Chat History POST Error]', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+}
+
+/**
+ * PATCH /api/ai/chat/history
+ *
+ * Updates conversation metadata (e.g., concepts).
+ * Body: {
+ *   problemId: string,
+ *   tabId: string,
+ *   metadata: { concepts?: array, ... }
+ * }
+ */
+export async function PATCH(req: NextRequest) {
+    try {
+        const user = await verifyAuth(req);
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const body = await req.json();
+        const { problemId, tabId, metadata } = body;
+
+        if (!problemId || !tabId || !metadata) {
+            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Update conversation metadata (merge with existing)
+        await query(
+            `UPDATE public.ai_conversations
+             SET metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
+                 updated_at = NOW()
+             WHERE user_id = $1 AND problem_id = $2 AND tab_id = $3`,
+            [user.id, problemId, tabId, JSON.stringify(metadata)]
+        );
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('[Chat History PATCH Error]', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
