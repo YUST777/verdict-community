@@ -1,8 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyAuth } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/simple-rate-limit';
 import { JUDGE0_LANGUAGE_MAP } from '@/lib/judge';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
+        // Auth required
+        const user = await verifyAuth(request);
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Rate limit: 10 fuzz tests per minute per user
+        if (!checkRateLimit(`judge-fuzz:${user.id}`, 10, 60)) {
+            return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
+        }
+
         const { aiSolution, referenceSolution, language, edgeCases } = await request.json();
 
         if (!aiSolution || !referenceSolution || !edgeCases || !Array.isArray(edgeCases)) {
@@ -114,8 +127,8 @@ export async function POST(request: Request) {
     } catch (error: unknown) {
         console.error('[Judge] Fuzz error', error);
         return NextResponse.json({
-            passed: true,
-            error: error instanceof Error ? error.message : 'Fuzz failed'
-        });
+            passed: false,
+            error: 'Fuzz test failed due to an internal error'
+        }, { status: 500 });
     }
 }

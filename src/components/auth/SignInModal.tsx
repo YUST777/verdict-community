@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Loader2, Github } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
 
 interface SignInModalProps {
     isOpen: boolean;
@@ -99,6 +100,14 @@ export default function SignInModal({
                             Continue with GitHub
                         </button>
                     </div>
+
+                    {/* Terms of Service */}
+                    <p className="text-center text-xs text-white/40 leading-relaxed">
+                        By signing in, you agree to our{' '}
+                        <Link href="/terms" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2" target="_blank">
+                            Terms of Service
+                        </Link>
+                    </p>
 
                     {error && (
                         <div className="text-sm px-4 py-3 mt-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">

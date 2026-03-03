@@ -9,15 +9,6 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Auto-create table if it doesn't exist
-        await query(`
-            CREATE TABLE IF NOT EXISTS user_tabs (
-                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                tabs JSONB DEFAULT '[]'::jsonb,
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-        `);
-
         const result = await query(
             'SELECT tabs FROM user_tabs WHERE user_id = $1',
             [user.id]
@@ -30,15 +21,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ data: result.rows[0].tabs || [] });
     } catch (error) {
         console.error('[User Tabs GET Error]', error);
-        console.error('[User Tabs GET Error Details]', {
-            message: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : undefined,
-            dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
-        });
-        return NextResponse.json({ 
-            error: 'Internal server error',
-            details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
-        }, { status: 500 });
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
 
@@ -56,14 +39,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid tabs format. Expected an array.' }, { status: 400 });
         }
 
-        await query(`
-            CREATE TABLE IF NOT EXISTS user_tabs (
-                user_id INTEGER PRIMARY KEY,
-                tabs JSONB DEFAULT '[]'::jsonb,
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-        `);
-
         const queryText = `
             INSERT INTO user_tabs (user_id, tabs, updated_at)
             VALUES ($1, $2, NOW())
@@ -78,14 +53,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('[User Tabs POST Error]', error);
-        console.error('[User Tabs POST Error Details]', {
-            message: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : undefined,
-            dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
-        });
-        return NextResponse.json({ 
-            error: 'Internal server error',
-            details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
-        }, { status: 500 });
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

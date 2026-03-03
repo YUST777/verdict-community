@@ -8,7 +8,10 @@ if (!encryptionKey) {
 }
 
 // Blind index salt for O(1) lookups (separate from encryption key)
-const blindIndexSalt = process.env.BLIND_INDEX_SALT || encryptionKey || 'fallback-salt';
+const blindIndexSalt = process.env.BLIND_INDEX_SALT || encryptionKey;
+if (!blindIndexSalt) {
+    console.error('CRITICAL: No BLIND_INDEX_SALT or DB_ENCRYPTION_KEY set. Blind index lookups will fail.');
+}
 
 // Encryption/Decryption functions for sensitive fields
 export const encrypt = (text: string | null | undefined): string | null => {

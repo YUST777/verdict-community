@@ -32,7 +32,7 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
-        REDIS_PASSWORD: ${REDIS_PASSWORD:-yourredispassword}
+        REDIS_PASSWORD: ${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
     image: verdict-frontend:latest
     container_name: verdict-frontend
     ports:
@@ -42,7 +42,7 @@ services:
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
       - REDIS_HOST=verdict-redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-yourredispassword}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
       - JUDGE0_URL=http://verdict-judge0-server:2358
       - MIRROR_SERVICE_URL=http://verdict-mirror:3099
     env_file:
@@ -61,7 +61,7 @@ services:
       - verdict-redis
       - verdict-judge0-server
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,7 +70,7 @@ services:
   verdict-redis:
     image: redis:7.2-alpine
     container_name: verdict-redis
-    command: ["redis-server", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD:-yourredispassword}"]
+    command: ["redis-server", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}"]
     networks:
       - verdict-network
     restart: always
@@ -141,7 +141,7 @@ services:
     environment:
       - POSTGRES_DB=judge0
       - POSTGRES_USER=judge0
-      - POSTGRES_PASSWORD=judge0secret
+      - POSTGRES_PASSWORD=bV64LC5kWHXER6iCMKdA
     volumes:
       - verdict-judge0-db-data:/var/lib/postgresql/data
     networks:

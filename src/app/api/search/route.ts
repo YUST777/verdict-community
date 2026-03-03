@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     } catch (error: unknown) {
         console.error('Search error', error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Internal Server Error' },
+            { error: 'Search failed' },
             { status: 500 }
         );
     }

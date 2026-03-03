@@ -22,6 +22,9 @@ export function getPool(): pg.Pool {
         pool = new Pool({
             connectionString,
             ssl: {
+                // Supabase Supavisor pooler uses certificates that may not be in the
+                // system CA bundle. For Supabase connections this is expected.
+                // If migrating to a different DB provider, set this to true.
                 rejectUnauthorized: false
             },
             // Small pool — Supavisor handles the real pooling upstream.

@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     } catch (error: unknown) {
         console.error('Solutions fetch API error:', error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Failed to fetch solution.' },
+            { error: 'Failed to fetch solution.' },
             { status: 500 }
         );
     }

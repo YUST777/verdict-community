@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-const CSRF_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY || 'csrf-fallback-secret';
+const CSRF_SECRET = process.env.JWT_SECRET || process.env.API_SECRET_KEY;
+if (!CSRF_SECRET) {
+    console.error('CRITICAL: No CSRF secret configured (JWT_SECRET or API_SECRET_KEY required)');
+}
 const CSRF_TOKEN_EXPIRY = 60 * 60 * 1000; // 1 hour
 
 interface CSRFPayload {
@@ -47,7 +50,10 @@ export function verifyCSRFToken(token: string, userId: string): boolean {
         hmac.update(data);
         const expectedSignature = hmac.digest('hex');
 
-        if (signature !== expectedSignature) {
+        // Timing-safe comparison to prevent timing attacks
+        const sigBuf = Buffer.from(signature, 'hex');
+        const expBuf = Buffer.from(expectedSignature, 'hex');
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
             return false;
         }
 

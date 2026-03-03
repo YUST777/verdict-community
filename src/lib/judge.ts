@@ -325,8 +325,7 @@ export async function executeBatchOnJudge0(
             time: '0ms',
             memory: '0KB',
             results: [],
-            error: error.message || 'Unknown Judge0 error',
-            details: error instanceof Error ? error.stack : undefined
+            error: 'Judge execution failed'
         };
     }
 }

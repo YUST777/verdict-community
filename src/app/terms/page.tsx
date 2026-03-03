@@ -11,7 +11,7 @@ export default function TermsOfService() {
             <main className="max-w-4xl mx-auto px-6 py-40">
                 {/* Title */}
                 <h1 className="text-4xl font-bold mb-2">Terms of Service</h1>
-                <p className="text-white/40 text-sm mb-12">Last Modified: January 15, 2026</p>
+                <p className="text-white/40 text-sm mb-12">Last Modified: March 3, 2026</p>
 
                 {/* Intro */}
                 <div className="prose prose-invert prose-emerald max-w-none">
@@ -103,10 +103,64 @@ export default function TermsOfService() {
                         </ul>
                     </section>
 
-                    {/* Section 4 */}
+                    {/* Section 4 - Data Collection & Storage (NEW) */}
+                    <section className="mb-12">
+                        <h2 id="data-collection" className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                            4. Data Collection and Storage
+                            <a href="#data-collection" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
+                        </h2>
+
+                        <h3 className="text-lg font-medium text-white mb-3">a. Data We Collect and Store</h3>
+                        <p className="text-white/70 mb-4">
+                            When you use the Services, we collect and store certain data on our servers to provide and improve the platform experience. This includes:
+                        </p>
+                        <ul className="list-disc list-inside space-y-2 text-white/70 mb-6">
+                            <li><strong className="text-white">AI Chat Messages:</strong> Conversations with the AI assistant, including your questions, code snippets shared in context, and AI-generated responses, are stored on our servers to enable chat history, multi-tab conversations, and continued sessions across devices.</li>
+                            <li><strong className="text-white">User Profile Data:</strong> Your email address (encrypted at rest), Codeforces handle, account preferences, and authentication identifiers.</li>
+                            <li><strong className="text-white">Problem Sheets and Workspace State:</strong> Your saved problem sheets, open tabs, and workspace configuration are stored to synchronize your session across devices.</li>
+                            <li><strong className="text-white">Video Scripts:</strong> AI-generated video explainer scripts and any shared videos are stored on our servers.</li>
+                            <li><strong className="text-white">Usage Metadata:</strong> Problem view history and submission activity for analytics and caching purposes.</li>
+                        </ul>
+
+                        <h3 className="text-lg font-medium text-white mb-3">b. Data We Do NOT Store on Our Servers</h3>
+                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-6 text-sm text-white/70 leading-relaxed mb-6">
+                            <p className="mb-4">
+                                <strong className="text-emerald-400">Your API Keys are never stored on our servers.</strong> When you configure an AI provider (such as OpenAI, Anthropic, or Google), the API key you provide is stored exclusively in your browser&apos;s local storage (localStorage). It is sent directly from your browser to the AI provider&apos;s API and is never transmitted to, logged by, or persisted on Verdict&apos;s servers.
+                            </p>
+                            <p>
+                                This means if you clear your browser data or switch devices, you will need to re-enter your API key. We recommend keeping a secure backup of your keys.
+                            </p>
+                        </div>
+
+                        <h3 className="text-lg font-medium text-white mb-3">c. Data Retention</h3>
+                        <p className="text-white/70">
+                            We retain your data for as long as your account is active or as needed to provide the Services. You may request deletion of your account and associated data by contacting us. Upon account deletion, we will remove your personal data within 30 days, except where retention is required by law.
+                        </p>
+                    </section>
+
+                    {/* Section 5 - Cookies (NEW) */}
+                    <section className="mb-12">
+                        <h2 id="cookies" className="text-2xl font-semibold mb-4 flex items-center gap-2">
+                            5. Cookies and Local Storage
+                            <a href="#cookies" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
+                        </h2>
+                        <p className="text-white/70 mb-4">
+                            Verdict uses cookies and browser local storage to operate the platform:
+                        </p>
+                        <ul className="list-disc list-inside space-y-2 text-white/70 mb-6">
+                            <li><strong className="text-white">Authentication Cookies:</strong> We use secure, HTTP-only cookies to maintain your login session. These are essential for the Services to function and cannot be disabled while using the platform.</li>
+                            <li><strong className="text-white">Supabase Auth Cookies:</strong> Our authentication provider (Supabase) sets cookies to manage OAuth sessions with Google and GitHub.</li>
+                            <li><strong className="text-white">Local Storage:</strong> We use browser local storage to persist your AI provider API keys, editor preferences, theme settings, and other client-side configuration. This data never leaves your browser.</li>
+                        </ul>
+                        <p className="text-white/70">
+                            We do not use third-party tracking cookies or advertising cookies. By using the Services, you consent to the use of essential cookies and local storage as described above.
+                        </p>
+                    </section>
+
+                    {/* Section 6 (was 4) */}
                     <section className="mb-12">
                         <h2 id="fees" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            4. Fees and Payment
+                            6. Fees and Payment
                             <a href="#fees" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <p className="text-white/70 mb-4">
@@ -117,10 +171,10 @@ export default function TermsOfService() {
                         </p>
                     </section>
 
-                    {/* Section 5 */}
+                    {/* Section 7 (was 5) */}
                     <section className="mb-12">
                         <h2 id="intellectual-property" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            5. Intellectual Property
+                            7. Intellectual Property
                             <a href="#intellectual-property" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <p className="text-white/70 mb-4">
@@ -131,10 +185,10 @@ export default function TermsOfService() {
                         </p>
                     </section>
 
-                    {/* Section 6 */}
+                    {/* Section 8 (was 6) */}
                     <section className="mb-12">
                         <h2 id="disclaimer" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            6. Disclaimer of Warranties
+                            8. Disclaimer of Warranties
                             <a href="#disclaimer" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <div className="bg-white/5 border border-white/10 rounded-lg p-6 text-sm text-white/60">
@@ -144,10 +198,10 @@ export default function TermsOfService() {
                         </div>
                     </section>
 
-                    {/* Section 7 */}
+                    {/* Section 9 (was 7) */}
                     <section className="mb-12">
                         <h2 id="limitation" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            7. Limitation of Liability
+                            9. Limitation of Liability
                             <a href="#limitation" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <div className="bg-white/5 border border-white/10 rounded-lg p-6 text-sm text-white/60">
@@ -157,10 +211,10 @@ export default function TermsOfService() {
                         </div>
                     </section>
 
-                    {/* Section 8 */}
+                    {/* Section 10 (was 8) */}
                     <section className="mb-12">
                         <h2 id="termination" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            8. Termination
+                            10. Termination
                             <a href="#termination" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <p className="text-white/70 mb-4">
@@ -171,10 +225,10 @@ export default function TermsOfService() {
                         </p>
                     </section>
 
-                    {/* Section 9 */}
+                    {/* Section 11 (was 9) */}
                     <section className="mb-12">
                         <h2 id="governing-law" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            9. Governing Law
+                            11. Governing Law
                             <a href="#governing-law" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <p className="text-white/70">
@@ -182,10 +236,10 @@ export default function TermsOfService() {
                         </p>
                     </section>
 
-                    {/* Section 10 */}
+                    {/* Section 12 (was 10) */}
                     <section className="mb-12">
                         <h2 id="changes" className="text-2xl font-semibold mb-4 flex items-center gap-2">
-                            10. Changes to Terms
+                            12. Changes to Terms
                             <a href="#changes" className="text-emerald-500 opacity-0 hover:opacity-100 transition-opacity">#</a>
                         </h2>
                         <p className="text-white/70">

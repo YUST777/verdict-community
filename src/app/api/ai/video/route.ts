@@ -30,6 +30,24 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'LLM not configured' }, { status: 400 });
         }
 
+        // Validate baseURL to prevent SSRF - only allow known LLM API hosts
+        if (settings.baseURL) {
+            try {
+                const parsedUrl = new URL(settings.baseURL);
+                const allowedHosts = [
+                    'api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com',
+                    'api.groq.com', 'openrouter.ai', 'api.together.xyz', 'api.fireworks.ai',
+                    'api.mistral.ai', 'api.deepseek.com', 'api.cohere.ai'
+                ];
+                const isAllowed = allowedHosts.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith('.' + h));
+                if (!isAllowed && !parsedUrl.hostname.endsWith('.openai.com')) {
+                    return NextResponse.json({ error: 'Unsupported LLM provider URL' }, { status: 400 });
+                }
+            } catch {
+                return NextResponse.json({ error: 'Invalid baseURL' }, { status: 400 });
+            }
+        }
+
         if (!problemDescription || !solution) {
             return NextResponse.json({ error: 'Missing problem description or solution' }, { status: 400 });
         }
@@ -385,6 +403,6 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
 
     } catch (error: any) {
         console.error('[Video Script API Error]', error);
-        return NextResponse.json({ error: error.message || 'Failed to generate script' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to generate script' }, { status: 500 });
     }
 }

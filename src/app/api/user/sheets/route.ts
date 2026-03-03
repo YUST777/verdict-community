@@ -25,14 +25,6 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        await query(`
-            CREATE TABLE IF NOT EXISTS user_sheets (
-                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                sheet JSONB DEFAULT '{}'::jsonb,
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-        `);
-
         const result = await query(
             'SELECT sheet FROM user_sheets WHERE user_id = $1',
             [user.id]
@@ -62,14 +54,6 @@ export async function POST(req: NextRequest) {
         if (!sheet || typeof sheet !== 'object') {
             return NextResponse.json({ error: 'Invalid sheet format' }, { status: 400 });
         }
-
-        await query(`
-            CREATE TABLE IF NOT EXISTS user_sheets (
-                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                sheet JSONB DEFAULT '{}'::jsonb,
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-        `);
 
         await query(`
             INSERT INTO user_sheets (user_id, sheet, updated_at)

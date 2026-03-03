@@ -22,8 +22,15 @@ export async function GET(req: NextRequest) {
     const groupId = searchParams.get('groupId');
 
     if (!contestId || !problemId) {
-        console.warn(`[Mirror] Missing params: contestId=${contestId}, problemId=${problemId}, url=${req.url}`);
         return NextResponse.json({ error: 'Missing contestId or problemId' }, { status: 400 });
+    }
+
+    // Validate contestId (numeric) and problemId (alpha like A, B, C1, etc.)
+    if (!/^\d{1,10}$/.test(contestId)) {
+        return NextResponse.json({ error: 'Invalid contestId format' }, { status: 400 });
+    }
+    if (!/^[A-Za-z][A-Za-z0-9]{0,5}$/.test(problemId)) {
+        return NextResponse.json({ error: 'Invalid problemId format' }, { status: 400 });
     }
 
     const noCache = searchParams.get('noCache') === 'true';
@@ -93,6 +100,10 @@ export async function GET(req: NextRequest) {
         case 'group':
             if (!groupId) {
                 return NextResponse.json({ error: 'Missing groupId for group problem' }, { status: 400 });
+            }
+            // Validate groupId to prevent SSRF (CF group IDs are alphanumeric)
+            if (!/^[a-zA-Z0-9]{1,20}$/.test(groupId)) {
+                return NextResponse.json({ error: 'Invalid groupId format' }, { status: 400 });
             }
             targetUrl = `https://codeforces.com/group/${groupId}/contest/${contestId}/problem/${problemId}`;
             break;
@@ -201,33 +212,23 @@ async function scrapeDirectly(url: string) {
 }
 
 async function buildMock(url: string) {
+    // Sanitize URL to prevent XSS injection
+    const safeUrl = url.replace(/[&<>"']/g, (c: string) => {
+        const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return map[c] || c;
+    });
     return {
         meta: {
             title: 'Problem Unavailable (Bot Protection)',
             timeLimitMs: 2000,
             memoryLimitMB: 256,
-            sourceUrl: url
+            sourceUrl: safeUrl
         },
-        story: `
-            <div class="alert alert-warning" style="background: rgba(255, 166, 0, 0.1); border: 1px solid rgba(255, 166, 0, 0.3); padding: 16px; border-radius: 8px; color: #ffca28; margin-bottom: 24px;">
-                <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    Connection Error
-                </h3>
-                <p>We could not retrieve the problem statement from Codeforces at this time.</p>
-                <p style="margin-bottom: 0;"><strong>You can still solve this problem:</strong></p>
-                <ol style="margin-top: 8px; padding-left: 20px;">
-                    <li>Open the problem on Codeforces manually.</li>
-                    <li>Copy test cases from the original problem.</li>
-                    <li>Write your solution and test it here.</li>
-                </ol>
-            </div>
-            <p>Please try refreshing the page in a few minutes.</p>
-        `,
+        story: '<div class="alert alert-warning" style="background: rgba(255, 166, 0, 0.1); border: 1px solid rgba(255, 166, 0, 0.3); padding: 16px; border-radius: 8px; color: #ffca28; margin-bottom: 24px;"><h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">Connection Error</h3><p>We could not retrieve the problem statement from Codeforces at this time.</p><p style="margin-bottom: 0;"><strong>You can still solve this problem:</strong></p><ol style="margin-top: 8px; padding-left: 20px;"><li>Open the problem on Codeforces manually.</li><li>Copy test cases from the original problem.</li><li>Write your solution and test it here.</li></ol></div><p>Please try refreshing the page in a few minutes.</p>',
         inputSpec: '<p>Please refer to the original problem statement on Codeforces for input specifications.</p>',
         outputSpec: '<p>Please refer to the original problem statement on Codeforces for output specifications.</p>',
         testCases: [],
-        note: `Codeforces URL: <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #10B981; text-decoration: underline;">${url}</a>`
+        note: 'Codeforces URL: <a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer" style="color: #10B981; text-decoration: underline;">' + safeUrl + '</a>'
     };
 }
 

@@ -9,11 +9,6 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Ensure column exists
-        await query(`
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS codeforces_handle VARCHAR(255);
-        `).catch(() => {});
-
         const result = await query(
             'SELECT codeforces_handle FROM users WHERE id = $1',
             [user.id]
@@ -42,11 +37,6 @@ export async function POST(req: NextRequest) {
         }
 
         const trimmed = handle.trim();
-
-        // Ensure column exists
-        await query(`
-            ALTER TABLE users ADD COLUMN IF NOT EXISTS codeforces_handle VARCHAR(255);
-        `).catch(() => {});
 
         await query(
             'UPDATE users SET codeforces_handle = $1 WHERE id = $2',

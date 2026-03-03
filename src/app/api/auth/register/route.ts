@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/simple-rate-limit';
 import { query } from '@/lib/db';
 import { createBlindIndex, encrypt } from '@/lib/encryption';
 import bcrypt from 'bcryptjs';
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
             path: '/',
             maxAge: 60 * 60 * 24 * 30, // 30 days
             sameSite: 'lax',
-            httpOnly: false,
+            httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             domain: process.env.NODE_ENV === 'production' ? '.verdict.run' : undefined
         });
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
         console.error('Register Error:', err);
         return NextResponse.json({
             success: false,
-            error: err instanceof Error ? err.message : 'Registration failed'
+            error: 'Registration failed'
         }, { status: 500 });
     }
 }

@@ -142,29 +142,19 @@ export async function POST(req: NextRequest) {
         );
         const conversationId = convResult.rows[0].id;
 
-        // 2. Get next ordinal for this conversation
-        const ordResult = await query(
-            `SELECT COALESCE(MAX(ordinal), 0) + 1 as next_ord
-             FROM public.ai_messages
-             WHERE conversation_id = $1`,
-            [conversationId]
-        );
-        const nextOrdinal = ordResult.rows[0].next_ord;
-
-        // 3. Build metadata (rich fields stored separately from content)
+        // 2. Build metadata (rich fields stored separately from content)
         const metadata: Record<string, any> = {};
         if (message.codeBlock) metadata.codeBlock = message.codeBlock;
         if (message.sources) metadata.sources = message.sources;
         if (message.videoScript) metadata.videoScript = message.videoScript;
 
-        // 4. Insert message with ordinal
+        // 3. Insert message with atomic ordinal (prevents race condition)
         const ct = message.contextType || 'chat';
         await query(
             `INSERT INTO public.ai_messages (conversation_id, role, content, context_type, metadata, ordinal)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+             VALUES ($1, $2, $3, $4, $5, (SELECT COALESCE(MAX(ordinal), 0) + 1 FROM public.ai_messages WHERE conversation_id = $1))`,
             [conversationId, message.role, message.content, ct,
-             Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '{}',
-             nextOrdinal]
+             Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : '{}']
         );
 
         return NextResponse.json({ success: true });
