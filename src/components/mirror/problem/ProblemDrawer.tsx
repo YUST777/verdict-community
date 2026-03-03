@@ -81,37 +81,60 @@ export default function ProblemDrawer({
     const [loadingPersisted, setLoadingPersisted] = useState(true);
     const [solvedSet, setSolvedSet] = useState<Set<string>>(new Set());
 
+    // Track which contestId we've already loaded to prevent re-fetches
+    const loadedContestRef = useRef<string | null>(null);
+
     // Sync external sheet
     useEffect(() => {
         if (externalSheet) setSheet(externalSheet);
     }, [externalSheet]);
 
-    // Load persisted sheet on mount (only once)
+    // Load the correct sheet for the CURRENT contest from DB or CF API
     useEffect(() => {
-        if (!user) { setLoadingPersisted(false); return; }
-        (async () => {
-            try {
-                const res = await fetch("/api/user/sheets");
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.data && data.data.problems?.length > 0) {
-                        setSheet(data.data);
-                        onSheetLoaded?.(data.data);
-                    }
-                }
-            } catch {}
-            finally { setLoadingPersisted(false); }
-        })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]);
+        if (!currentContestId) { setLoadingPersisted(false); return; }
+        // Don't re-load if we already loaded this contest
+        if (loadedContestRef.current === currentContestId) return;
 
-    // Auto-load current contest if no sheet is loaded
-    useEffect(() => {
-        if (sheet || loadingPersisted) return;
-        if (!currentContestId) return;
-        loadContestProblems(currentContestId, urlType as any, groupId);
+        let cancelled = false;
+
+        (async () => {
+            setLoadingPersisted(true);
+
+            // Step 1: Try loading from DB cache (keyed by contestId)
+            if (user) {
+                try {
+                    const res = await fetch(`/api/user/sheets?contestId=${currentContestId}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.data && data.data.problems?.length > 0) {
+                            if (!cancelled) {
+                                const cachedSheet = data.data as ActiveSheet;
+                                setSheet(cachedSheet);
+                                onSheetLoaded?.(cachedSheet);
+                                loadedContestRef.current = currentContestId;
+                                setLoadingPersisted(false);
+                            }
+                            return;
+                        }
+                    }
+                } catch {}
+            }
+
+            // Step 2: Not cached — lazy-load from CF API
+            if (!cancelled) {
+                const cType = urlType === "gym" ? "gym" : urlType === "group" ? "group" : "contest";
+                await loadContestProblems(currentContestId, cType as any, groupId);
+                if (!cancelled) {
+                    loadedContestRef.current = currentContestId;
+                }
+            }
+
+            if (!cancelled) setLoadingPersisted(false);
+        })();
+
+        return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentContestId, loadingPersisted]);
+    }, [currentContestId, user]);
 
     // Focus input when opened
     useEffect(() => {
@@ -150,7 +173,7 @@ export default function ProblemDrawer({
                 setSheet(newSheet);
                 onSheetLoaded?.(newSheet);
 
-                // Persist
+                // Persist to DB cache
                 if (user) {
                     fetch("/api/user/sheets", {
                         method: "POST",
@@ -179,6 +202,8 @@ export default function ProblemDrawer({
                 parsed.type === "gym" ? "gym" : parsed.type === "group" ? "group" : "contest",
                 parsed.groupId
             );
+            // Update loaded ref so we don't re-fetch
+            loadedContestRef.current = parsed.contestId;
             setUrlInput("");
         } else {
             // Navigate to single problem
@@ -362,7 +387,7 @@ export default function ProblemDrawer({
                                 </div>
                             ) : filteredProblems.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-12">
-                                    <p className="text-xs text-white/30">No problems match "{search}"</p>
+                                    <p className="text-xs text-white/30">No problems match &quot;{search}&quot;</p>
                                 </div>
                             ) : (
                                 <div className="flex flex-col gap-0.5 mt-1">

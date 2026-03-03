@@ -103,11 +103,14 @@ export default function AIAgentPanel({
         setConceptsByTab,
         inputByTab,
         setInputByTab,
+        aiCodeByTab,
+        setAiCodeByTab,
         chatTabs,
         setChatTabs,
         isLoaded,
         saveMessage,
         saveConcepts,
+        saveAiCode,
         deleteConversation
     } = useAIChatPersistence(
         problemId || 'unknown',
@@ -143,6 +146,14 @@ export default function AIAgentPanel({
 
     // Chat tabs state is now managed by useAIChatPersistence hook
     const [activeChatTab, setActiveChatTab] = useState('default');
+
+    // Sync the local user editor code to the parent ClientPage when switching tabs or when data loads
+    const aiCodeForActiveTab = aiCodeByTab[activeChatTab] || '';
+    useEffect(() => {
+        if (onAiCodeUpdate && isLoaded) {
+            onAiCodeUpdate(aiCodeForActiveTab);
+        }
+    }, [activeChatTab, isLoaded, aiCodeForActiveTab]); // onAiCodeUpdate intentionally omitted to avoid infinite loops.
 
     const messages = messagesByTab[activeChatTab] || [];
     const input = inputByTab[activeChatTab] || '';
@@ -196,10 +207,16 @@ export default function AIAgentPanel({
         setActiveChatTab(newId);
         setMessagesByTab((prev: Record<string, any[]>) => ({ ...prev, [newId]: [] }));
         setInputByTab((prev: Record<string, string>) => ({ ...prev, [newId]: '' }));
+        setAiCodeByTab((prev: Record<string, string>) => ({ ...prev, [newId]: '' }));
         setConceptsByTab((prev: Record<string, any[]>) => ({ ...prev, [newId]: [] }));
         setTutorActiveByTab((prev: Record<string, boolean>) => ({ ...prev, [newId]: false }));
         setIsLoadingByTab((prev: Record<string, boolean>) => ({ ...prev, [newId]: false }));
         setAiStatusByTab((prev: Record<string, string>) => ({ ...prev, [newId]: settings?.language === 'ar' ? 'بجهز أطبخ...' : 'Getting ready to cook...' }));
+
+        // Clear editor for new tab
+        if (onAiCodeUpdate) {
+            onAiCodeUpdate('');
+        }
     }, [chatTabs]);
 
     const deleteChat = useCallback((tabId: string) => {
@@ -239,6 +256,11 @@ export default function AIAgentPanel({
                 return newDict;
             });
             setConceptsByTab(p => {
+                const newDict = { ...p };
+                delete newDict[tabId];
+                return newDict;
+            });
+            setAiCodeByTab((p: Record<string, string>) => {
                 const newDict = { ...p };
                 delete newDict[tabId];
                 return newDict;
@@ -367,6 +389,7 @@ export default function AIAgentPanel({
         },
         saveMessage,
         saveConcepts,
+        saveAiCode,
     });
 
     const { startVideoTutor, stopVideoTutor } = useVideoTutor({

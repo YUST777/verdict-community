@@ -31,12 +31,14 @@ export function useAIChatPersistence(
     const [messagesByTab, setMessagesByTab] = useState<Record<string, any[]>>({ 'default': [] });
     const [conceptsByTab, setConceptsByTab] = useState<Record<string, any[]>>({ 'default': [] });
     const [inputByTab, setInputByTab] = useState<Record<string, string>>({ 'default': '' });
+    const [aiCodeByTab, setAiCodeByTab] = useState<Record<string, string>>({ 'default': '' });
     const [chatTabs, setChatTabs] = useState<any[]>(initialTabs);
     const [isLoaded, setIsLoaded] = useState(false);
 
     const messagesRef = useRef(messagesByTab);
     const conceptsRef = useRef(conceptsByTab);
     const inputRef = useRef(inputByTab);
+    const aiCodeRef = useRef(aiCodeByTab);
     const tabsRef = useRef(chatTabs);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isFirstLoad = useRef(true);
@@ -46,8 +48,9 @@ export function useAIChatPersistence(
         messagesRef.current = messagesByTab;
         conceptsRef.current = conceptsByTab;
         inputRef.current = inputByTab;
+        aiCodeRef.current = aiCodeByTab;
         tabsRef.current = chatTabs;
-    }, [messagesByTab, conceptsByTab, inputByTab, chatTabs]);
+    }, [messagesByTab, conceptsByTab, inputByTab, aiCodeByTab, chatTabs]);
 
     // ── Load on mount ────────────────────────────────────────────────
     useEffect(() => {
@@ -94,6 +97,14 @@ export function useAIChatPersistence(
                                 }));
                             }
 
+                            // Load AI code from normalized tables
+                            if (histData.aiCodeByTab) {
+                                setAiCodeByTab(prev => ({
+                                    ...prev,
+                                    ...histData.aiCodeByTab
+                                }));
+                            }
+
                             setIsLoaded(true);
                             return; // Successfully loaded from normalized tables
                         }
@@ -131,6 +142,9 @@ export function useAIChatPersistence(
                         }
                         if (data.ai_chat_inputs) {
                             setInputByTab(data.ai_chat_inputs);
+                        }
+                        if (data.ai_chat_code) {
+                            setAiCodeByTab(data.ai_chat_code);
                         }
                         setIsLoaded(true);
                         return;
@@ -172,7 +186,8 @@ export function useAIChatPersistence(
                     aiChatMessages: messagesByTab,
                     aiChatTabs: chatTabs,
                     aiChatConcepts: conceptsByTab,
-                    aiChatInput: inputByTab
+                    aiChatInput: inputByTab,
+                    aiChatCode: aiCodeByTab
                 };
 
                 const response = await fetch('/api/workspace/sync', {
@@ -192,7 +207,7 @@ export function useAIChatPersistence(
             }
         }, 2000); // 2s debounce for backup
 
-    }, [messagesByTab, chatTabs, conceptsByTab, inputByTab, problemId, isLoaded, isAuthenticated]);
+    }, [messagesByTab, chatTabs, conceptsByTab, inputByTab, aiCodeByTab, problemId, isLoaded, isAuthenticated]);
 
     // ── saveMessage: persist a single message to normalized tables ───
     // Now uses UPSERT on client_id — safe to call multiple times for same message.
@@ -251,6 +266,35 @@ export function useAIChatPersistence(
         });
     }, [isAuthenticated, problemId]);
 
+    // ── saveAiCode: persist AI generated code for the tab ────────────
+    const saveAiCode = useCallback((tabId: string, aiCode: string) => {
+        console.log('[AIChat] Executing saveAiCode for tab:', tabId, 'code length:', aiCode?.length, 'auth:', isAuthenticated);
+        setAiCodeByTab(prev => ({ ...prev, [tabId]: aiCode }));
+        if (!isAuthenticated || !problemId) {
+            console.warn('[AIChat] Skipping saveAiCode because not authenticated or missing problemId');
+            return;
+        }
+
+        fetch('/api/ai/chat/history', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                problemId,
+                tabId,
+                aiCode
+            })
+        }).then(async res => {
+            if (!res.ok) {
+                const text = await res.text();
+                console.error('[AIChat] Failed to persist AI code on server. Status:', res.status, text);
+            } else {
+                console.log('[AIChat] Successfully saved AI code to server for tab:', tabId);
+            }
+        }).catch(err => {
+            console.error('[AIChat] Network error persisting AI code:', err?.message || err);
+        });
+    }, [isAuthenticated, problemId]);
+
     // ── deleteConversation: remove a tab from normalized tables ──────
     const deleteConversation = useCallback((tabId: string) => {
         if (!isAuthenticated || !problemId) return;
@@ -271,11 +315,14 @@ export function useAIChatPersistence(
         setConceptsByTab,
         inputByTab,
         setInputByTab,
+        aiCodeByTab,
+        setAiCodeByTab,
         chatTabs,
         setChatTabs,
         isLoaded,
         saveMessage,
         saveConcepts,
+        saveAiCode,
         deleteConversation
     };
 }

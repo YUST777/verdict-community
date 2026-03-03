@@ -282,7 +282,7 @@ export default function AnalyticsView({ stats, cfStats, loading, analyzeComplexi
                     </div>
                     <div className="px-2 pt-4 pb-2">
                         <div className="h-32 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                 <BarChart data={stats!.runtimeDistribution} margin={{ top: 4, right: 8, bottom: 16, left: -24 }}>
                                     <XAxis
                                         dataKey="label"
@@ -338,7 +338,7 @@ export default function AnalyticsView({ stats, cfStats, loading, analyzeComplexi
                     </div>
                     <div className="px-2 pt-4 pb-2">
                         <div className="h-32 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                                 <BarChart data={stats!.memoryDistribution} margin={{ top: 4, right: 8, bottom: 16, left: -24 }}>
                                     <XAxis
                                         dataKey="label"

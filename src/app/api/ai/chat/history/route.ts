@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
         const tabs: { id: string; label: string }[] = [];
         const messagesByTab: Record<string, any[]> = {};
         const conceptsByTab: Record<string, any[]> = {};
+        const aiCodeByTab: Record<string, string> = {};
 
         // Map conversation UUID -> tab_id for message grouping
         const convIdToTabId: Record<string, string> = {};
@@ -74,8 +75,11 @@ export async function GET(req: NextRequest) {
             convIdToTabId[conv.id] = tabId;
             messagesByTab[tabId] = [];
 
-            // Load concepts from conversation metadata
+            // Load concepts and aiCode from conversation metadata
             const convMeta = conv.metadata || {};
+            if (convMeta.aiCode) {
+                aiCodeByTab[tabId] = convMeta.aiCode;
+            }
             if (convMeta.concepts && Array.isArray(convMeta.concepts)) {
                 conceptsByTab[tabId] = convMeta.concepts;
             }
@@ -99,7 +103,7 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        return NextResponse.json({ tabs, messagesByTab, conceptsByTab });
+        return NextResponse.json({ tabs, messagesByTab, conceptsByTab, aiCodeByTab });
     } catch (error) {
         console.error('[Chat History GET Error]', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -138,6 +142,7 @@ export async function POST(req: NextRequest) {
 
         const body = await req.json();
         const { problemId, tabId, tabLabel, message } = body;
+        console.log('[DEBUG] POST received tabId:', tabId, 'message id:', message?.id);
 
         if (!problemId || !tabId || !message || !message.role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -216,20 +221,35 @@ export async function PATCH(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { problemId, tabId, metadata } = body;
+        const { problemId, tabId, metadata, aiCode } = body;
+        console.log('[DEBUG] PATCH received tabId:', tabId, 'aiCode length:', aiCode?.length, 'metadata:', !!metadata);
 
-        if (!problemId || !tabId || !metadata) {
+        if (!problemId || !tabId || (!metadata && aiCode === undefined)) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Update conversation metadata (merge with existing)
-        await query(
-            `UPDATE public.ai_conversations
-             SET metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
-                 updated_at = NOW()
-             WHERE user_id = $1 AND problem_id = $2 AND tab_id = $3`,
-            [user.id, problemId, tabId, JSON.stringify(metadata)]
-        );
+        if (aiCode !== undefined) {
+            // Upsert conversation to include aiCode in metadata so we don't fail if saving before messages do
+            await query(
+                `INSERT INTO public.ai_conversations (user_id, problem_id, tab_id, metadata, updated_at)
+                 VALUES ($1, $2, $3, jsonb_build_object('aiCode', $4::jsonb), NOW())
+                 ON CONFLICT (user_id, problem_id, tab_id)
+                 DO UPDATE SET metadata = jsonb_set(COALESCE(public.ai_conversations.metadata, '{}'::jsonb), '{aiCode}', $4::jsonb),
+                               updated_at = NOW()`,
+                [user.id, problemId, tabId, JSON.stringify(aiCode)]
+            );
+        }
+
+        if (metadata) {
+            // Update conversation metadata (merge with existing)
+            await query(
+                `UPDATE public.ai_conversations
+                 SET metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
+                     updated_at = NOW()
+                 WHERE user_id = $1 AND problem_id = $2 AND tab_id = $3`,
+                [user.id, problemId, tabId, JSON.stringify(metadata)]
+            );
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback , useEffect} from 'react';
 import { useLLM } from '@/lib/useLLM';
 import { extractAndParseJson } from '@/lib/json-utils';
 import { CODE_TUTOR_PEDAGOGY } from '@/lib/ai-code-tutor-instructions';
@@ -36,6 +36,7 @@ interface UseTutorProps {
     setIsLoading: (loading: boolean, tabId?: string) => void;
     saveMessage?: (tabId: string, tabLabel: string, message: { id: string; role: string; content: string; contextType?: string; codeBlock?: any; sources?: any[]; videoScript?: any }) => void;
     saveConcepts?: (tabId: string, concepts: any[]) => void;
+    saveAiCode?: (tabId: string, aiCode: string) => void;
 }
 
 const SIMPLE_MODE_RULES = `STRICT RULES — Use an ADAPTIVE TEACHING approach for this learner:
@@ -123,13 +124,18 @@ export function useTutor({
     setIsTutorActive,
     setIsLoading: setIsLoadingInParent,
     saveMessage,
-    saveConcepts
+    saveConcepts,
+    saveAiCode
 }: UseTutorProps) {
     const [variants, setVariants] = useState<any[]>([]);
     const [selectedLevel, setSelectedLevel] = useState(2);
     const tutorActiveRefs = useRef<Record<string, boolean>>({});
     const abortControllers = useRef<Record<string, AbortController | null>>({});
     const { settings } = useLLM();
+
+    // Use refs for callbacks to avoid stale closures in long-running async functions
+    const saveAiCodeRef = useRef(saveAiCode);
+    useEffect(() => { saveAiCodeRef.current = saveAiCode; }, [saveAiCode]);
 
     const streamCodeToEditor = useCallback(async (code: string, tabId: string) => {
         if (!onAiCodeUpdate) return;
@@ -139,7 +145,13 @@ export function useTutor({
             onAiCodeUpdate(code.substring(0, Math.min(i + chunkSize, code.length)));
             await new Promise(r => setTimeout(r, 12));
         }
-        if (tutorActiveRefs.current[tabId]) onAiCodeUpdate(code);
+        if (tutorActiveRefs.current[tabId]) {
+            onAiCodeUpdate(code);
+            // Use ref to avoid stale closure — saveAiCode depends on isAuthenticated
+            // which may change after startTutor begins executing
+            const currentSaveAiCode = saveAiCodeRef.current;
+            if (currentSaveAiCode) currentSaveAiCode(tabId, code);
+        }
     }, [onAiCodeUpdate]);
 
     const startTutor = useCallback(async (tabId: string = 'default') => {
