@@ -48,6 +48,8 @@ interface ProblemLeftPanelProps {
     autoStart?: boolean;
     showNotes?: boolean;
     setShowNotes?: (show: boolean) => void;
+    onQuizMe?: () => void;
+    quizMode?: boolean;
 }
 
 export default React.memo(function ProblemLeftPanel({
@@ -203,6 +205,8 @@ export default React.memo(function ProblemLeftPanel({
                         selectedLineReference={selectedLineReference}
                         autoStart={otherProps.autoStart}
                         problemId={`${safeContestId}-${safeProblemId}`}
+                        onQuizMe={otherProps.onQuizMe}
+                        quizMode={otherProps.quizMode}
                     />
                 </div>
 

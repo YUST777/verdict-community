@@ -116,6 +116,7 @@ function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug }: {
     const [showNotes, setShowNotes] = useState(false);
     const [submissions, setSubmissions] = useState<any[]>([]);
     const [submissionsLoading, setSubmissionsLoading] = useState(false);
+    const [quizMode, setQuizMode] = useState(false);
 
     const sheetProblems = activeSheet?.problems ?? [];
 
@@ -192,32 +193,37 @@ function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug }: {
 
                 <div ref={containerRef} className="relative flex-1 flex overflow-hidden">
                     <ProblemLeftPanel
-                        activeTab={activeTab}
-                        setActiveTab={setActiveTab}
-                        isWhiteboardExpanded={false}
-                        setIsWhiteboardExpanded={() => {}}
-                        cfData={cfData}
-                        submissions={submissions}
-                        submissionsLoading={submissionsLoading}
-                        stats={null}
-                        cfStats={cfStats}
-                        contestId={contestId}
-                        problemId={problemId}
-                        whiteboardHeight={whiteboardHeight}
-                        handleWhiteboardResizeStart={handleResizeStart}
-                        analyzeComplexity={() => {}}
-                        complexityLoading={false}
-                        leftPanelRef={leftPanelRef}
-                        lastWidth={lastWidth}
-                        mobileView={mobileView}
-                        cfHandle={cfHandle}
-                        handleLoading={handleLoading}
-                        onHandleSave={setCfHandle}
-                        userCode={code}
-                        language={language}
-                        showNotes={showNotes}
-                        setShowNotes={setShowNotes}
-                    />
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            isWhiteboardExpanded={false}
+                            setIsWhiteboardExpanded={() => {}}
+                            cfData={cfData}
+                            submissions={submissions}
+                            submissionsLoading={submissionsLoading}
+                            stats={null}
+                            cfStats={cfStats}
+                            contestId={contestId}
+                            problemId={problemId}
+                            whiteboardHeight={whiteboardHeight}
+                            handleWhiteboardResizeStart={handleResizeStart}
+                            analyzeComplexity={() => {}}
+                            complexityLoading={false}
+                            leftPanelRef={leftPanelRef}
+                            lastWidth={lastWidth}
+                            mobileView={mobileView}
+                            cfHandle={cfHandle}
+                            handleLoading={handleLoading}
+                            onHandleSave={setCfHandle}
+                            userCode={code}
+                            language={language}
+                            showNotes={showNotes}
+                            setShowNotes={setShowNotes}
+                            onQuizMe={() => {
+                                setQuizMode(!quizMode);
+                                if (!quizMode) setActiveTab('solution');
+                            }}
+                            quizMode={quizMode}
+                        />
 
                     <div
                         className="hidden md:block w-1 bg-white/5 hover:bg-emerald-500/50 cursor-col-resize transition-colors relative group shrink-0"

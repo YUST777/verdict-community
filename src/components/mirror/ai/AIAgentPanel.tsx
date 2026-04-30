@@ -23,6 +23,7 @@ import { Conversation, ConversationContent, ConversationScrollButton } from '@/c
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { AIContextUsageProvider, useAIContextUsage } from '@/components/ui/ai-context-usage';
 import { VideoExplainerModal, VideoScript } from '../video';
+import QuizPanel from './QuizPanel';
 
 interface Message {
     id: string;
@@ -59,6 +60,8 @@ interface AIAgentPanelProps {
     autoStart?: boolean;
     problemId?: string;
     isActive?: boolean;
+    onQuizMe?: () => void;
+    quizMode?: boolean;
 }
 
 export default function AIAgentPanel({
@@ -78,7 +81,9 @@ export default function AIAgentPanel({
     onSwitchToAiTab,
     autoStart = false,
     problemId,
-    isActive = false
+    isActive = false,
+    onQuizMe,
+    quizMode = false
 }: AIAgentPanelProps) {
     const { logout: globalLogout, user, loading: authLoading } = useAuth();
     const [showSignInModal, setShowSignInModal] = useState(false);
@@ -542,11 +547,8 @@ export default function AIAgentPanel({
         // Teach Me runs ONLY when user clicks the "Teach Me" button — not on text in chat.
         // Normal chat and Teach Me are separate flows with separate API behavior.
 
-        // Check LLM Configuration
-        if (!settings.enabled || !settings.apiKey) {
-            setShowPreferencesModal(true);
-            return;
-        }
+        // Check LLM Configuration — skip if server has built-in Gemini fallback
+        // Users can chat without configuring their own key
 
         // Analyze question for behavior tracking
         const questionAnalysis = analyzeQuestion(promptToSend);
@@ -704,15 +706,17 @@ export default function AIAgentPanel({
             const signal = chatAbortControllerRef.current.signal;
 
             while (attempt < 3) {
-                const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:]\/)\/+/g, "$1"), {
+                const response = await fetch('/api/ai/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${settings.apiKey}`
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                         model: settings.model,
                         messages: currentMessages,
+                        baseURL: settings.enabled ? settings.baseURL : undefined,
+                        apiKey: settings.enabled ? settings.apiKey : undefined,
                         tools: tools,
                         tool_choice: 'auto'
                     }),
@@ -954,7 +958,17 @@ export default function AIAgentPanel({
                 </div>
 
 
-                {/* ── Messages ───────────────────────────────────── */}
+                {/* ── Messages or Quiz ───────────────────────────────────── */}
+                {quizMode ? (
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <QuizPanel
+                            code={userCode}
+                            problemTitle={problemDescription?.match(/\*\*Problem: (.+?)\*\*/)?.[1]}
+                            problemStatement={problemDescription}
+                            onExit={() => onQuizMe?.()}
+                        />
+                    </div>
+                ) : (
                 <Conversation className="relative flex-1 min-h-0 bg-[#121212]">
                     <ConversationContent className="px-3 py-4">
                         {messages.length === 0 && (
@@ -1025,8 +1039,9 @@ export default function AIAgentPanel({
                     </ConversationContent>
                     <ConversationScrollButton />
                 </Conversation>
+                )}
 
-                <div className="bg-[#121212] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10">
+                <div className={`bg-[#121212] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10 ${quizMode ? 'hidden' : ''}`}>
 
                     {/* Selected code context badge */}
                     {selectedCode?.trim() && selectedLineReference && (
@@ -1069,15 +1084,14 @@ export default function AIAgentPanel({
                             </div>
                         </div>
                     ) : (
-                        <div className={`transition-opacity duration-200 ${(!settings.enabled || !settings.apiKey) ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+                        <div className="transition-opacity duration-200">
                             <PromptInputBox
                                 value={input}
                                 onChange={setInput}
                                 isLoading={isLoadingMessage}
                                 placeholder={
-                                    !settings.enabled || !settings.apiKey ? (isArabic ? 'اعمل إعداد للنموذج الأول...' : 'Configure LLM first...')
-                                        : selectedCode && selectedLineReference ? (isArabic ? 'اسأل عن الكود المحدد...' : 'Ask about the selected code...')
-                                            : (isArabic ? 'اسأل أي شيء...' : 'Ask anything...')
+                                    selectedCode && selectedLineReference ? (isArabic ? 'اسأل عن الكود المحدد...' : 'Ask about the selected code...')
+                                        : (isArabic ? 'اسأل أي شيء...' : 'Ask anything...')
                                 }
                                 onSend={(msg) => handleSendMessage(msg)}
                                 onStop={stopGeneration}
@@ -1088,6 +1102,7 @@ export default function AIAgentPanel({
                                 isTutorLoading={isLoadingMessage && isTutorActive}
                                 isTutorActive={isTutorActive}
                                 hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
+                                onQuizMe={onQuizMe}
                             />
                         </div>
                     )}

@@ -225,6 +225,7 @@ export interface PromptInputBoxProps {
     onChange?: (value: string) => void;
     onExplainVideo?: () => void;
     isVideoLoading?: boolean;
+    onQuizMe?: () => void;
 }
 
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>((props, ref) => {
@@ -382,6 +383,20 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                             >
                                 {props.isVideoLoading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
                                 <span>Explain with Video</span>
+                            </motion.button>
+                        )}
+
+                        {/* Quiz Me button */}
+                        {props.onQuizMe && (
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                type="button"
+                                onClick={props.onQuizMe}
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 ml-1"
+                            >
+                                <span>🧠</span>
+                                <span>Quiz Me</span>
                             </motion.button>
                         )}
                     </div>

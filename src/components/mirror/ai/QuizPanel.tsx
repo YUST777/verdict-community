@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Brain, CheckCircle2, XCircle, AlertTriangle, ArrowRight, X, Loader2, RotateCcw } from 'lucide-react';
 
 interface Question {
@@ -39,58 +39,143 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
     const generateQuestions = useCallback(async () => {
         setPhase('loading');
         setError(null);
+        setResults([]);
+        setCurrentQ(0);
+        setAnswer('');
+
+        // Guard: need code to quiz on
+        if (!code || !code.trim()) {
+            setError('Write some code first, then quiz yourself on it.');
+            return;
+        }
+
         try {
-            const res = await fetch('/api/ai/quiz/generate', {
+            // Read user's LLM settings from localStorage
+            let userSettings: any = {};
+            try {
+                const stored = localStorage.getItem('verdict_byok_llm');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    // Only use settings if enabled — don't try to decrypt the key here,
+                    // the server proxy handles fallback to Gemini if no key provided
+                    if (parsed.enabled && parsed.apiKey && parsed.baseURL) {
+                        // Import decrypt function
+                        const { decryptValue } = await import('@/lib/client-encryption');
+                        const decryptedKey = await decryptValue(parsed.apiKey);
+                        userSettings = { ...parsed, apiKey: decryptedKey };
+                    }
+                }
+            } catch {}
+
+            const numberedCode = code.split('\n').map((line: string, i: number) => `${i + 1}: ${line}`).join('\n');
+
+            const systemPrompt = `You are a strict but fair competitive programming tutor. Given the student's code, generate exactly 5 questions that test whether they TRULY understand it. Questions should go from easy to hard. Reference specific line numbers. Return ONLY a JSON array: [{"q":"question text","type":"line_explain","line":5,"difficulty":"easy"},...]`;
+
+            const userPrompt = `Problem: ${problemTitle || 'Unknown'}\n\nCode:\n\`\`\`\n${numberedCode}\n\`\`\`\n\nGenerate 5 quiz questions.`;
+
+            const res = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ code, problemTitle, problemStatement }),
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt },
+                    ],
+                    model: userSettings.model || undefined,
+                    baseURL: userSettings.enabled ? userSettings.baseURL : undefined,
+                    apiKey: userSettings.enabled ? userSettings.apiKey : undefined,
+                }),
             });
-            if (!res.ok) throw new Error('Failed to generate questions');
-            const data = await res.json();
-            if (data.questions?.length > 0) {
-                setQuestions(data.questions);
-                setCurrentQ(0);
-                setResults([]);
-                setPhase('quiz');
-            } else {
-                throw new Error('No questions generated');
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                if (res.status === 401) throw new Error('Please sign in to use the quiz feature.');
+                if (res.status === 429) throw new Error('AI rate limit reached. Wait a moment and try again.');
+                if (res.status === 503) throw new Error('No AI key configured. Go to AI Settings (⚙️) and add your API key.');
+                throw new Error(errData.error || `AI service error (${res.status}). Check your LLM settings.`);
             }
+
+            const data = await res.json();
+            const text = data.choices?.[0]?.message?.content || '';
+            const jsonMatch = text.match(/\[[\s\S]*\]/);
+            if (!jsonMatch) throw new Error('AI did not return valid questions. Try again.');
+
+            let questions;
+            try { questions = JSON.parse(jsonMatch[0]); } catch { throw new Error('Failed to parse questions'); }
+            if (!Array.isArray(questions) || questions.length === 0) throw new Error('No questions generated');
+
+            setQuestions(questions);
+            setCurrentQ(0);
+            setResults([]);
+            setPhase('quiz');
         } catch (err: any) {
             setError(err.message || 'Failed to start quiz');
         }
     }, [code, problemTitle, problemStatement]);
 
-    // Auto-generate on first render
-    useState(() => { generateQuestions(); });
+    // Auto-generate on mount (not on every render)
+    useEffect(() => { generateQuestions(); }, []);
 
     const submitAnswer = async () => {
         if (!answer.trim() || evaluating) return;
         setEvaluating(true);
+        setError(null);
 
         try {
-            const res = await fetch('/api/ai/quiz/evaluate', {
+            let userSettings: any = {};
+            try {
+                const stored = localStorage.getItem('verdict_byok_llm');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (parsed.enabled && parsed.apiKey && parsed.baseURL) {
+                        const { decryptValue } = await import('@/lib/client-encryption');
+                        const decryptedKey = await decryptValue(parsed.apiKey);
+                        userSettings = { ...parsed, apiKey: decryptedKey };
+                    }
+                }
+            } catch {}
+
+            const numberedCode = code.split('\n').map((line: string, i: number) => `${i + 1}: ${line}`).join('\n');
+
+            const systemPrompt = `You are a strict tutor evaluating a student's answer about their code. Be honest: if correct say so briefly, if wrong correct them firmly. Return ONLY JSON: {"rating":"good"|"partial"|"weak","feedback":"1-3 sentences","correctAnswer":"if wrong"}`;
+
+            const userPrompt = `Code:\n\`\`\`\n${numberedCode}\n\`\`\`\n\nQuestion: ${questions[currentQ].q}\nStudent's answer: ${answer.trim()}\n\nEvaluate.`;
+
+            const res = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({
-                    code,
-                    question: questions[currentQ].q,
-                    answer: answer.trim(),
-                    problemTitle,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt },
+                    ],
+                    model: userSettings.model || undefined,
+                    baseURL: userSettings.enabled ? userSettings.baseURL : undefined,
+                    apiKey: userSettings.enabled ? userSettings.apiKey : undefined,
                 }),
             });
 
             if (!res.ok) throw new Error('Evaluation failed');
             const data = await res.json();
+            const text = data.choices?.[0]?.message?.content || '';
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+            let evaluation;
+            if (jsonMatch) {
+                try { evaluation = JSON.parse(jsonMatch[0]); } catch { evaluation = { rating: 'partial', feedback: text.substring(0, 200) }; }
+            } else {
+                evaluation = { rating: 'partial', feedback: text.substring(0, 200) || 'Could not evaluate.' };
+            }
 
             const result: AnswerResult = {
                 qIndex: currentQ,
                 question: questions[currentQ].q,
                 answer: answer.trim(),
-                rating: data.rating || 'partial',
-                feedback: data.feedback || 'Could not evaluate.',
-                correctAnswer: data.correctAnswer,
+                rating: evaluation.rating || 'partial',
+                feedback: evaluation.feedback || 'Could not evaluate.',
+                correctAnswer: evaluation.correctAnswer,
             };
 
             setResults(prev => [...prev, result]);
@@ -132,9 +217,9 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
     // Loading state
     if (phase === 'loading') {
         return (
-            <div className="h-full flex flex-col items-center justify-center p-6 text-center">
+            <div className="h-full flex flex-col p-4">
                 {error ? (
-                    <>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center">
                         <XCircle size={32} className="text-red-400 mb-3" />
                         <p className="text-red-400 text-sm mb-4">{error}</p>
                         <button onClick={generateQuestions} className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-colors">
@@ -143,11 +228,34 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                         <button onClick={onExit} className="mt-2 text-[#666] text-xs hover:text-white transition-colors">
                             Exit Quiz
                         </button>
-                    </>
+                    </div>
                 ) : (
                     <>
-                        <Loader2 size={32} className="text-emerald-400 animate-spin mb-3" />
-                        <p className="text-[#808080] text-sm">Generating questions about your code...</p>
+                        {/* Skeleton header */}
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-5 h-5 rounded bg-white/5 animate-pulse" />
+                            <div className="h-4 w-24 rounded bg-white/5 animate-pulse" />
+                            <div className="h-4 w-16 rounded-full bg-white/5 animate-pulse ml-auto" />
+                        </div>
+                        <div className="h-1 w-full rounded-full bg-white/5 animate-pulse mb-6" />
+
+                        {/* Skeleton question card */}
+                        <div className="space-y-3 mb-6">
+                            <div className="flex gap-2">
+                                <div className="h-4 w-12 rounded-full bg-white/5 animate-pulse" />
+                                <div className="h-4 w-14 rounded bg-white/5 animate-pulse" />
+                            </div>
+                            <div className="h-4 w-full rounded bg-white/5 animate-pulse" />
+                            <div className="h-4 w-3/4 rounded bg-white/5 animate-pulse" />
+                        </div>
+
+                        {/* Skeleton textarea */}
+                        <div className="flex-1 rounded-lg bg-white/5 animate-pulse min-h-[80px] mb-4" />
+
+                        {/* Skeleton button */}
+                        <div className="h-10 w-full rounded-lg bg-white/5 animate-pulse" />
+
+                        <p className="text-[#555] text-[10px] text-center mt-3">Generating questions about your code...</p>
                     </>
                 )}
             </div>
@@ -216,6 +324,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
 
     // Quiz state
     const q = questions[currentQ];
+    if (!q) return null;
 
     return (
         <div className="h-full flex flex-col overflow-hidden">

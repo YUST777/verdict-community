@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         const response = NextResponse.json({ success: true, user: { id: user.id, email: normalizedEmail } });
 
         // Set Cookie
-        response.cookies.set('authToken', token, getAuthCookieOptions());
+        response.cookies.set('authToken', token, getAuthCookieOptions(req));
 
         return response;
 
