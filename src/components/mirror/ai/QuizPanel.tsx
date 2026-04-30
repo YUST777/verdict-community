@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Brain, CheckCircle2, XCircle, AlertTriangle, ArrowRight, X, Loader2, RotateCcw } from 'lucide-react';
 
 interface Question {
@@ -35,8 +35,19 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
     const [results, setResults] = useState<AnswerResult[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    // Generate questions on mount
-    const generateQuestions = useCallback(async () => {
+    // Prevent double-fire from React Strict Mode or rapid re-mounts
+    const abortRef = useRef<AbortController | null>(null);
+    const hasStartedRef = useRef(false);
+
+    // Generate questions
+    const generateQuestions = useCallback(async (isRetry = false) => {
+        // Cancel any in-flight request
+        if (abortRef.current) {
+            abortRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortRef.current = controller;
+
         setPhase('loading');
         setError(null);
         setResults([]);
@@ -56,10 +67,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 const stored = localStorage.getItem('verdict_byok_llm');
                 if (stored) {
                     const parsed = JSON.parse(stored);
-                    // Only use settings if enabled — don't try to decrypt the key here,
-                    // the server proxy handles fallback to Gemini if no key provided
                     if (parsed.enabled && parsed.apiKey && parsed.baseURL) {
-                        // Import decrypt function
                         const { decryptValue } = await import('@/lib/client-encryption');
                         const decryptedKey = await decryptValue(parsed.apiKey);
                         userSettings = { ...parsed, apiKey: decryptedKey };
@@ -77,6 +85,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
+                signal: controller.signal,
                 body: JSON.stringify({
                     messages: [
                         { role: 'system', content: systemPrompt },
@@ -88,6 +97,9 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 }),
             });
 
+            // If aborted between fetch and here, bail out
+            if (controller.signal.aborted) return;
+
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
                 if (res.status === 401) throw new Error('Please sign in to use the quiz feature.');
@@ -97,25 +109,44 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
             }
 
             const data = await res.json();
+            if (controller.signal.aborted) return;
+
             const text = data.choices?.[0]?.message?.content || '';
             const jsonMatch = text.match(/\[[\s\S]*\]/);
             if (!jsonMatch) throw new Error('AI did not return valid questions. Try again.');
 
-            let questions;
-            try { questions = JSON.parse(jsonMatch[0]); } catch { throw new Error('Failed to parse questions'); }
-            if (!Array.isArray(questions) || questions.length === 0) throw new Error('No questions generated');
+            let parsed;
+            try { parsed = JSON.parse(jsonMatch[0]); } catch { throw new Error('Failed to parse questions'); }
+            if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('No questions generated');
 
-            setQuestions(questions);
+            // Final abort check before committing state
+            if (controller.signal.aborted) return;
+
+            setQuestions(parsed);
             setCurrentQ(0);
             setResults([]);
             setPhase('quiz');
         } catch (err: any) {
+            if (err?.name === 'AbortError') return; // silently ignore aborted requests
             setError(err.message || 'Failed to start quiz');
         }
     }, [code, problemTitle, problemStatement]);
 
-    // Auto-generate on mount (not on every render)
-    useEffect(() => { generateQuestions(); }, []);
+    // Auto-generate once on mount — abort on unmount
+    useEffect(() => {
+        // Strict Mode guard: only fire once
+        if (hasStartedRef.current) return;
+        hasStartedRef.current = true;
+
+        generateQuestions();
+
+        return () => {
+            // Abort in-flight request on unmount
+            if (abortRef.current) {
+                abortRef.current.abort();
+            }
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const submitAnswer = async () => {
         if (!answer.trim() || evaluating) return;
@@ -306,7 +337,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 {/* Actions */}
                 <div className="shrink-0 p-3 border-t border-white/10 flex gap-2">
                     <button
-                        onClick={() => { setResults([]); setCurrentQ(0); generateQuestions(); }}
+                        onClick={() => { setResults([]); setCurrentQ(0); generateQuestions(true); }}
                         className="flex-1 flex items-center justify-center gap-2 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-[#808080] hover:text-white hover:bg-white/10 transition-colors"
                     >
                         <RotateCcw size={14} /> Retry
