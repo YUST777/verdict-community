@@ -1,0 +1,2 @@
+ALTER TABLE public.mirror_problems ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mirror_views ENABLE ROW LEVEL SECURITY;

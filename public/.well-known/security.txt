@@ -1,0 +1,12 @@
+# Security Policy for Verdict.run
+# https://verdict.run
+
+Contact: mailto:security@verdict.run
+Expires: 2027-12-31T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://verdict.run/.well-known/security.txt
+
+# Verdict.run is a competitive programming platform
+# that provides instant code verdicts and problem mirroring.
+
+# For security concerns, please contact us at the email above.

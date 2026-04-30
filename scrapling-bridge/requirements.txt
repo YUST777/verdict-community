@@ -1,0 +1,6 @@
+fastapi>=0.115.0
+uvicorn>=0.34.0
+httpx>=0.28.0
+pydantic>=2.10.0
+scrapling[fetchers]>=0.3.9
+curl-cffi>=0.7.1

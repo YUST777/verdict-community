@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verdict Helper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 320px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+        }
+
+        /* Header Bar */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+        }
+
+        .brand-name {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-name span {
+            color: #10b981;
+        }
+
+        .version-badge {
+            font-size: 10px;
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Main Content */
+        .content {
+            padding: 20px;
+        }
+
+        /* Account Section */
+        .account-section {
+            margin-bottom: 20px;
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.35);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .account-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+            background: #111;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+        }
+
+        .account-card.connected {
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .account-card.error {
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            color: #000;
+            flex-shrink: 0;
+        }
+
+        .account-card.error .avatar {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: #fff;
+        }
+
+        .account-card.checking .avatar {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .account-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .account-handle {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .account-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #10b981;
+        }
+
+        .account-card.error .account-status {
+            color: #ef4444;
+        }
+
+        .account-card.checking .account-status {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .account-card.connected .status-dot {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* Disclaimer */
+        .disclaimer {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.25);
+            line-height: 1.5;
+            text-align: center;
+            padding: 0 8px;
+        }
+
+        .disclaimer a {
+            color: rgba(255, 255, 255, 0.4);
+            text-decoration: underline;
+        }
+
+        .disclaimer a:hover {
+            color: #10b981;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="logo-group">
+            <img src="logo.webp" alt="Verdict" class="logo">
+            <span class="brand-name">Verdict<span>.run</span></span>
+        </div>
+        <span class="version-badge">v1.0.9</span>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <!-- Account Section -->
+        <div class="account-section">
+            <div class="section-label">Codeforces Account</div>
+            <div class="account-card checking" id="account-card">
+                <div class="avatar" id="avatar">?</div>
+                <div class="account-info">
+                    <div class="account-handle" id="handle">Checking...</div>
+                    <div class="account-status">
+                        <span class="status-dot"></span>
+                        <span id="status-text">Connecting</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer">
+            By using this extension, you agree to our <a href="https://verdict.run/terms" target="_blank">Terms of Service</a>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>

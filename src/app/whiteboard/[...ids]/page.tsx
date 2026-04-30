@@ -1,0 +1,308 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Trash2, Download } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+const Excalidraw = dynamic(
+    () => import('@/components/shared/ExcalidrawWrapper'),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center h-screen bg-[#121212]">
+                <div className="text-[#666]">Loading Whiteboard...</div>
+            </div>
+        )
+    }
+);
+
+export default function WhiteboardPage() {
+    const { isAuthenticated, loading: authLoading } = useAuth();
+    const params = useParams();
+    const router = useRouter();
+
+    // Catch-all param parsing: /whiteboard/[contestId]/[problemIndex]/[whiteboardId]
+    const ids = params.ids as string[] | undefined;
+
+    // Parse IDs early - use empty strings as fallbacks for hooks
+    const contestId = ids?.[0] || '';
+    const problemIndex = ids?.[1] || '';
+    const whiteboardId = ids?.[2] || 'primary';
+
+    // Interface for Excalidraw API
+    interface ExcalidrawAPI {
+        resetScene: () => void;
+        updateScene: (scene: any) => void;
+        getSceneElements: () => unknown[];
+        getAppState: () => Record<string, unknown>;
+        getFiles: () => Record<string, unknown>;
+    }
+
+    const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawAPI | null>(null);
+
+    // New scoped key structure
+    const storageKey = `whiteboard-${contestId}-${problemIndex}-${whiteboardId}`;
+    // Legacy key for migration
+    const legacyKey = `whiteboard-${contestId}${problemIndex}`;
+
+    // Use custom hook for persistence (debounced)
+    const { initialData, triggerSave } = useWhiteboardPersistence(
+        storageKey,
+        legacyKey,
+        whiteboardId === 'primary',
+        contestId,
+        problemIndex,
+        excalidrawAPI,
+        isAuthenticated,
+        authLoading
+    );
+
+    // Handle changes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleChange = useCallback((elements: readonly any[], appState: any) => {
+        triggerSave(elements, appState);
+    }, [triggerSave]);
+
+    const handleClear = useCallback(() => {
+        if (excalidrawAPI) {
+            excalidrawAPI.resetScene();
+            localStorage.removeItem(storageKey);
+
+            if (whiteboardId === 'primary' && isAuthenticated && !authLoading) {
+                fetch('/api/workspace/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        problemId: `${contestId}-${problemIndex}`,
+                        whiteboardData: { elements: [], appState: {} }
+                    })
+                }).catch(console.error);
+            }
+        }
+    }, [excalidrawAPI, storageKey, whiteboardId, isAuthenticated, authLoading, contestId, problemIndex]);
+
+    const handleExport = useCallback(async () => {
+        if (!excalidrawAPI) return;
+        try {
+            const elements = excalidrawAPI.getSceneElements();
+            if (!elements || elements.length === 0) return;
+
+            const { exportToBlob } = await import('@excalidraw/excalidraw');
+
+            const blob = await exportToBlob({
+                elements,
+                appState: {
+                    ...excalidrawAPI.getAppState() as any,
+                    exportWithDarkMode: true,
+                },
+                files: excalidrawAPI.getFiles() as any,
+            });
+
+            if (blob) {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `whiteboard-${contestId}${problemIndex}-${whiteboardId}.png`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            }
+        } catch (e: any) {
+            console.error('Failed to export:', e?.message || e);
+        }
+    }, [excalidrawAPI, contestId, problemIndex, whiteboardId]);
+
+    // Ensure we have at least contestId and problemIndex - render error after hooks
+    if (!ids || ids.length < 2) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-[#121212] text-white gap-4">
+                <h1 className="text-xl font-bold">Invalid Whiteboard URL</h1>
+                <p className="text-[#888]">Expected format: /whiteboard/contestId/problemIndex/whiteboardId</p>
+                <button
+                    onClick={() => router.back()}
+                    className="px-4 py-2 bg-[#10B981] text-[#121212] rounded font-bold"
+                >
+                    Go Back
+                </button>
+            </div>
+        );
+    }
+
+
+    return (
+        <div className="flex flex-col h-screen w-full bg-[#121212]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-[#1a1a1a] border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => router.back()}
+                        className="p-2 text-[#666] hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div>
+                        <h1 className="text-white font-bold text-lg flex items-center gap-2">
+                            Problem {contestId}{problemIndex}
+                            <span className="text-[#666] text-sm font-normal">/</span>
+                            <span className="text-[#10B981] text-sm px-2 py-0.5 bg-[#10B981]/10 rounded border border-[#10B981]/20 font-mono">
+                                {whiteboardId === 'primary' ? 'Solo' : whiteboardId}
+                            </span>
+                        </h1>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleClear}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#666] hover:text-red-400 transition-colors rounded-lg hover:bg-white/5"
+                    >
+                        <Trash2 size={16} />
+                        Clear
+                    </button>
+                    <button
+                        onClick={handleExport}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#121212] bg-[#10B981] hover:bg-[#059669] transition-colors rounded-lg"
+                    >
+                        <Download size={16} />
+                        Export
+                    </button>
+                </div>
+            </div>
+
+            {/* Canvas */}
+            <div className="flex-1 w-full min-h-0">
+                <Excalidraw
+                    excalidrawAPI={(api) => setExcalidrawAPI(api as unknown as ExcalidrawAPI)}
+                    initialData={initialData}
+                    onChange={handleChange}
+                    theme="dark"
+                    UIOptions={{
+                        canvasActions: {
+                            saveAsImage: false,
+                            loadScene: true,
+                            export: false,
+                            clearCanvas: false,
+                        }
+                    }}
+                />
+            </div>
+        </div>
+    );
+}
+
+// --- Hooks ---
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WhiteboardData = any; // Excalidraw's internal data structure
+
+function useWhiteboardPersistence(
+    storageKey: string,
+    legacyKey: string,
+    isPrimary: boolean,
+    contestId: string,
+    problemIndex: string,
+    excalidrawAPI: any,
+    isAuthenticated: boolean,
+    authLoading: boolean
+) {
+    const [initialData] = useState<WhiteboardData | null>(() => {
+        if (typeof window === 'undefined') return null;
+        try {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) return JSON.parse(saved);
+
+            if (isPrimary) {
+                const legacy = localStorage.getItem(legacyKey);
+                if (legacy) return JSON.parse(legacy);
+            }
+        } catch (e: any) {
+            console.error('Failed to load whiteboard:', e?.message || e);
+        }
+        return null;
+    });
+
+    const isDbLoadedRef = useRef(false);
+
+    useEffect(() => {
+        if (isPrimary) {
+            const current = localStorage.getItem(storageKey);
+            if (!current) {
+                const legacy = localStorage.getItem(legacyKey);
+                if (legacy) {
+                    localStorage.setItem(storageKey, legacy);
+                }
+            }
+        }
+    }, [isPrimary, storageKey, legacyKey]);
+
+    useEffect(() => {
+        if (!isPrimary || !excalidrawAPI || isDbLoadedRef.current || !isAuthenticated || authLoading) {
+            if (!authLoading && !isAuthenticated && excalidrawAPI) isDbLoadedRef.current = true;
+            return;
+        }
+
+        async function loadDb() {
+            try {
+                const res = await fetch(`/api/workspace/sync?problemId=${encodeURIComponent(contestId + '-' + problemIndex)}`);
+                if (res.ok) {
+                    const { data } = await res.json();
+                    if (data && data.whiteboard_data) {
+                        try {
+                            const wbData = typeof data.whiteboard_data === 'string' ? JSON.parse(data.whiteboard_data) : data.whiteboard_data;
+                            if (wbData && wbData.elements && wbData.elements.length > 0) {
+                                excalidrawAPI.updateScene(wbData);
+                            }
+                        } catch (e: any) {
+                            console.error('Failed to apply DB whiteboard data', e?.message || e);
+                        }
+                    }
+                }
+            } catch (e: any) {
+                console.error('Failed to fetch DB whiteboard data', e?.message || e);
+            }
+            isDbLoadedRef.current = true;
+        }
+
+        loadDb();
+    }, [excalidrawAPI, isPrimary, contestId, problemIndex, isAuthenticated, authLoading]);
+
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const triggerSave = useCallback((elements: readonly any[], appState: any) => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                const data = {
+                    elements: [...elements],
+                    appState: {
+                        viewBackgroundColor: appState.viewBackgroundColor,
+                        zoom: appState.zoom,
+                        scrollX: appState.scrollX,
+                        scrollY: appState.scrollY,
+                    }
+                };
+                localStorage.setItem(storageKey, JSON.stringify(data));
+
+                if (isPrimary && isDbLoadedRef.current && isAuthenticated && !authLoading) {
+                    try {
+                        await fetch('/api/workspace/sync', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                problemId: `${contestId}-${problemIndex}`,
+                                whiteboardData: data
+                            })
+                        });
+                    } catch (e: any) {
+                        console.error('Failed to sync whiteboard to DB', e?.message || e);
+                    }
+                }
+            } catch (e: any) {
+                console.error('Failed to save:', e?.message || e);
+            }
+        }, 1500);
+    }, [storageKey, isPrimary, contestId, problemIndex]);
+
+    return { initialData, triggerSave };
+}

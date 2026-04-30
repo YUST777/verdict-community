@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# VCL - Verdict Command Line Helper
+# Designed to help AI agents and developers ship code faster.
+
+set -e
+
+COMMAND=$1
+SHIFT_ARGS=${@:2}
+
+function show_help() {
+    echo "Usage: vcl [command]"
+    echo ""
+    echo "Commands:"
+    echo "  status       Check health of all services"
+    echo "  logs [svc]   Tail logs for all or a specific service"
+    echo "  rebuild      Optimized rebuild of the frontend"
+    echo "  clean        Prune docker and system caches"
+    echo "  help         Show this help"
+}
+
+function check_status() {
+    echo "--- Verdict System Status ---"
+    docker compose ps
+    echo ""
+    echo "--- Port Listeners ---"
+    sudo netstat -tulpn | grep -E "3000|3002|2358|3099|6379|5432" || echo "No tracked ports listening"
+}
+
+function tail_logs() {
+    if [ -z "$1" ]; then
+        docker compose logs -f --tail=100
+    else
+        docker compose logs -f --tail=100 $1
+    fi
+}
+
+function optimized_build() {
+    echo "Starting optimized build..."
+    docker compose build verdict-frontend
+    docker compose up -d verdict-frontend
+}
+
+case $COMMAND in
+    status)
+        check_status
+        ;;
+    logs)
+        tail_logs "$SHIFT_ARGS"
+        ;;
+    rebuild)
+        optimized_build
+        ;;
+    clean)
+        sudo docker system prune -af
+        sudo apt autoremove -y
+        ;;
+    help|*)
+        show_help
+        ;;
+esac

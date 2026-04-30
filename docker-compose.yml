@@ -1,0 +1,211 @@
+
+services:
+  # ===========================================
+  # SCRAPLING BRIDGE (CF Submission Proxy)
+  # ===========================================
+  verdict-scrapling-bridge:
+    build:
+      context: ./scrapling-bridge
+      dockerfile: Dockerfile
+    container_name: verdict-scrapling-bridge
+    networks:
+      - verdict-network
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ===========================================
+  # MIRROR SERVICE (Puppeteer)
+  # ===========================================
+  verdict-mirror:
+    build:
+      context: ./mirror
+      dockerfile: Dockerfile
+    container_name: verdict-mirror
+    restart: always
+    ports:
+      - "3099:3099"
+    environment:
+      - PORT=3099
+    networks:
+      - verdict-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+
+  # ===========================================
+  # FRONTEND (Next.js)
+  # ===========================================
+  verdict-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-placeholder}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
+        REDIS_PASSWORD: ${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
+    image: verdict-frontend:latest
+    container_name: verdict-frontend
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
+      - REDIS_HOST=verdict-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
+      - JUDGE0_URL=http://verdict-judge0-server:2358
+      - MIRROR_SERVICE_URL=http://verdict-mirror:3099
+      - SCRAPLING_BRIDGE_URL=http://verdict-scrapling-bridge:8787
+    env_file:
+      - .env
+    networks:
+      - verdict-network
+      - icpchue-network
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - verdict-mirror
+      - verdict-redis
+      - verdict-judge0-server
+      - verdict-scrapling-bridge
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  verdict-redis:
+    image: redis:7.2-alpine
+    container_name: verdict-redis
+    command: ["redis-server", "--appendonly", "no", "--requirepass", "${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}"]
+    networks:
+      - verdict-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 64M
+
+  # ===========================================
+  # JUDGE0 - SHARED CODE EXECUTION ENGINE
+  # ===========================================
+  verdict-judge0-server:
+    image: mrkushalsm/judge0:latest
+    container_name: verdict-judge0-server
+    volumes:
+      - ./judge0/judge0.conf:/judge0.conf:ro
+    env_file:
+      - ./judge0/judge0.conf
+    ports:
+      - "127.0.0.1:2359:2358"
+    privileged: true
+    depends_on:
+      - verdict-judge0-db
+      - verdict-redis
+    networks:
+      - verdict-network
+      - icpchue-network
+    restart: always
+    security_opt:
+      - seccomp:unconfined
+
+  verdict-judge0-worker:
+    image: mrkushalsm/judge0:latest
+    container_name: verdict-judge0-worker
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0/judge0.conf:/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    privileged: true
+    cgroup: host
+    depends_on:
+      - verdict-judge0-db
+      - verdict-redis
+    networks:
+      - verdict-network
+    restart: always
+    security_opt:
+      - seccomp:unconfined
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  verdict-judge0-worker-2:
+    image: mrkushalsm/judge0:latest
+    container_name: verdict-judge0-worker-2
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0/judge0.conf:/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    privileged: true
+    cgroup: host
+    depends_on:
+      - verdict-judge0-db
+      - verdict-redis
+    networks:
+      - verdict-network
+    restart: always
+    security_opt:
+      - seccomp:unconfined
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  verdict-judge0-db:
+    image: postgres:16.2-alpine
+    container_name: verdict-judge0-db
+    env_file: ./judge0/judge0.conf
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=bV64LC5kWHXER6iCMKdA
+    volumes:
+      - verdict-judge0-db-data:/var/lib/postgresql/data
+    networks:
+      - verdict-network
+    restart: always
+
+# ===========================================
+# NETWORKS
+# ===========================================
+networks:
+  verdict-network:
+    driver: bridge
+  # Attach verdict-frontend so nginx (icpchue) can proxy verdict.run. Create with: docker network create icpchue_icpchue-network
+  icpchue-network:
+    external: true
+    name: icpchue_icpchue-network
+
+# ===========================================
+# VOLUMES
+# ===========================================
+volumes:
+  verdict-judge0-db-data:

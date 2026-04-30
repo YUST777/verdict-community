@@ -1,0 +1,280 @@
+@import "tailwindcss";
+@import "./excalidraw.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+@property --r {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.rotatingGradient {
+  background: conic-gradient(from var(--r), #10B981, #06B6D4, #10B981);
+  animation: rotating 3s linear infinite;
+}
+
+@keyframes rotating {
+  to {
+    --r: 360deg;
+  }
+}
+
+/* Global Scrollbar - Ultra Aggressive Force */
+::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  border: 1px solid transparent !important;
+  background-clip: padding-box !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent !important;
+}
+
+.custom-scrollbar {
+  overscroll-behavior: contain !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Hide scrollbar but keep functionality - Ultra Aggressive Version */
+.scrollbar-hide {
+  -ms-overflow-style: none !important;
+  /* IE and Edge */
+  scrollbar-width: none !important;
+  /* Firefox */
+  overflow: -moz-scrollbars-none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar-track,
+.scrollbar-hide::-webkit-scrollbar-thumb {
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ============================================================================
+   DRIVER.JS DARK THEME OVERRIDES — Verdict Design System
+   ============================================================================ */
+
+.driver-popover {
+  background-color: #0f0f0f !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  color: #e6e6e6 !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(16, 185, 129, 0.1) !important;
+}
+
+.driver-popover .driver-popover-title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  font-family: inherit !important;
+  line-height: 1.4 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.driver-popover .driver-popover-description {
+  font-size: 15px !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  line-height: 1.6 !important;
+  font-family: inherit !important;
+  margin-top: 8px !important;
+}
+
+.driver-popover .driver-popover-progress-text {
+  font-size: 11px !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+.driver-popover .driver-popover-navigation-btns {
+  gap: 8px !important;
+}
+
+.driver-popover .driver-popover-next-btn {
+  background-color: #10B981 !important;
+  color: #000000 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  padding: 6px 16px !important;
+  text-shadow: none !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.driver-popover .driver-popover-next-btn:hover {
+  background-color: #34D399 !important;
+}
+
+.driver-popover .driver-popover-prev-btn {
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  padding: 6px 16px !important;
+  text-shadow: none !important;
+  transition: all 0.15s ease !important;
+}
+
+.driver-popover .driver-popover-prev-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #ffffff !important;
+}
+
+.driver-popover .driver-popover-close-btn {
+  color: rgba(255, 255, 255, 0.4) !important;
+  transition: color 0.15s ease !important;
+}
+
+.driver-popover .driver-popover-close-btn:hover {
+  color: #ffffff !important;
+}
+
+.driver-popover-arrow-side-left .driver-popover-arrow,
+.driver-popover-arrow-side-right .driver-popover-arrow,
+.driver-popover-arrow-side-top .driver-popover-arrow,
+.driver-popover-arrow-side-bottom .driver-popover-arrow {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Arrow fill to match dark background */
+.driver-popover .driver-popover-arrow {
+  border: 5px solid transparent !important;
+}
+
+.driver-popover-arrow-side-top .driver-popover-arrow {
+  border-top-color: #0f0f0f !important;
+}
+
+.driver-popover-arrow-side-bottom .driver-popover-arrow {
+  border-bottom-color: #0f0f0f !important;
+}
+
+.driver-popover-arrow-side-left .driver-popover-arrow {
+  border-left-color: #0f0f0f !important;
+}
+
+.driver-popover-arrow-side-right .driver-popover-arrow {
+  border-right-color: #0f0f0f !important;
+}

@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "Verdict Helper",
+  "description": "One-click submission to Codeforces - the modern competitive programming interface helper.",
+  "version": "1.0.9",
+  "permissions": [
+    "cookies"
+  ],
+  "host_permissions": [
+    "*://codeforces.com/*",
+    "*://*.codeforces.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://icpchue.com/*",
+        "*://*.icpchue.com/*",
+        "*://icpchue.xyz/*",
+        "*://*.icpchue.xyz/*",
+        "*://verdict.run/*",
+        "*://*.verdict.run/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Verdict Helper - Codeforces Submission",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*", "logo.webp"],
+      "matches": [
+        "*://icpchue.com/*",
+        "*://*.icpchue.com/*",
+        "*://icpchue.xyz/*",
+        "*://*.icpchue.xyz/*",
+        "*://verdict.run/*",
+        "*://*.verdict.run/*"
+      ]
+    }
+  ],
+  "minimum_chrome_version": "116"
+}
