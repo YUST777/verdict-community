@@ -219,8 +219,10 @@ function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug }: {
                             showNotes={showNotes}
                             setShowNotes={setShowNotes}
                             onQuizMe={() => {
-                                setQuizMode(!quizMode);
-                                if (!quizMode) setActiveTab('solution');
+                                setQuizMode(prev => {
+                                    if (!prev) setActiveTab('solution');
+                                    return !prev;
+                                });
                             }}
                             quizMode={quizMode}
                         />

@@ -393,7 +393,8 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                                 whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={props.onQuizMe}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 ml-1"
+                                disabled={isLoading}
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <span>🧠</span>
                                 <span>Quiz Me</span>

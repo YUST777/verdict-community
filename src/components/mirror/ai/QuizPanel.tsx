@@ -26,6 +26,15 @@ interface QuizPanelProps {
     onExit: () => void;
 }
 
+// Normalize AI rating to one of our three valid values
+function normalizeRating(raw: string | undefined): 'good' | 'partial' | 'weak' {
+    if (!raw) return 'partial';
+    const r = raw.toLowerCase().trim();
+    if (r === 'good' || r === 'correct' || r === 'right' || r === 'excellent' || r === 'perfect') return 'good';
+    if (r === 'weak' || r === 'wrong' || r === 'incorrect' || r === 'bad' || r === 'poor') return 'weak';
+    return 'partial';
+}
+
 export default function QuizPanel({ code, problemTitle, problemStatement, onExit }: QuizPanelProps) {
     const [phase, setPhase] = useState<'loading' | 'quiz' | 'results'>('loading');
     const [questions, setQuestions] = useState<Question[]>([]);
@@ -38,9 +47,32 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
     // Prevent double-fire from React Strict Mode or rapid re-mounts
     const abortRef = useRef<AbortController | null>(null);
     const hasStartedRef = useRef(false);
+    const mountedRef = useRef(true);
+
+    // Track mounted state for async safety
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    // Helper: read user LLM settings from localStorage
+    const getUserSettings = useCallback(async () => {
+        try {
+            const stored = localStorage.getItem('verdict_byok_llm');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.enabled && parsed.apiKey && parsed.baseURL) {
+                    const { decryptValue } = await import('@/lib/client-encryption');
+                    const decryptedKey = await decryptValue(parsed.apiKey);
+                    return { ...parsed, apiKey: decryptedKey };
+                }
+            }
+        } catch {}
+        return {};
+    }, []);
 
     // Generate questions
-    const generateQuestions = useCallback(async (isRetry = false) => {
+    const generateQuestions = useCallback(async () => {
         // Cancel any in-flight request
         if (abortRef.current) {
             abortRef.current.abort();
@@ -61,19 +93,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
         }
 
         try {
-            // Read user's LLM settings from localStorage
-            let userSettings: any = {};
-            try {
-                const stored = localStorage.getItem('verdict_byok_llm');
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (parsed.enabled && parsed.apiKey && parsed.baseURL) {
-                        const { decryptValue } = await import('@/lib/client-encryption');
-                        const decryptedKey = await decryptValue(parsed.apiKey);
-                        userSettings = { ...parsed, apiKey: decryptedKey };
-                    }
-                }
-            } catch {}
+            const userSettings = await getUserSettings();
 
             const numberedCode = code.split('\n').map((line: string, i: number) => `${i + 1}: ${line}`).join('\n');
 
@@ -97,8 +117,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 }),
             });
 
-            // If aborted between fetch and here, bail out
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || !mountedRef.current) return;
 
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -109,7 +128,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
             }
 
             const data = await res.json();
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || !mountedRef.current) return;
 
             const text = data.choices?.[0]?.message?.content || '';
             const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -119,53 +138,49 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
             try { parsed = JSON.parse(jsonMatch[0]); } catch { throw new Error('Failed to parse questions'); }
             if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('No questions generated');
 
-            // Final abort check before committing state
-            if (controller.signal.aborted) return;
+            // Validate each question has at minimum a `q` and `difficulty` field
+            const validated = parsed
+                .filter((q: any) => q && typeof q.q === 'string' && q.q.trim())
+                .map((q: any) => ({
+                    q: q.q,
+                    type: q.type || 'general',
+                    line: typeof q.line === 'number' ? q.line : undefined,
+                    difficulty: ['easy', 'medium', 'hard'].includes(q.difficulty) ? q.difficulty : 'medium',
+                }));
 
-            setQuestions(parsed);
+            if (validated.length === 0) throw new Error('AI returned invalid questions. Try again.');
+
+            if (controller.signal.aborted || !mountedRef.current) return;
+
+            setQuestions(validated);
             setCurrentQ(0);
             setResults([]);
             setPhase('quiz');
         } catch (err: any) {
-            if (err?.name === 'AbortError') return; // silently ignore aborted requests
-            setError(err.message || 'Failed to start quiz');
+            if (err?.name === 'AbortError') return;
+            if (mountedRef.current) setError(err.message || 'Failed to start quiz');
         }
-    }, [code, problemTitle, problemStatement]);
+    }, [code, problemTitle, problemStatement, getUserSettings]);
 
     // Auto-generate once on mount — abort on unmount
     useEffect(() => {
-        // Strict Mode guard: only fire once
         if (hasStartedRef.current) return;
         hasStartedRef.current = true;
-
         generateQuestions();
-
         return () => {
-            // Abort in-flight request on unmount
-            if (abortRef.current) {
-                abortRef.current.abort();
-            }
+            if (abortRef.current) abortRef.current.abort();
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const submitAnswer = async () => {
         if (!answer.trim() || evaluating) return;
+        if (!questions[currentQ]) return; // safety guard
+
         setEvaluating(true);
         setError(null);
 
         try {
-            let userSettings: any = {};
-            try {
-                const stored = localStorage.getItem('verdict_byok_llm');
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (parsed.enabled && parsed.apiKey && parsed.baseURL) {
-                        const { decryptValue } = await import('@/lib/client-encryption');
-                        const decryptedKey = await decryptValue(parsed.apiKey);
-                        userSettings = { ...parsed, apiKey: decryptedKey };
-                    }
-                }
-            } catch {}
+            const userSettings = await getUserSettings();
 
             const numberedCode = code.split('\n').map((line: string, i: number) => `${i + 1}: ${line}`).join('\n');
 
@@ -188,8 +203,12 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 }),
             });
 
+            if (!mountedRef.current) return;
             if (!res.ok) throw new Error('Evaluation failed');
+
             const data = await res.json();
+            if (!mountedRef.current) return;
+
             const text = data.choices?.[0]?.message?.content || '';
             const jsonMatch = text.match(/\{[\s\S]*\}/);
 
@@ -204,7 +223,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 qIndex: currentQ,
                 question: questions[currentQ].q,
                 answer: answer.trim(),
-                rating: evaluation.rating || 'partial',
+                rating: normalizeRating(evaluation.rating),
                 feedback: evaluation.feedback || 'Could not evaluate.',
                 correctAnswer: evaluation.correctAnswer,
             };
@@ -218,9 +237,9 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 setCurrentQ(prev => prev + 1);
             }
         } catch {
-            setError('Failed to evaluate answer. Try again.');
+            if (mountedRef.current) setError('Failed to evaluate answer. Try again.');
         } finally {
-            setEvaluating(false);
+            if (mountedRef.current) setEvaluating(false);
         }
     };
 
@@ -243,7 +262,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
     };
 
     const score = results.filter(r => r.rating === 'good').length;
-    const total = questions.length;
+    const total = questions.length || 1; // avoid division by zero
 
     // Loading state
     if (phase === 'loading') {
@@ -253,7 +272,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                         <XCircle size={32} className="text-red-400 mb-3" />
                         <p className="text-red-400 text-sm mb-4">{error}</p>
-                        <button onClick={generateQuestions} className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-colors">
+                        <button onClick={() => generateQuestions()} className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-colors">
                             Try Again
                         </button>
                         <button onClick={onExit} className="mt-2 text-[#666] text-xs hover:text-white transition-colors">
@@ -310,9 +329,9 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
 
                 {/* Score */}
                 <div className="shrink-0 p-4 border-b border-white/10 text-center">
-                    <div className="text-4xl font-black text-white mb-1">{score}/{total}</div>
-                    <p className={`text-sm font-medium ${score >= total * 0.7 ? 'text-green-400' : score >= total * 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {score >= total * 0.7 ? 'Great understanding!' : score >= total * 0.4 ? 'Room for improvement' : 'You should review this code'}
+                    <div className="text-4xl font-black text-white mb-1">{score}/{questions.length}</div>
+                    <p className={`text-sm font-medium ${score >= questions.length * 0.7 ? 'text-green-400' : score >= questions.length * 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {score >= questions.length * 0.7 ? 'Great understanding!' : score >= questions.length * 0.4 ? 'Room for improvement' : 'You should review this code'}
                     </p>
                 </div>
 
@@ -325,7 +344,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                                 <span className="text-xs text-[#808080]">Q{i + 1}</span>
                             </div>
                             <p className="text-xs text-white/80 mb-1">{r.question}</p>
-                            <p className="text-[10px] text-[#666] italic">You: "{r.answer}"</p>
+                            <p className="text-[10px] text-[#666] italic">You: &quot;{r.answer}&quot;</p>
                             <p className="text-xs text-[#A0A0A0] mt-1">{r.feedback}</p>
                             {r.correctAnswer && (
                                 <p className="text-xs text-emerald-400 mt-1">✓ {r.correctAnswer}</p>
@@ -337,7 +356,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                 {/* Actions */}
                 <div className="shrink-0 p-3 border-t border-white/10 flex gap-2">
                     <button
-                        onClick={() => { setResults([]); setCurrentQ(0); generateQuestions(true); }}
+                        onClick={() => { hasStartedRef.current = false; generateQuestions(); }}
                         className="flex-1 flex items-center justify-center gap-2 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-[#808080] hover:text-white hover:bg-white/10 transition-colors"
                     >
                         <RotateCcw size={14} /> Retry
@@ -353,9 +372,25 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
         );
     }
 
-    // Quiz state
+    // Quiz state — guard against out-of-bounds
     const q = questions[currentQ];
-    if (!q) return null;
+    if (!q) {
+        // Shouldn't happen, but if AI returned fewer questions than expected, show results
+        if (results.length > 0) {
+            // Force results phase
+            setPhase('results');
+            return null;
+        }
+        return (
+            <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                <XCircle size={32} className="text-red-400 mb-3" />
+                <p className="text-red-400 text-sm mb-4">Something went wrong with the quiz.</p>
+                <button onClick={onExit} className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-colors">
+                    Exit Quiz
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col overflow-hidden">
@@ -365,7 +400,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                     <Brain size={18} className="text-emerald-400" />
                     <span className="text-sm font-bold text-white">Quiz Mode</span>
                     <span className="text-[10px] text-[#666] bg-white/5 px-2 py-0.5 rounded-full">
-                        Q {currentQ + 1} of {total}
+                        Q {currentQ + 1} of {questions.length}
                     </span>
                 </div>
                 <button onClick={onExit} className="p-1 text-[#666] hover:text-white transition-colors" title="Exit Quiz">
@@ -377,7 +412,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
             <div className="shrink-0 h-1 bg-white/5">
                 <div
                     className="h-full bg-emerald-500 transition-all duration-500"
-                    style={{ width: `${((currentQ) / total) * 100}%` }}
+                    style={{ width: `${(currentQ / total) * 100}%` }}
                 />
             </div>
 
@@ -400,7 +435,7 @@ export default function QuizPanel({ code, problemTitle, problemStatement, onExit
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getDifficultyColor(q.difficulty)}`}>
                             {q.difficulty.toUpperCase()}
                         </span>
-                        {q.line && (
+                        {q.line != null && (
                             <span className="text-[10px] text-[#666]">Line {q.line}</span>
                         )}
                     </div>
