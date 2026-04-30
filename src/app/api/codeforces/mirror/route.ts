@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for') || 'unknown-ip';
     // Strict Rate Limit for Scraping: 20 per minute
-    if (!checkRateLimit(`mirror:${ip}`, 20, 60)) {
+    if (!checkRateLimit(`mirror:${ip}`, 60, 60)) {
         return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
     }
 

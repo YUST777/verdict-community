@@ -6,8 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
     LayoutDashboard, Trophy, BookOpen, LogOut,
     Bell, Home, Menu, X, User,
-    ChevronRight, ChevronLeft, Users, GraduationCap, Play
+    ChevronRight, ChevronLeft, Users, Play
 } from 'lucide-react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // NavItem component for sidebar navigation
@@ -244,7 +245,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[#0B0B0C] border-b border-white/10 px-4 py-2 flex items-center justify-between h-14">
                 <Link href="/" className="flex items-center gap-2">
-                    <GraduationCap size={24} className="text-emerald-400" />
+                    <Image src="/icons/logo.svg" alt="Verdict" width={24} height={24} />
                     <span className="font-bold text-white">Verdict</span>
                 </Link>
                 <div className="flex items-center gap-3">
@@ -338,7 +339,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="flex-1">
                     <div className={`p-6 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
                         <Link href="/" className="flex items-center gap-2">
-                            <GraduationCap size={28} className="text-emerald-400" />
+                            <Image src="/icons/logo.svg" alt="Verdict" width={28} height={28} />
                             {!isSidebarCollapsed && (
                                 <span className="font-bold text-white text-lg">Verdict</span>
                             )}

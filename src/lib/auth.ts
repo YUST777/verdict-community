@@ -53,6 +53,10 @@ export async function verifyAuth(req: NextRequest): Promise<AuthUser | null> {
         }
 
         // 2. Supabase session fallback (OAuth / Supabase-managed users)
+        // Only attempt if there are Supabase auth cookies present
+        const hasSbCookies = req.cookies.getAll().some(c => c.name.includes('sb-') && c.name.includes('auth'));
+        if (!hasSbCookies) return null;
+
         const supabase = await createClient();
         const userPromise = supabase.auth.getUser();
         const timeoutPromise = new Promise<never>((_, reject) => {

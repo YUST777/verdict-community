@@ -28,13 +28,11 @@ export function getPool(): pg.Pool {
                 rejectUnauthorized: false
             },
             // Small pool — Supavisor handles the real pooling upstream.
-            // 5 is optimal for serverless: low memory, fast checkout.
-            max: 5,
-            // Release idle connections quickly — serverless functions
-            // should not hold connections for long.
-            idleTimeoutMillis: 10000,
-            // Fail fast if the pool is exhausted
-            connectionTimeoutMillis: 5000,
+            max: 10,
+            // Release idle connections after 30s
+            idleTimeoutMillis: 30000,
+            // Wait up to 10s for a connection
+            connectionTimeoutMillis: 10000,
         });
 
         pool.on('error', (err) => {

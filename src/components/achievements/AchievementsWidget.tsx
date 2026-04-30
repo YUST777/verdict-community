@@ -121,7 +121,7 @@ export default function AchievementsWidget({ profile, user }: AchievementsWidget
             ))}
           </div>
 
-          <Link href="/dashboard/profile" className="w-full relative overflow-hidden rounded-xl bg-[#161616] border border-white/5 hover:bg-[#1a1a1a] hover:border-white/10 transition-all group/btn block">
+          <Link href="/dashboard/achievements" className="w-full relative overflow-hidden rounded-xl bg-[#161616] border border-white/5 hover:bg-[#1a1a1a] hover:border-white/10 transition-all group/btn block">
             <div className="relative z-10 px-4 py-3 flex items-center justify-between">
               <div className="flex flex-col items-start gap-0.5">
                 <span className="text-sm font-bold text-white group-hover/btn:text-emerald-400 transition-colors">View All Badges</span>
