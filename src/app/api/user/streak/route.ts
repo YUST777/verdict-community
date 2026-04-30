@@ -10,8 +10,8 @@ export async function GET(req: NextRequest) {
         // Count consecutive days with submissions ending today/yesterday
         const result = await query(
             `WITH daily AS (
-                SELECT DISTINCT DATE(created_at) as day
-                FROM submissions
+                SELECT DISTINCT DATE(submitted_at) as day
+                FROM training_submissions
                 WHERE user_id = $1
             ),
             numbered AS (

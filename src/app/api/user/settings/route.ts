@@ -55,16 +55,17 @@ export async function GET(req: NextRequest) {
 
         const profile = profileResult.rows[0];
 
-        // Fetch university info
-        const uniResult = await query(
-            `SELECT uu.university_email, u.name as university_name
-             FROM public.university_users uu
-             JOIN public.universities u ON u.id = uu.university_id
-             WHERE uu.user_id = $1`,
-            [user.id]
-        );
-
-        const uniRow = uniResult.rows[0];
+        // Fetch university info from users.university_id
+        let uniRow = null;
+        if (profile.university_id) {
+            try {
+                const uniResult = await query(
+                    'SELECT name as university_name, short_name, email_domain FROM public.universities WHERE id = $1',
+                    [profile.university_id]
+                );
+                uniRow = uniResult.rows[0] || null;
+            } catch { /* table may not exist */ }
+        }
 
         return NextResponse.json({
             settings: {

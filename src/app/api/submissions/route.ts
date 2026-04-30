@@ -3,81 +3,106 @@ import { verifyAuth } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 // GET /api/submissions?contestId=X&problemIndex=Y
-// Returns all submissions for the current user + problem
+// or GET /api/submissions?sheetId=X&problemId=Y
 export async function GET(req: NextRequest) {
     try {
         const user = await verifyAuth(req);
-        if (!user) {
-            return NextResponse.json({ success: true, submissions: [] });
-        }
+        if (!user) return NextResponse.json({ success: true, submissions: [] });
 
         const contestId = req.nextUrl.searchParams.get('contestId');
-        const problemIndex = req.nextUrl.searchParams.get('problemIndex');
+        const problemIndex = req.nextUrl.searchParams.get('problemIndex') || req.nextUrl.searchParams.get('problemId');
+        const sheetId = req.nextUrl.searchParams.get('sheetId');
 
-        if (!contestId || !problemIndex) {
-            return NextResponse.json({ error: 'Missing contestId or problemIndex' }, { status: 400 });
+        // CF submissions (contest-based)
+        if (contestId && problemIndex) {
+            const result = await query(
+                `SELECT id, cf_submission_id, source_code, language, verdict, time_ms, memory_kb,
+                        test_number, submitted_at
+                 FROM cf_submissions
+                 WHERE user_id = $1 AND contest_id = $2 AND problem_index = $3
+                 ORDER BY submitted_at DESC
+                 LIMIT 50`,
+                [user.id, contestId, problemIndex.toUpperCase()]
+            );
+
+            return NextResponse.json({
+                success: true,
+                submissions: result.rows.map((r: any, idx: number) => ({
+                    id: r.cf_submission_id ? Number(r.cf_submission_id) : r.id,
+                    dbId: r.id,
+                    verdict: r.verdict,
+                    timeMs: r.time_ms || 0,
+                    memoryKb: r.memory_kb || 0,
+                    testsPassed: r.test_number || 0,
+                    submittedAt: r.submitted_at,
+                    attemptNumber: result.rows.length - idx,
+                    sourceCode: r.source_code,
+                    language: r.language,
+                    source: 'codeforces',
+                })),
+            });
         }
 
-        const result = await query(
-            `SELECT id, cf_submission_id, source_code, language, verdict, time_ms, memory_kb,
-                    passed_test_count, problem_rating, problem_tags, problem_name, created_at
-             FROM submissions
-             WHERE user_id = $1 AND contest_id = $2 AND problem_index = $3
-             ORDER BY created_at DESC
-             LIMIT 50`,
-            [user.id, contestId, problemIndex.toUpperCase()]
-        );
+        // Training submissions (sheet-based)
+        if (sheetId) {
+            const params: any[] = [user.id];
+            let where = 'user_id = $1';
+            if (sheetId) { where += ' AND sheet_id = $2'; params.push(sheetId); }
+            if (problemIndex) { where += ` AND problem_id = $${params.length + 1}`; params.push(problemIndex); }
 
-        const submissions = result.rows.map((row: any, idx: number) => ({
-            id: row.cf_submission_id ? Number(row.cf_submission_id) : row.id,
-            dbId: row.id,
-            verdict: row.verdict,
-            timeMs: row.time_ms || 0,
-            memoryKb: row.memory_kb || 0,
-            testsPassed: row.passed_test_count || 0,
-            totalTests: row.verdict === 'Accepted'
-                ? (row.passed_test_count || 0)
-                : Math.max((row.passed_test_count || 0) + 1, 1),
-            submittedAt: row.created_at,
-            attemptNumber: result.rows.length - idx,
-            sourceCode: row.source_code,
-            language: row.language,
-            problemRating: row.problem_rating,
-            problemTags: row.problem_tags,
-            problemName: row.problem_name,
-        }));
+            const result = await query(
+                `SELECT id, sheet_id, problem_id, source_code, language, verdict, time_ms, memory_kb,
+                        test_cases_passed, total_test_cases, submitted_at, attempt_number,
+                        tab_switches, paste_events, time_to_solve_seconds
+                 FROM training_submissions
+                 WHERE ${where}
+                 ORDER BY submitted_at DESC
+                 LIMIT 100`,
+                params
+            );
 
-        return NextResponse.json({ success: true, submissions });
+            return NextResponse.json({
+                success: true,
+                submissions: result.rows.map((r: any) => ({
+                    id: r.id,
+                    problemId: r.problem_id,
+                    verdict: r.verdict,
+                    timeMs: r.time_ms || 0,
+                    memoryKb: r.memory_kb || 0,
+                    testsPassed: r.test_cases_passed || 0,
+                    totalTests: r.total_test_cases || 0,
+                    submittedAt: r.submitted_at,
+                    attemptNumber: r.attempt_number,
+                    language: r.language,
+                    source: 'judge0',
+                })),
+            });
+        }
+
+        return NextResponse.json({ error: 'Missing contestId or sheetId' }, { status: 400 });
     } catch (err) {
         console.error('[submissions GET]', err);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }
 }
 
-// POST /api/submissions
-// Save a new submission after CF verdict
+// POST /api/submissions — Save CF submission
 export async function POST(req: NextRequest) {
     try {
         const user = await verifyAuth(req);
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
-        const {
-            contestId, problemIndex, sourceCode, language,
-            cfSubmissionId, verdict, timeMs, memoryKb,
-            passedTestCount, problemRating, problemTags, problemName
-        } = body;
+        const { contestId, problemIndex, sourceCode, language, cfSubmissionId, verdict, timeMs, memoryKb, sheetId, urlType, groupId } = body;
 
-        if (!contestId || !problemIndex || !sourceCode || !language || !verdict) {
+        if (!contestId || !problemIndex || !verdict) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Dedup: skip if we already have this cf_submission_id
+        // Dedup
         if (cfSubmissionId) {
             const existing = await query(
-                'SELECT id FROM submissions WHERE cf_submission_id = $1 AND user_id = $2 LIMIT 1',
+                'SELECT id FROM cf_submissions WHERE cf_submission_id = $1 AND user_id = $2 LIMIT 1',
                 [cfSubmissionId, user.id]
             );
             if (existing.rows.length > 0) {
@@ -86,27 +111,12 @@ export async function POST(req: NextRequest) {
         }
 
         const result = await query(
-            `INSERT INTO submissions (
+            `INSERT INTO cf_submissions (
                 user_id, contest_id, problem_index, source_code, language,
-                cf_submission_id, verdict, time_ms, memory_kb, passed_test_count,
-                problem_rating, problem_tags, problem_name
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                cf_submission_id, verdict, time_ms, memory_kb, sheet_id, url_type, group_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING id`,
-            [
-                user.id,
-                contestId,
-                problemIndex.toUpperCase(),
-                sourceCode,
-                language,
-                cfSubmissionId || null,
-                verdict,
-                timeMs || null,
-                memoryKb || null,
-                passedTestCount || null,
-                problemRating || null,
-                problemTags || null,
-                problemName || null
-            ]
+            [user.id, contestId, problemIndex.toUpperCase(), sourceCode || '', language || 'C++', cfSubmissionId || null, verdict, timeMs || null, memoryKb || null, sheetId || null, urlType || 'contest', groupId || null]
         );
 
         return NextResponse.json({ success: true, id: result.rows[0].id });
