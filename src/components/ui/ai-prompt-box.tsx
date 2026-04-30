@@ -3,7 +3,7 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowUp, Paperclip, Square, X, Library, Loader2, Wand2, Play } from "lucide-react";
+import { ArrowUp, Paperclip, Square, X, Library, Loader2, Wand2, Play, Brain } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { AIContextCircle } from "@/components/ui/ai-context-usage";
@@ -396,7 +396,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                                 disabled={isLoading}
                                 className="flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11px] font-medium transition-colors bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <span>🧠</span>
+                                <Brain size={12} />
                                 <span>Quiz Me</span>
                             </motion.button>
                         )}
