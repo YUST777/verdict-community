@@ -973,8 +973,8 @@ export default function AIAgentPanel({
                     <ConversationContent className="px-3 py-4">
                         {messages.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-500">
-                                <div className="w-14 h-14 rounded-2xl bg-[#2cbb5d]/10 border border-[#2cbb5d]/20 flex items-center justify-center mb-4 relative overflow-hidden ">
-                                    <Image src="/icons/logo.svg" alt="Verdict" fill sizes="56px" className="object-contain p-2.5 opacity-80" />
+                                <div className="w-14 h-14 rounded-2xl bg-[#2cbb5d]/10 border border-[#2cbb5d]/20 flex items-center justify-center mb-4">
+                                    <Image src="/icons/logo.svg" alt="Verdict" width={32} height={32} className="opacity-80" />
                                 </div>
                                 <h3 className="text-base font-semibold text-white/80 mb-1.5">{isArabic ? 'كيف يمكنني مساعدتك؟' : 'How can I help?'}</h3>
                                 <p className="text-xs text-white/35 max-w-[220px] leading-relaxed">
