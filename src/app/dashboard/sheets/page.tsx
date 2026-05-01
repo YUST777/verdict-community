@@ -2,7 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { FileCode2, Info, X, ChevronRight, Loader2 } from 'lucide-react';
+
+const levelImages: Record<number, string> = {
+    0: '/images/lessons/levels/0.png',
+    1: '/images/lessons/levels/1.png',
+    2: '/images/lessons/levels/2.png',
+};
 
 export default function SheetsPage() {
     const [levels, setLevels] = useState<any[]>([]);
@@ -123,14 +130,16 @@ export default function SheetsPage() {
                                 >
                                     <div className="relative group rounded-3xl p-[1px] bg-gradient-to-b from-white/10 to-transparent overflow-hidden">
                                         <div className="bg-[#0f0f0f] rounded-[23px] relative overflow-hidden h-full flex flex-col">
-                                            {/* Gradient Header */}
-                                            <div className="relative h-32 w-full overflow-hidden bg-gradient-to-br from-emerald-500/20 to-blue-500/10">
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <span className="text-6xl font-black text-white/10">
-                                                        {level.levelNumber}
-                                                    </span>
-                                                </div>
-                                                <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent" />
+                                            {/* Photo Header */}
+                                            <div className="relative h-48 w-full overflow-hidden bg-[#1a1a1a]">
+                                                <Image
+                                                    src={levelImages[level.levelNumber] || levelImages[0]}
+                                                    alt={level.name}
+                                                    fill
+                                                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                                    className="object-cover opacity-70 group-hover:opacity-100 transition-all duration-700 scale-100 group-hover:scale-105"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-[#0f0f0f]/30 to-transparent" />
                                             </div>
 
                                             <div className="relative z-10 p-5 pt-4 flex-1 flex flex-col">

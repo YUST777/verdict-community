@@ -132,20 +132,7 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // Check if application exists (returning applicant who never completed registration)
-        const existingApplication = await query(
-            'SELECT id, name FROM public.applications WHERE email_blind_index = $1',
-            [emailBlindIndex]
-        );
-
-        if (existingApplication.rows.length > 0) {
-            return NextResponse.json({
-                success: true,
-                verified: true,
-                hasApplication: true,
-                userName: existingApplication.rows[0].name
-            });
-        }
+        // Applications table removed
 
         return NextResponse.json({
             success: true,

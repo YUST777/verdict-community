@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
         u.email,
         u.name,
         u.university_id,
-        a.name AS application_name,
+        u.display_name,
         uni.short_name AS university_short_name,
         us.solved_count,
         us.accepted_count,
@@ -50,7 +50,6 @@ export async function GET(req: NextRequest) {
       FROM users u
       INNER JOIN user_stats us ON u.id = us.user_id
       LEFT JOIN sub_counts sc ON u.id = sc.user_id
-      LEFT JOIN applications a ON u.application_id = a.id
       LEFT JOIN universities uni ON uni.id = u.university_id
       WHERE (u.is_shadow_banned = FALSE OR u.is_shadow_banned IS NULL)
         ${uniFilter}
@@ -60,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     const leaderboard = result.rows.map((row: any) => ({
       userId: Number(row.id),
-      username: getShortName(row.name || row.application_name) || row.email?.split('@')[0] || 'Anonymous',
+      username: getShortName(row.display_name || row.name) || row.email?.split('@')[0] || 'Anonymous',
       universityShortName: row.university_short_name || null,
       solvedCount: Number(row.solved_count) || 0,
       totalSubmissions: Number(row.total_submissions) || 0,

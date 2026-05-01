@@ -181,6 +181,7 @@ async function handleUniversityRegistration(body: Record<string, unknown>) {
     // Create blind indexes for searchable fields
     const studentIdBlindIndex = createBlindIndex(data.studentId);
     const nationalIdBlindIndex = data.nationalId ? createBlindIndex(data.nationalId) : null;
+    const telephoneBlindIndex = createBlindIndex(data.telephone);
 
     // Extract Codeforces/LeetCode usernames from URLs if provided
     const codeforcesHandle = data.codeforcesProfile
@@ -199,33 +200,24 @@ async function handleUniversityRegistration(body: Record<string, unknown>) {
             `INSERT INTO public.users (
                 email, email_blind_index, password_hash, name, 
                 university_id, tier, codeforces_handle, leetcode_handle,
-                is_email_verified, created_at
-            ) VALUES ($1, $2, $3, $4, $5, 'university', $6, $7, true, NOW())
+                is_email_verified, faculty, student_level,
+                student_id_encrypted, student_id_blind_index,
+                national_id_encrypted, national_id_blind_index,
+                telephone_encrypted, telephone_blind_index,
+                created_at
+            ) VALUES ($1, $2, $3, $4, $5, 'university', $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
             RETURNING id`,
             [
                 encryptedEmail, emailBlindIndex, passwordHash, encryptedName,
-                universityId, codeforcesHandle, leetcodeHandle
+                universityId, codeforcesHandle, leetcodeHandle,
+                data.faculty, data.studentLevel,
+                encryptedStudentId, studentIdBlindIndex,
+                encryptedNationalId, nationalIdBlindIndex,
+                encryptedTelephone, telephoneBlindIndex
             ]
         );
 
         const userId = userResult.rows[0].id;
-
-        // Create application record with encrypted PII
-        await query(
-            `INSERT INTO public.applications (
-                user_id, university_id, email, email_blind_index,
-                name, telephone, student_id, student_id_blind_index,
-                national_id, national_id_blind_index, faculty,
-                student_level, application_type, status,
-                codeforces_handle, leetcode_handle, submitted_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'trainee', 'approved', $13, $14, NOW())`,
-            [
-                userId, universityId, encryptedEmail, emailBlindIndex,
-                encryptedName, encryptedTelephone, encryptedStudentId, studentIdBlindIndex,
-                encryptedNationalId, nationalIdBlindIndex, data.faculty,
-                data.studentLevel, codeforcesHandle, leetcodeHandle
-            ]
-        );
 
         // Grant "First Steps" achievement
         const achievementResult = await query(

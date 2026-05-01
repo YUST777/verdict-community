@@ -11,9 +11,10 @@ export async function GET(req: NextRequest) {
     }
 
     const userResult = await query(
-      `SELECT id, email, last_login_at, created_at, application_id, 
+      `SELECT id, email, last_login_at, created_at,
               telegram_username, role, profile_picture, codeforces_handle, codeforces_data,
-              university_id, faculty, username, display_name, name
+              university_id, faculty, username, display_name, name, student_level,
+              student_id_encrypted, national_id_encrypted, telephone_encrypted
        FROM users
        WHERE id = $1`,
       [authUser.id]
@@ -44,13 +45,29 @@ export async function GET(req: NextRequest) {
     }
     const decryptedEmail = decrypt(user.email) || user.email;
 
-    let profile: any = null;
-    if (user.application_id) {
-      const appResult = await query('SELECT * FROM applications WHERE id = $1', [user.application_id]);
-      if (appResult.rows.length > 0) profile = appResult.rows[0];
+    let profile: any = {
+      faculty: user.faculty,
+      student_level: user.student_level,
+      name: user.display_name || user.name
+    };
+    
+    if (user.student_id_encrypted) {
+      try {
+        profile.student_id = decrypt(user.student_id_encrypted);
+      } catch (e) { profile.student_id = user.student_id_encrypted; }
     }
-
-    if (!profile) profile = {};
+    
+    if (user.national_id_encrypted) {
+      try {
+        profile.national_id = decrypt(user.national_id_encrypted);
+      } catch (e) { profile.national_id = user.national_id_encrypted; }
+    }
+    
+    if (user.telephone_encrypted) {
+      try {
+        profile.telephone = decrypt(user.telephone_encrypted);
+      } catch (e) { profile.telephone = user.telephone_encrypted; }
+    }
 
     if (user.codeforces_data) {
       profile.codeforces_data = typeof user.codeforces_data === 'string'

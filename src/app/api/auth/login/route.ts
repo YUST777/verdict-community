@@ -27,11 +27,23 @@ export async function POST(req: NextRequest) {
         const normalizedEmail = email.trim().toLowerCase();
         const blindIndex = createBlindIndex(normalizedEmail);
 
-        // Find User
-        const userResult = await query(
+        // Find User — try blind index first, then direct email as fallback
+        let userResult = await query(
             'SELECT id, password_hash, university_id FROM public.users WHERE email_blind_index = $1',
             [blindIndex]
         );
+
+        // Fallback: direct email lookup (handles migrated users with mismatched blind indexes)
+        if (userResult.rows.length === 0) {
+            userResult = await query(
+                'SELECT id, password_hash, university_id FROM public.users WHERE LOWER(email) = $1',
+                [normalizedEmail]
+            );
+            // If found via email, fix the blind index for future logins
+            if (userResult.rows.length > 0 && blindIndex) {
+                await query('UPDATE public.users SET email_blind_index = $1 WHERE id = $2', [blindIndex, userResult.rows[0].id]).catch(() => {});
+            }
+        }
 
         if (userResult.rows.length === 0) {
             return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
     LayoutDashboard, Trophy, BookOpen, LogOut,
-    Bell, Home, Menu, X, User,
+    Bell, Home, Menu, X, User, Settings,
     ChevronRight, ChevronLeft, Users, Play
 } from 'lucide-react';
 import Image from 'next/image';
@@ -436,12 +436,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         })}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-6">
+                        <button
+                            onClick={() => handleNav('/dashboard/news')}
+                            className="text-[#555] hover:text-white transition-colors"
+                            title="Notifications"
+                        >
+                            <Bell size={18} strokeWidth={1.2} />
+                        </button>
+                        <button
+                            onClick={() => handleNav('/dashboard/settings')}
+                            className="text-[#555] hover:text-white transition-colors"
+                            title="Settings"
+                        >
+                            <Settings size={18} strokeWidth={1.2} />
+                        </button>
                         <button
                             onClick={handleLogout}
-                            className="w-8 h-8 flex items-center justify-center text-[#A0A0A0] hover:text-red-500 hover:bg-white/5 rounded-lg transition-all"
+                            className="text-[#555] hover:text-red-500 transition-colors"
+                            title="Sign Out"
                         >
-                            <LogOut size={18} />
+                            <LogOut size={18} strokeWidth={1.2} />
                         </button>
                     </div>
                 </header>

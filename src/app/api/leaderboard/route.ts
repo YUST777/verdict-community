@@ -37,34 +37,15 @@ export async function GET() {
     };
 
     const result = await query(`
-      SELECT DISTINCT ON (COALESCE(handle, name))
-        name,
-        handle,
-        codeforces_profile,
-        codeforces_data
-      FROM (
-        SELECT
-          name,
-          codeforces_profile,
-          codeforces_data,
-          (codeforces_data::json->>'handle') as handle
-        FROM applications
-        WHERE codeforces_data IS NOT NULL
-
-        UNION ALL
-
-        SELECT
-          COALESCE(a.name, u.email) as name,
-          u.codeforces_handle as codeforces_profile,
-          u.codeforces_data,
-          (u.codeforces_data::json->>'handle') as handle
-        FROM users u
-        LEFT JOIN applications a ON u.application_id = a.id
-        WHERE u.codeforces_data IS NOT NULL
-          AND (u.show_on_cf_leaderboard = TRUE OR u.show_on_cf_leaderboard IS NULL)
-          AND (u.is_shadow_banned IS NULL OR u.is_shadow_banned = FALSE)
-      ) combined
-      ORDER BY COALESCE(handle, name)
+      SELECT
+        COALESCE(u.display_name, u.name, u.email) as name,
+        u.codeforces_handle as codeforces_profile,
+        u.codeforces_data,
+        (u.codeforces_data::json->>'handle') as handle
+      FROM users u
+      WHERE u.codeforces_data IS NOT NULL
+        AND (u.show_on_cf_leaderboard = TRUE OR u.show_on_cf_leaderboard IS NULL)
+        AND (u.is_shadow_banned IS NULL OR u.is_shadow_banned = FALSE)
     `);
 
     const leaderboard = result.rows

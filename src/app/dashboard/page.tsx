@@ -16,7 +16,7 @@ export default function DashboardHome() {
   const [forceShowTour, setForceShowTour] = useState(false);
   void forceShowTour;
 
-  const displayName = getDisplayName((profile as any)?.name) || user?.email?.split('@')[0] || 'Member';
+  const displayName = getDisplayName((profile as any)?.name) || getDisplayName(user?.name) || user?.email?.split('@')[0] || 'Member';
   const firstName = displayName.split(' ')[0];
   const rank = (profile as any)?.codeforces_data?.rank || 'Unrated';
 

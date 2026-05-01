@@ -188,7 +188,7 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="space-y-6 max-w-3xl">
+        <div className="space-y-6 max-w-5xl">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">

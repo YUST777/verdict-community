@@ -17,7 +17,6 @@ export default function DashboardSessionDetail() {
   const sessionNumber = params.sessionNumber as string;
 
   const [authChecked, setAuthChecked] = useState(false);
-  const [viewCount, setViewCount] = useState<number | null>(null);
 
   const camp = camps.find(c => c.slug === campSlug);
   const session = camp?.sessions.find(s => s.number === sessionNumber);
@@ -27,20 +26,9 @@ export default function DashboardSessionDetail() {
       setTimeout(() => setAuthChecked(true), 0);
       if (!isAuthenticated) {
         router.replace('/register');
-      } else if (session) {
-        const entityId = `${campSlug}-${sessionNumber}`;
-        fetch('/api/views', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ entityType: 'session', entityId }),
-        })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => setViewCount(data?.views ?? null))
-          .catch(() => {});
       }
     }
-  }, [loading, isAuthenticated, router, campSlug, sessionNumber, session]);
+  }, [loading, isAuthenticated, router]);
 
   if (loading || !authChecked) {
     return <div className="min-h-screen bg-black p-6"><div className="max-w-3xl mx-auto space-y-4"><Skeleton className="h-8 w-48 rounded-lg" /><Skeleton className="h-4 w-72 rounded" /><Skeleton className="h-64 rounded-xl" /></div></div>;
@@ -68,12 +56,6 @@ export default function DashboardSessionDetail() {
           <h1 className="text-3xl sm:text-5xl font-black mb-4 tracking-tight">{session.title}</h1>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <p className="text-lg text-[#808080] max-w-2xl leading-relaxed">{session.description}</p>
-            {viewCount !== null && (
-              <div className="flex items-center gap-2 text-white/40 bg-white/5 px-3 py-1.5 rounded-full self-start sm:self-auto border border-white/5">
-                <Eye size={16} />
-                <span className="text-xs font-bold uppercase tracking-tighter">{viewCount} views</span>
-              </div>
-            )}
           </div>
         </div>
 
