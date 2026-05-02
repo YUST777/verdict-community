@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
 
 // GET /api/rooms/[roomId] - Get room details
 export async function GET(
@@ -70,6 +71,8 @@ export async function GET(
                 u.name,
                 u.display_name,
                 u.username,
+                u.email,
+                u.student_id_encrypted,
                 COALESCE(lc.solved_count, 0) as solved_count,
                 lc.university_rank
             FROM users u
@@ -113,13 +116,30 @@ export async function GET(
                 createdAt: a.created_at,
                 authorName: a.author_name,
             })),
-            topMembers: topMembersResult.rows.map((m: any, index: number) => ({
-                id: m.id,
-                name: m.display_name || m.name || m.username || 'Anonymous',
-                username: m.username,
-                solvedCount: parseInt(m.solved_count) || 0,
-                rank: m.university_rank || index + 1,
-            })),
+            topMembers: topMembersResult.rows.map((m: any, index: number) => {
+                const rawName = m.display_name || m.name;
+                const decryptedName = rawName ? (decrypt(rawName) || rawName) : (m.username || 'Anonymous');
+                
+                // Fallback for identifier: username -> student_id -> email prefix
+                let identifier = m.username;
+                if (!identifier && m.student_id_encrypted) {
+                    try { identifier = decrypt(m.student_id_encrypted); } catch {}
+                }
+                if (!identifier && m.email) {
+                    try {
+                        const decryptedEmail = decrypt(m.email) || m.email;
+                        identifier = decryptedEmail.split('@')[0];
+                    } catch {}
+                }
+
+                return {
+                    id: m.id,
+                    name: decryptedName,
+                    username: identifier || 'trainee',
+                    solvedCount: parseInt(m.solved_count) || 0,
+                    rank: m.university_rank || index + 1,
+                };
+            }),
             isMember,
         });
     } catch (error) {

@@ -11,13 +11,15 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Username required' }, { status: 400 });
         }
 
-        // Find user by username
+        // Find user by ID or username
+        const isNumeric = /^\d+$/.test(username);
         const userResult = await query(`
             SELECT
                 u.id,
                 u.username,
                 u.display_name,
                 u.name,
+                u.email,
                 u.profile_picture,
                 u.codeforces_handle,
                 u.codeforces_data,
@@ -27,13 +29,14 @@ export async function GET(req: NextRequest) {
                 u.show_public_profile,
                 uni.name as university_name,
                 uni.short_name as university_short_name,
-                uni.slug as university_slug
+                uni.slug as university_slug,
+                u.stats
             FROM users u
             LEFT JOIN universities uni ON uni.id = u.university_id
-            WHERE u.username = $1
+            WHERE ${isNumeric ? 'u.id = $1' : 'u.username = $1'}
               AND (u.is_shadow_banned = false OR u.is_shadow_banned IS NULL)
             LIMIT 1
-        `, [username.toLowerCase()]);
+        `, [isNumeric ? parseInt(username) : username.toLowerCase()]);
 
         if (userResult.rows.length === 0) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -45,18 +48,14 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Profile is private' }, { status: 403 });
         }
 
-        // Get solve stats
-        const statsResult = await query(`
-            SELECT
-                COUNT(DISTINCT (sheet_id, problem_id)) FILTER (WHERE verdict = 'Accepted' OR status = 'AC') as solved_count,
-                COUNT(*) as total_submissions
-            FROM training_submissions
+        // ... stats/achievements queries stay the same ...
+        const cacheResult = await query(`
+            SELECT solved_count, total_submissions
+            FROM leaderboard_cache
             WHERE user_id = $1
         `, [user.id]);
+        const stats = cacheResult.rows[0] || { solved_count: 0, total_submissions: 0 };
 
-        const stats = statsResult.rows[0] || { solved_count: 0, total_submissions: 0 };
-
-        // Get achievements
         const achievementsResult = await query(`
             SELECT achievement_id, earned_at
             FROM user_achievements
@@ -64,33 +63,37 @@ export async function GET(req: NextRequest) {
             ORDER BY earned_at DESC
         `, [user.id]);
 
-        // Get leaderboard position
         const rankResult = await query(`
             SELECT national_rank, university_rank, solved_count
             FROM leaderboard_cache
             WHERE user_id = $1
         `, [user.id]);
-
         const rank = rankResult.rows[0] || {};
 
-        // Get streak
-        const streakResult = await query(`
-            SELECT current_streak, longest_streak
-            FROM user_streaks
-            WHERE user_id = $1
-        `, [user.id]);
+        // Extract streak from stats JSONB
+        const userStats = user.stats || {};
+        const streak = {
+            current_streak: userStats.streak?.current || 0,
+            longest_streak: userStats.streak?.longest || 0
+        };
 
-        const streak = streakResult.rows[0] || { current_streak: 0, longest_streak: 0 };
-
-        // Decrypt display name if encrypted
-        const displayName = user.display_name
-            ? (decrypt(user.display_name) || user.display_name)
-            : (user.name ? (decrypt(user.name) || user.name) : user.username);
+        // Decrypt display name or fallback to email prefix
+        let displayName = user.display_name ? (decrypt(user.display_name) || user.display_name) : null;
+        if (!displayName) {
+            displayName = user.name ? (decrypt(user.name) || user.name) : null;
+        }
+        if (!displayName && user.email) {
+            const decryptedEmail = decrypt(user.email) || user.email;
+            displayName = decryptedEmail.split('@')[0];
+        }
+        if (!displayName) {
+            displayName = user.username || 'Anonymous';
+        }
 
         return NextResponse.json({
             success: true,
             profile: {
-                username: user.username,
+                username: user.username || displayName.toLowerCase().replace(/\s+/g, '.'),
                 displayName,
                 profilePicture: user.profile_picture,
                 codeforcesHandle: user.codeforces_handle,

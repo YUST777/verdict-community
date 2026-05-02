@@ -40,21 +40,33 @@ export const encrypt = (text: string | null | undefined): string | null => {
 
 // ─── Decrypt: cryptr first, legacy CryptoJS fallback ────────────────
 
-export const decrypt = (ciphertext: string | null | undefined): string | null => {
+export const decrypt = (ciphertext: string | null | undefined, customKey?: string): string | null => {
     if (!ciphertext) return null;
+
+    const key = customKey || ENCRYPTION_KEY;
 
     // Legacy CryptoJS format starts with "U2FsdGVkX1" (base64 of "Salted__")
     if (ciphertext.startsWith('U2FsdGVkX1')) {
-        return decryptLegacyCryptoJS(ciphertext);
+        return decryptLegacyCryptoJS(ciphertext, key);
     }
 
     // Legacy hand-rolled AES-256-GCM format from previous code
     if (ciphertext.startsWith('aes256gcm:')) {
-        return decryptLegacyGCM(ciphertext);
+        return decryptLegacyGCM(ciphertext, key);
     }
 
     // Current format: cryptr (hex string)
-    if (!cryptr) return null;
+    if (!cryptr || customKey) {
+        // If we have a custom key, we need a new cryptr instance
+        if (customKey) {
+            try {
+                const customCryptr = new Cryptr(customKey);
+                return customCryptr.decrypt(ciphertext);
+            } catch { return null; }
+        }
+        return null;
+    }
+
     try {
         return cryptr.decrypt(ciphertext);
     } catch (err) {
@@ -65,15 +77,16 @@ export const decrypt = (ciphertext: string | null | undefined): string | null =>
 
 // ─── Legacy: CryptoJS AES-CBC decrypt (read-only, for old DB data) ──
 
-function decryptLegacyCryptoJS(b64: string): string | null {
-    if (!ENCRYPTION_KEY) return null;
+function decryptLegacyCryptoJS(b64: string, keyToUse?: string): string | null {
+    const key = keyToUse || ENCRYPTION_KEY;
+    if (!key) return null;
     try {
         const raw = Buffer.from(b64, 'base64');
         if (raw.subarray(0, 8).toString('utf8') !== 'Salted__') return null;
 
         const salt = raw.subarray(8, 16);
         const ct = raw.subarray(16);
-        const derived = evpBytesToKey(Buffer.from(ENCRYPTION_KEY, 'utf8'), salt, 32, 16);
+        const derived = evpBytesToKey(Buffer.from(key, 'utf8'), salt, 32, 16);
 
         const decipher = crypto.createDecipheriv('aes-256-cbc', derived.key, derived.iv);
         decipher.setAutoPadding(true);
@@ -99,8 +112,9 @@ function evpBytesToKey(password: Buffer, salt: Buffer, keyLen: number, ivLen: nu
 
 // ─── Legacy: hand-rolled AES-256-GCM decrypt (from previous refactor) ──
 
-function decryptLegacyGCM(ciphertext: string): string | null {
-    if (!ENCRYPTION_KEY) return null;
+function decryptLegacyGCM(ciphertext: string, keyToUse?: string): string | null {
+    const keyString = keyToUse || ENCRYPTION_KEY;
+    if (!keyString) return null;
     try {
         const packed = Buffer.from(ciphertext.slice(10), 'base64');
         if (packed.length < 28) return null;
@@ -108,7 +122,7 @@ function decryptLegacyGCM(ciphertext: string): string | null {
         const iv = packed.subarray(0, 12);
         const authTag = packed.subarray(12, 28);
         const ct = packed.subarray(28);
-        const key = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+        const key = crypto.createHash('sha256').update(keyString).digest();
 
         const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
         decipher.setAuthTag(authTag);

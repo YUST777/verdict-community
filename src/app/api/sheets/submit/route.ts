@@ -147,6 +147,47 @@ export async function POST(req: NextRequest) {
             [user.id, sheetId, problemId, sourceCode, finalVerdict, Math.round(totalTimeMs), maxMemoryKb, passedCount, testCases.length, results.find((r: any) => r.compileError)?.compileError || null, results.find((r: any) => r.runtimeError)?.runtimeError || null, ip, tabSwitches, pasteEvents, timeToSolve || null, attemptNumber]
         );
 
+        // If Accepted, update leaderboard cache
+        if (allPassed) {
+            try {
+                // Check if this was already solved before
+                const alreadySolved = await query(
+                    "SELECT 1 FROM training_submissions WHERE user_id = $1 AND sheet_id = $2 AND problem_id = $3 AND verdict = 'Accepted' AND id != $4 LIMIT 1",
+                    [user.id, sheetId, problemId, insertRes.rows[0].id]
+                );
+
+                if (alreadySolved.rows.length === 0) {
+                    // Increment solved count in leaderboard_cache
+                    await query(`
+                        INSERT INTO leaderboard_cache (user_id, university_id, solved_count, last_solve_at)
+                        SELECT u.id, u.university_id, 1, NOW()
+                        FROM users u WHERE u.id = $1
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            solved_count = leaderboard_cache.solved_count + 1,
+                            last_solve_at = EXCLUDED.last_solve_at
+                    `, [user.id]);
+
+                    // Update university total solves
+                    await query(`
+                        UPDATE universities 
+                        SET total_solves = total_solves + 1
+                        WHERE id = (SELECT university_id FROM users WHERE id = $1)
+                    `, [user.id]);
+
+                    // Clear Redis cache for leaderboards
+                    try {
+                        const { default: redis } = await import('@/lib/redis');
+                        const keys = await redis.keys('leaderboard:*');
+                        if (keys.length > 0) await redis.del(...keys);
+                    } catch (redisErr) {
+                        console.error('Redis cache clear failed:', redisErr);
+                    }
+                }
+            } catch (cacheErr) {
+                console.error('Leaderboard cache update failed:', cacheErr);
+            }
+        }
+
         return NextResponse.json({ success: true, submissionId: insertRes.rows[0]?.id, verdict: finalVerdict, passed: allPassed, testsPassed: passedCount, totalTests: testCases.length, time: `${Math.round(totalTimeMs)}ms`, memory: `${Math.round(maxMemoryKb)}KB`, attemptNumber, results });
     } catch (error) {
         console.error('Sheet submit error:', error);

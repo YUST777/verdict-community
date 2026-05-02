@@ -29,6 +29,7 @@ interface CFUser {
 interface SheetUser {
   userId: number;
   username: string;
+  universityShortName: string | null;
   solvedCount: number;
   totalSubmissions: number;
   acceptedCount: number;
@@ -42,11 +43,21 @@ export default function LeaderboardPage() {
   const [sheetsLeaderboard, setSheetsLeaderboard] = useState<SheetUser[]>([]);
   const [uniLeaderboard, setUniLeaderboard] = useState<any[]>([]);
   const [uniName, setUniName] = useState<string>('');
+  
+  const userUniId = (user as any)?.university?.id;
+  const userUniShortName = (user as any)?.university?.shortName;
+  
+  const [selectedUniId, setSelectedUniId] = useState<number | undefined>(undefined);
+
+  // Initialize selectedUniId with user's uniId once it's available
+  useEffect(() => {
+    if (userUniId && !selectedUniId) {
+      setSelectedUniId(userUniId);
+    }
+  }, [userUniId, selectedUniId]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const uniId = (user as any)?.university?.id;
-  const uniShortName = (user as any)?.university?.shortName;
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -57,8 +68,9 @@ export default function LeaderboardPage() {
           const data = await fetchWithCache<any>(addCacheBust('/api/leaderboard'), {}, 300);
           setCfLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
         } else if (activeTab === 'university') {
-          if (uniId) {
-            const data = await fetchWithCache<any>(`/api/leaderboard/university?scope=university&universityId=${uniId}`, { credentials: 'include' }, 300);
+          const targetUniId = selectedUniId || userUniId;
+          if (targetUniId) {
+            const data = await fetchWithCache<any>(`/api/leaderboard/university?scope=university&universityId=${targetUniId}`, { credentials: 'include' }, 300);
             setUniLeaderboard(data.leaderboard || []);
             setUniName(data.university?.name || '');
           } else {
@@ -66,8 +78,9 @@ export default function LeaderboardPage() {
           }
         } else {
           // Sheets tab — apply scope filter
-          const uniParam = scope === 'university' && uniId ? `&universityId=${uniId}` : '';
-          const data = await fetchWithCache<any>(addCacheBust(`/api/leaderboard/sheets?_=${Date.now()}${uniParam}`), { credentials: 'include' }, 60);
+          const targetUniId = selectedUniId || userUniId;
+          const uniParam = scope === 'university' && targetUniId ? `universityId=${targetUniId}` : '';
+          const data = await fetchWithCache<any>(addCacheBust(`/api/leaderboard/sheets?${uniParam}`), { credentials: 'include' }, 60);
           setSheetsLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
         }
       } catch (err) {
@@ -78,7 +91,7 @@ export default function LeaderboardPage() {
     };
 
     fetchLeaderboard();
-  }, [activeTab, scope, uniId]);
+  }, [activeTab, scope, selectedUniId, userUniId]);
 
   const getRatingColor = (rating: number) => {
     if (rating >= 2400) return 'text-red-500';
@@ -107,14 +120,13 @@ export default function LeaderboardPage() {
           </h2>
           <p className="text-[#A0A0A0] mt-1 ml-10">Compare your progress with the community</p>
         </div>
-        {uniShortName ? (
-          <ScopeSelector scope={scope} setScope={setScope} universityName={uniShortName} />
-        ) : (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg border border-white/5 text-xs text-[#666]">
-            <Globe size={13} />
-            All Egypt
-          </div>
-        )}
+        <ScopeSelector 
+            scope={scope} 
+            setScope={setScope} 
+            universityName={userUniShortName} 
+            selectedUniId={selectedUniId || userUniId}
+            onUniChange={(id) => setSelectedUniId(id)}
+        />
       </div>
 
       <div className="border-b border-white/10">
@@ -139,12 +151,13 @@ export default function LeaderboardPage() {
       <div className="bg-[#121212] rounded-xl border border-white/5 overflow-hidden h-[600px] flex flex-col">
         {activeTab === 'sheets' ? (
           <>
-            <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 sm:gap-4 p-3 sm:p-4 border-b border-white/5 text-xs text-[#666] uppercase tracking-wider bg-[#121212] z-10 shrink-0">
+            <div className={`grid grid-cols-6 sm:grid-cols-12 gap-2 sm:gap-4 p-3 sm:p-4 border-b border-white/5 text-xs text-[#666] uppercase tracking-wider bg-[#121212] z-10 shrink-0`}>
               <div className="col-span-1">#</div>
               <div className="col-span-2 sm:col-span-4">Username</div>
-              <div className="col-span-3 sm:col-span-3">Solved</div>
+              <div className="col-span-3 sm:col-span-2">Solved</div>
               <div className="hidden sm:block col-span-2">Accepted</div>
-              <div className="hidden sm:block col-span-2">Submissions</div>
+              <div className="hidden sm:block col-span-1">Subs</div>
+              <div className="hidden sm:block col-span-2">University</div>
             </div>
             {loading ? (
               <div className="flex-1">
@@ -152,9 +165,10 @@ export default function LeaderboardPage() {
                   <div key={i} className="grid grid-cols-6 sm:grid-cols-12 gap-2 sm:gap-4 p-3 sm:p-4 border-b border-white/[0.03]">
                     <div className="col-span-1"><Skeleton className="h-5 w-5 rounded-full mx-auto" /></div>
                     <div className="col-span-2 sm:col-span-4"><Skeleton className="h-4 w-3/4 rounded" /></div>
-                    <div className="col-span-3"><Skeleton className="h-5 w-10 rounded-full" /></div>
+                    <div className="col-span-3 sm:col-span-2"><Skeleton className="h-5 w-10 rounded-full" /></div>
                     <div className="hidden sm:block col-span-2"><Skeleton className="h-4 w-8 rounded" /></div>
-                    <div className="hidden sm:block col-span-2"><Skeleton className="h-4 w-8 rounded" /></div>
+                    <div className="hidden sm:block col-span-1"><Skeleton className="h-4 w-4 rounded" /></div>
+                    <div className="hidden sm:block col-span-2"><Skeleton className="h-4 w-12 rounded" /></div>
                   </div>
                 ))}
               </div>
@@ -173,13 +187,25 @@ export default function LeaderboardPage() {
                 {({ index, style }: { index: number; style: React.CSSProperties }) => {
                   const user = sheetsLeaderboard[index];
                   return (
-                    <div style={style} key={user.userId} className="grid grid-cols-6 sm:grid-cols-12 gap-2 sm:gap-4 p-3 sm:p-4 hover:bg-white/5 transition-colors items-center border-b border-white/5 last:border-0">
+                    <Link
+                      style={style}
+                      key={user.userId}
+                      href={`/profile/${user.userId}`}
+                      className="grid grid-cols-6 sm:grid-cols-12 gap-2 sm:gap-4 p-3 sm:p-4 hover:bg-white/5 transition-colors items-center border-b border-white/5 last:border-0"
+                    >
                       <div className="col-span-1 flex items-center justify-center">{index < 3 ? <MedalAnimation place={(index + 1) as 1 | 2 | 3} /> : <span className="text-sm font-bold text-[#666]">{index + 1}</span>}</div>
-                      <div className="col-span-2 sm:col-span-4 min-w-0"><span className="text-sm font-medium text-[#F2F2F2] truncate block">{user.username}</span></div>
-                      <div className="col-span-3"><span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-xs font-bold ${getSolvedBadge(user.solvedCount)}`}>{user.solvedCount}</span></div>
+                      <div className="col-span-2 sm:col-span-4 min-w-0">
+                        <span className="text-sm font-medium text-[#F2F2F2] truncate block">{user.username}</span>
+                      </div>
+                      <div className="col-span-3 sm:col-span-2"><span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-xs font-bold ${getSolvedBadge(user.solvedCount)}`}>{user.solvedCount}</span></div>
                       <div className="hidden sm:block col-span-2 text-sm text-green-400 font-medium">{user.acceptedCount}</div>
-                      <div className="hidden sm:block col-span-2 text-sm text-[#666]">{user.totalSubmissions}</div>
-                    </div>
+                      <div className="hidden sm:block col-span-1 text-sm text-[#666]">{user.totalSubmissions}</div>
+                      <div className="hidden sm:block col-span-2">
+                        {user.universityShortName && (
+                          <span className="text-xs text-[#A0A0A0] font-medium truncate max-w-full italic">{user.universityShortName}</span>
+                        )}
+                      </div>
+                    </Link>
                   );
                 }}
               </VirtualLeaderboard>
@@ -249,12 +275,19 @@ export default function LeaderboardPage() {
             ) : (
               <div className="flex-1 overflow-y-auto">
                 {uniLeaderboard.map((u: any, index: number) => (
-                  <div key={u.userId} className="grid grid-cols-[40px_1fr_80px] sm:grid-cols-[40px_1fr_100px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-white/5 transition-colors items-center border-b border-white/5">
+                  <Link
+                    key={u.userId}
+                    href={`/profile/${u.handle || u.userId}`}
+                    className="grid grid-cols-[40px_1fr_80px] sm:grid-cols-[40px_1fr_100px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-white/5 transition-colors items-center border-b border-white/5 last:border-0"
+                  >
                     <div className="flex items-center justify-center">{index < 3 ? <MedalAnimation place={(index + 1) as 1 | 2 | 3} /> : <span className="text-sm font-bold text-[#666]">{index + 1}</span>}</div>
-                    <div className="min-w-0"><span className="text-sm font-medium text-[#F2F2F2] truncate block">{u.username}</span></div>
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-[#F2F2F2] truncate block">{u.username}</span>
+                      <span className="text-[10px] text-[#666] truncate block">@{u.handle}</span>
+                    </div>
                     <div className="text-sm font-bold text-emerald-400 text-right">{u.solvedCount}</div>
                     <div className="hidden sm:block text-sm text-[#666] truncate">{u.codeforcesHandle || '—'}</div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

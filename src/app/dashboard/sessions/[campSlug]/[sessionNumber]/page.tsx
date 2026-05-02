@@ -83,10 +83,19 @@ export default function DashboardSessionDetail() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mb-12">
+        <div className="flex items-center gap-4 mb-8">
           <div className="h-px bg-white/5 flex-1" />
           <span className="text-white/20 text-[10px] font-bold uppercase tracking-[0.2em]">Session Notes</span>
           <div className="h-px bg-white/5 flex-1" />
+        </div>
+
+        <div className="mb-8 p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+            <Eye size={16} />
+          </div>
+          <p className="text-xs text-white/60 font-medium">
+            Made by <a href="https://www.linkedin.com/in/a-waleed/" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Ahmed Waleed</a>
+          </p>
         </div>
 
         <article className="prose prose-invert prose-lg max-w-none prose-headings:text-white prose-a:text-emerald-400 prose-strong:text-white prose-code:text-emerald-400 prose-pre:bg-[#0a0a0a] prose-pre:border prose-pre:border-white/10">

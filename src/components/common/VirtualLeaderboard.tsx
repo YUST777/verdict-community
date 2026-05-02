@@ -13,6 +13,15 @@ export default function VirtualLeaderboard<T = unknown>({ items, itemSize, child
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(600);
 
+  // Reset scroll position when items change to avoid blank views
+  // when switching from a long list to a short one while scrolled down.
+  useEffect(() => {
+    setScrollTop(0);
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [items]);
+
   useEffect(() => {
     const updateHeight = () => {
       if (containerRef.current) {

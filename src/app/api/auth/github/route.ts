@@ -28,6 +28,11 @@ export async function GET(req: NextRequest) {
                         );
                     },
                 },
+                cookieOptions: {
+                    path: '/',
+                    sameSite: 'lax',
+                    secure: true,
+                }
             }
         );
 
@@ -44,7 +49,21 @@ export async function GET(req: NextRequest) {
         }
 
         if (data?.url) {
-            return NextResponse.redirect(data.url);
+            // We must return the response object that has the cookies set on it
+            // We just update its Location header to the OAuth provider URL
+            const redirectResponse = NextResponse.redirect(data.url);
+            
+            // Copy all cookies from our original response to the redirect response
+            response.cookies.getAll().forEach(cookie => {
+                redirectResponse.cookies.set(cookie.name, cookie.value, {
+                    ...cookie,
+                    path: '/',
+                    sameSite: 'lax',
+                    secure: true,
+                });
+            });
+            
+            return redirectResponse;
         }
 
         return NextResponse.redirect(new URL('/register?error=no_oauth_url', baseUrl));

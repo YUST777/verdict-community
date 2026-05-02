@@ -5,14 +5,14 @@ import { updateSession } from '@/lib/supabase/middleware';
 // Simple in-memory rate limiter (per instance)
 const rateLimitMap = new Map<string, { count: number, resetTime: number }>();
 const WINDOW_SIZE = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 100; // 100 requests per minute per IP
+const MAX_REQUESTS = 500; // 500 requests per minute per IP
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
     let response: NextResponse;
 
-    // Skip session update for auth callback — it handles its own Supabase client
+    // Skip session update for auth callback paths — they handle their own Supabase clients
     const pathname = request.nextUrl.pathname;
-    if (pathname.startsWith('/api/auth/callback')) {
+    if (pathname.startsWith('/auth/callback') || pathname.startsWith('/api/auth/callback')) {
         response = NextResponse.next({ request });
     } else {
         try {

@@ -44,11 +44,12 @@ export async function GET(req: NextRequest) {
       } catch { /* universities table may have different schema */ }
     }
     const decryptedEmail = decrypt(user.email) || user.email;
+    const decryptedName = user.display_name ? (decrypt(user.display_name) || user.display_name) : (user.name ? (decrypt(user.name) || user.name) : null);
 
     let profile: any = {
       faculty: user.faculty,
       student_level: user.student_level,
-      name: user.display_name || user.name
+      name: decryptedName
     };
     
     if (user.student_id_encrypted) {
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
       user: {
         id: Number(user.id),
         email: decryptedEmail,
-        name: user.display_name || user.name || null,
+        name: decryptedName,
         username: user.username || null,
         isVerified: true,
         lastLogin: user.last_login_at,

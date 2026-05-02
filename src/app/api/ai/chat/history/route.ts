@@ -36,11 +36,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Missing problemId' }, { status: 400 });
         }
 
-        // 1. Load all conversations (tabs) for this user + problem
+        // 1. Load all conversations (tabs) for this user + context (currently only 'problem')
         const convResult = await query(
             `SELECT id, tab_id, title, metadata, created_at, updated_at
              FROM public.ai_conversations
-             WHERE user_id = $1 AND problem_id = $2
+             WHERE user_id = $1 AND context_id = $2 AND context_type = 'problem'
              ORDER BY created_at ASC`,
             [user.id, problemId]
         );
@@ -152,11 +152,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing content' }, { status: 400 });
         }
 
-        // 1. Upsert conversation (ON CONFLICT on user_id, problem_id, tab_id)
+        // 1. Upsert conversation (ON CONFLICT on user_id, context_id, context_type, tab_id)
         const convResult = await query(
-            `INSERT INTO public.ai_conversations (user_id, problem_id, tab_id, title, updated_at)
-             VALUES ($1, $2, $3, $4, NOW())
-             ON CONFLICT (user_id, problem_id, tab_id)
+            `INSERT INTO public.ai_conversations (user_id, context_id, context_type, tab_id, title, updated_at)
+             VALUES ($1, $2, 'problem', $3, $4, NOW())
+             ON CONFLICT (user_id, context_id, context_type, tab_id)
              DO UPDATE SET title = COALESCE(EXCLUDED.title, ai_conversations.title),
                            updated_at = NOW()
              RETURNING id`,
@@ -227,11 +227,11 @@ export async function PATCH(req: NextRequest) {
         }
 
         if (aiCode !== undefined) {
-            // Upsert conversation to include aiCode in metadata so we don't fail if saving before messages do
+            // Upsert conversation to include aiCode in metadata
             await query(
-                `INSERT INTO public.ai_conversations (user_id, problem_id, tab_id, metadata, updated_at)
-                 VALUES ($1, $2, $3, jsonb_build_object('aiCode', $4::jsonb), NOW())
-                 ON CONFLICT (user_id, problem_id, tab_id)
+                `INSERT INTO public.ai_conversations (user_id, context_id, context_type, tab_id, metadata, updated_at)
+                 VALUES ($1, $2, 'problem', $3, jsonb_build_object('aiCode', $4::jsonb), NOW())
+                 ON CONFLICT (user_id, context_id, context_type, tab_id)
                  DO UPDATE SET metadata = jsonb_set(COALESCE(public.ai_conversations.metadata, '{}'::jsonb), '{aiCode}', $4::jsonb),
                                updated_at = NOW()`,
                 [user.id, problemId, tabId, JSON.stringify(aiCode)]
@@ -244,7 +244,7 @@ export async function PATCH(req: NextRequest) {
                 `UPDATE public.ai_conversations
                  SET metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
                      updated_at = NOW()
-                 WHERE user_id = $1 AND problem_id = $2 AND tab_id = $3`,
+                 WHERE user_id = $1 AND context_id = $2 AND context_type = 'problem' AND tab_id = $3`,
                 [user.id, problemId, tabId, JSON.stringify(metadata)]
             );
         }
@@ -279,7 +279,7 @@ export async function DELETE(req: NextRequest) {
         // CASCADE delete will remove all ai_messages for this conversation
         await query(
             `DELETE FROM public.ai_conversations
-             WHERE user_id = $1 AND problem_id = $2 AND tab_id = $3`,
+             WHERE user_id = $1 AND context_id = $2 AND context_type = 'problem' AND tab_id = $3`,
             [user.id, problemId, tabId]
         );
 

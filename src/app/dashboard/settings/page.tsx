@@ -6,9 +6,11 @@ import {
     Settings, User, Bell, Shield, Palette, LogOut, Save,
     Loader2, Check, AlertTriangle, Mail, GraduationCap, ExternalLink
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UserSettings {
     name: string;
+    username: string;
     email: string;
     universityEmail?: string;
     universityName?: string;
@@ -74,9 +76,11 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { logout: globalLogout } = useAuth();
 
     // Form state
     const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
     const [codeforcesHandle, setCodeforcesHandle] = useState('');
     const [notifications, setNotifications] = useState({
         emailDigest: true,
@@ -121,6 +125,7 @@ export default function SettingsPage() {
 
                     setSettings(userSettings);
                     setName(userSettings.name);
+                    setUsername(user.username || '');
                     setCodeforcesHandle(userSettings.codeforcesHandle || '');
                     setNotifications(userSettings.notifications);
                     setPreferences(userSettings.preferences);
@@ -147,6 +152,7 @@ export default function SettingsPage() {
                 credentials: 'include',
                 body: JSON.stringify({
                     name,
+                    username,
                     codeforces_handle: codeforcesHandle,
                     notification_settings: notifications,
                     preferences,
@@ -169,7 +175,7 @@ export default function SettingsPage() {
 
     const handleLogout = async () => {
         try {
-            await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+            await globalLogout();
             router.push('/');
         } catch (err) {
             console.error('Failed to logout:', err);
@@ -226,6 +232,19 @@ export default function SettingsPage() {
 
             {/* Profile Section */}
             <SettingsSection title="Profile" icon={<User size={20} />}>
+                <SettingsRow label="Username" description="Your unique @handle">
+                    <div className="flex items-center gap-1.5 w-64 bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus-within:border-emerald-500/50 transition-colors">
+                        <span className="text-white/40 text-sm">@</span>
+                        <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                            placeholder="username"
+                            className="flex-1 bg-transparent border-none text-white text-sm focus:outline-none"
+                        />
+                    </div>
+                </SettingsRow>
+
                 <SettingsRow label="Display Name" description="Your name shown on leaderboards and profile">
                     <input
                         type="text"

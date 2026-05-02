@@ -91,11 +91,10 @@ function CustomDropdown({ value, onChange, options, placeholder, error }: Dropdo
 
 const emailSchema = z.object({
     email: z.string()
-        .min(1, 'Email is required')
-        .email('Please enter a valid email address')
+        .min(1, 'Email or Handle is required')
         .refine(
-            (email) => email.toLowerCase().endsWith('.edu.eg'),
-            'Please use your university email (.edu.eg)'
+            (val) => val.includes('@') ? val.toLowerCase().endsWith('.edu.eg') : true,
+            'Please use your university email (.edu.eg) or your handle'
         ),
 });
 
@@ -632,10 +631,10 @@ export default function UniversityAuth() {
                             <form onSubmit={handleSubmit}>
                                 <div className="mb-4">
                                     <input
-                                        type="email"
+                                        type="text"
                                         value={email}
                                         onChange={handleEmailChange}
-                                        placeholder="you@university.edu.eg"
+                                        placeholder="Email or Codeforces Handle"
                                         className={cn(inputBase, errors.email && inputError)}
                                         autoFocus
                                     />

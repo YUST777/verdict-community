@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { icpchueQuery } from '@/lib/icpchue_db';
 
 export async function GET(req: NextRequest) {
     try {
@@ -8,6 +9,10 @@ export async function GET(req: NextRequest) {
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        // Fetch user's university, email and stats
+        const userBasicResult = await query('SELECT email, university_id, original_id, stats FROM users WHERE id = $1', [user.id]);
+        const userBasic = userBasicResult.rows[0];
 
         // Fetch user's unlocked achievements
         const achievementsResult = await query(
@@ -20,39 +25,29 @@ export async function GET(req: NextRequest) {
 
         let achievements = achievementsResult.rows;
 
-        // Fetch user's progress stats for computing achievement progress
+        // Fetch user's solved count from cache
         const statsResult = await query(
-            `SELECT id, status, created_at 
-             FROM public.training_submissions 
-             WHERE user_id = $1 AND status = 'AC'`,
+            `SELECT solved_count as problems_solved
+             FROM public.leaderboard_cache
+             WHERE user_id = $1`,
             [user.id]
         );
 
-        const submissions = statsResult.rows;
-        const problemsSolved = submissions.length;
+        let problemsSolved = parseInt(statsResult.rows[0]?.problems_solved) || 0;
+        const currentStreak = parseInt(userBasic?.stats?.streak?.current) || 0;
 
-        // Calculate streak
-        let currentStreak = 0;
-        if (submissions.length > 0) {
-            const sortedDates = [...new Set(
-                submissions.map((s: any) => new Date(s.created_at).toISOString().split('T')[0])
-            )].sort().reverse();
-
-            const today = new Date().toISOString().split('T')[0];
-            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-            if (sortedDates[0] === today || sortedDates[0] === yesterday) {
-                currentStreak = 1;
-                for (let i = 1; i < sortedDates.length; i++) {
-                    const prevDate = new Date(sortedDates[i - 1]);
-                    const currDate = new Date(sortedDates[i]);
-                    const diffDays = Math.floor((prevDate.getTime() - currDate.getTime()) / 86400000);
-                    if (diffDays === 1) {
-                        currentStreak++;
-                    } else {
-                        break;
-                    }
-                }
+        // --- MERGE ICPC HUE DATA ---
+        if (Number(userBasic?.university_id) === 1 && userBasic?.original_id) {
+            try {
+                const hueUserId = userBasic.original_id;
+                const hueSolvedResult = await icpchueQuery(
+                    `SELECT COUNT(DISTINCT problem_id) as total FROM public.user_progress WHERE user_id = $1 AND status = 'SOLVED'`,
+                    [hueUserId]
+                );
+                const hueTotal = parseInt(hueSolvedResult.rows[0]?.total) || 0;
+                problemsSolved = Math.max(problemsSolved, hueTotal);
+            } catch (err) {
+                console.error('HUE DB achievements fetch failed:', err);
             }
         }
 
@@ -105,16 +100,6 @@ export async function GET(req: NextRequest) {
                 [user.id]
             );
             achievements = refreshed.rows;
-        }
-
-        // Ensure welcome achievement exists
-        if (!unlockedIds.has('welcome') && !toUnlock.includes('welcome')) {
-            achievements.unshift({
-                id: 'welcome-default',
-                achievement_id: 'welcome',
-                earned_at: new Date().toISOString(),
-                seen: true,
-            });
         }
 
         return NextResponse.json({

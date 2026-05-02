@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         }
 
         const result = await query(
-            'SELECT tabs FROM user_tabs WHERE user_id = $1',
+            "SELECT settings->'tabs' as tabs FROM users WHERE id = $1",
             [user.id]
         );
 
@@ -39,16 +39,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid tabs format. Expected an array.' }, { status: 400 });
         }
 
-        const queryText = `
-            INSERT INTO user_tabs (user_id, tabs, updated_at)
-            VALUES ($1, $2, NOW())
-            ON CONFLICT (user_id) 
-            DO UPDATE SET 
-                tabs = EXCLUDED.tabs,
-                updated_at = NOW();
-        `;
-
-        await query(queryText, [user.id, JSON.stringify(tabs)]);
+        await query(
+            "UPDATE users SET settings = jsonb_set(settings, '{tabs}', $1::jsonb) WHERE id = $2",
+            [JSON.stringify(tabs), user.id]
+        );
 
         return NextResponse.json({ success: true });
     } catch (error) {

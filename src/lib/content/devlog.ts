@@ -49,8 +49,10 @@ export const devLogs: LogEntry[] = [
         title: 'Cheat Detection & Behavior Tracking',
         subtitle: 'Comprehensive anti-cheating system ported from ICPCHUE',
         description: 'The full behavior tracking system is now active. Every problem-solving session tracks tab switches, paste events, idle time, DevTools detection, and more. Submissions record cheat metrics (tab_switches, paste_events, time_to_solve) for admin review.',
+        highlights: [
             'Shadow ban system: is_shadow_banned + cheating_flags on users',
             'Judge0 submit records tab_switches, paste_events, time_to_solve_seconds',
+        ],
     },
     {
         id: 4,

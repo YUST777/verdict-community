@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
+import { getCachedData, setCachedData } from '@/lib/redis';
 
 function getShortName(fullName: string | null): string {
   if (!fullName) return 'Anonymous';
@@ -14,60 +16,82 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const universityId = searchParams.get('universityId');
 
+    const cacheKey = `leaderboard:sheets:${universityId || 'all'}`;
+    const cached = await getCachedData<any>(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
     const uniFilter = universityId ? 'AND u.university_id = $1' : '';
     const params = universityId ? [universityId] : [];
 
     const result = await query(`
-      WITH all_solves AS (
-        SELECT user_id, contest_id || '-' || problem_index AS problem_key, submitted_at, id AS sub_id
-        FROM cf_submissions
-        WHERE verdict = 'Accepted'
-      ),
-      user_stats AS (
-        SELECT
-          user_id,
-          COUNT(DISTINCT problem_key) AS solved_count,
-          COUNT(sub_id) AS accepted_count,
-          MAX(submitted_at) AS last_solve_at
-        FROM all_solves
-        GROUP BY user_id
-      ),
-      sub_counts AS (
-        SELECT user_id, COUNT(*)::int AS total_submissions
-        FROM cf_submissions
-        GROUP BY user_id
-      )
       SELECT
         u.id,
         u.email,
         u.name,
+        u.username,
         u.university_id,
         u.display_name,
         uni.short_name AS university_short_name,
-        us.solved_count,
-        us.accepted_count,
-        COALESCE(sc.total_submissions, 0) AS total_submissions
-      FROM users u
-      INNER JOIN user_stats us ON u.id = us.user_id
-      LEFT JOIN sub_counts sc ON u.id = sc.user_id
-      LEFT JOIN universities uni ON uni.id = u.university_id
+        lc.solved_count,
+        lc.accepted_count,
+        lc.total_submissions,
+        u.cheating_flags
+      FROM public.leaderboard_cache lc
+      INNER JOIN public.users u ON u.id = lc.user_id
+      LEFT JOIN public.universities uni ON uni.id = u.university_id
       WHERE (u.is_shadow_banned = FALSE OR u.is_shadow_banned IS NULL)
+        AND lc.solved_count > 0
         ${uniFilter}
-      ORDER BY us.solved_count DESC, COALESCE(sc.total_submissions, 0) ASC, us.last_solve_at ASC
+      ORDER BY lc.solved_count DESC, lc.total_submissions ASC, lc.last_solve_at ASC
       LIMIT 100
     `, params);
 
-    const leaderboard = result.rows.map((row: any) => ({
-      userId: Number(row.id),
-      username: getShortName(row.display_name || row.name) || row.email?.split('@')[0] || 'Anonymous',
-      universityShortName: row.university_short_name || null,
-      solvedCount: Number(row.solved_count) || 0,
-      totalSubmissions: Number(row.total_submissions) || 0,
-      acceptedCount: Number(row.accepted_count) || 0,
-    }));
+    const leaderboard = result.rows.map((row: any) => {
+      // 1. Prioritize plaintext display_name if available
+      // 2. Otherwise decrypt the full name
+      // 3. If the username exists and isn't just a numeric string, use it
+      // 4. Fallback to email prefix
+      
+      let finalName = 'Anonymous';
+      
+      const rawName = row.display_name || row.name;
+      if (rawName) {
+        const decrypted = decrypt(rawName);
+        if (decrypted) {
+          finalName = getShortName(decrypted);
+        } else if (!/^[0-9a-f]{32,}$/i.test(rawName)) {
+          // If not hex-encrypted, use as is (unless it's a long hex string)
+          finalName = getShortName(rawName);
+        }
+      }
+      
+      // If we still have 'Anonymous' or a numeric/hex string, try username or email
+      if (finalName === 'Anonymous' || /^\d+$/.test(finalName) || /^[0-9a-f]{32,}$/i.test(finalName)) {
+        if (row.username && !/^\d+$/.test(row.username)) {
+          finalName = row.username;
+        } else if (row.email) {
+          const decryptedEmail = decrypt(row.email) || row.email;
+          finalName = decryptedEmail.split('@')[0];
+        }
+      }
 
-    return NextResponse.json({ success: true, leaderboard });
-  } catch {
+      return {
+        userId: Number(row.id),
+        username: finalName,
+        universityShortName: row.university_short_name || null,
+        solvedCount: Number(row.solved_count) || 0,
+        totalSubmissions: Number(row.total_submissions) || 0,
+        acceptedCount: Number(row.accepted_count) || 0,
+        cheatingFlags: Number(row.cheating_flags) || 0,
+      };
+    });
+
+    const responseData = { success: true, leaderboard };
+    await setCachedData(cacheKey, responseData, 600); // 10 minute cache
+
+    return NextResponse.json(responseData);
+  } catch (err) {
+    console.error('[Sheets-Leaderboard] Error:', err);
     return NextResponse.json({ success: false, leaderboard: [] }, { status: 500 });
   }
 }

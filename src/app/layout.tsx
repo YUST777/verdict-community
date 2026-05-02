@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { SmoothScroll } from "@/components/core/smooth-scroll";
 import { Providers } from "@/components/core/providers";
 import LocalToCloudSync from "@/components/auth/LocalToCloudSync";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -161,6 +162,11 @@ export default function RootLayout({
             {children}
           </SmoothScroll>
         </Providers>
+        <Script
+          src="/api/script.js"
+          data-site-id={process.env.NEXT_PUBLIC_RYBBIT_SITE_ID}
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

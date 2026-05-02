@@ -6,10 +6,13 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
     LayoutDashboard, Trophy, BookOpen, LogOut,
     Bell, Home, Menu, X, User, Settings,
-    ChevronRight, ChevronLeft, Users, Play
+    ChevronRight, ChevronLeft, Users, Play,
+    LayoutGrid, UserCircle, Code2, Library, Medal, Megaphone, Compass,
+    History, ListChecks, DoorOpen, BarChart2
 } from 'lucide-react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
 
 // NavItem component for sidebar navigation
 function NavItem({
@@ -116,6 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [transitionsEnabled, setTransitionsEnabled] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [loading, setLoading] = useState(true);
+    const { logout: globalLogout } = useAuth();
     const [user, setUser] = useState<any>(null);
 
     // Check authentication
@@ -200,8 +204,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     const handleLogout = async () => {
-        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-        router.push('/');
+        try {
+            await globalLogout();
+        } catch (err) {
+            console.error('Logout failed:', err);
+            window.location.href = '/';
+        }
     };
 
     const handleBack = () => {
@@ -260,12 +268,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Mobile Bottom Navigation */}
             <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0B0B0C] border-t border-white/10 pb-[env(safe-area-inset-bottom)] grid grid-cols-6 w-full items-end">
-                <MobileNavItem icon={<LayoutDashboard size={18} />} label="Home" active={activePage === 'Dashboard'} onClick={() => handleNav('/dashboard')} />
+                <MobileNavItem icon={<Home size={18} />} label="Home" active={activePage === 'Dashboard'} onClick={() => handleNav('/dashboard')} />
                 <MobileNavItem icon={<User size={18} />} label="Profile" active={activePage === 'Profile'} onClick={() => handleNav('/dashboard/profile')} />
-                <MobileNavItem icon={<Play size={18} />} label="Sessions" active={activePage === 'Sessions'} onClick={() => handleNav('/dashboard/sessions')} />
-                <MobileNavItem icon={<BookOpen size={18} />} label="Sheets" active={activePage === 'Sheets'} onClick={() => handleNav('/dashboard/sheets')} />
+                <MobileNavItem icon={<History size={18} />} label="Sessions" active={activePage === 'Sessions'} onClick={() => handleNav('/dashboard/sessions')} />
+                <MobileNavItem icon={<ListChecks size={18} />} label="Sheets" active={activePage === 'Sheets'} onClick={() => handleNav('/dashboard/sheets')} />
                 <MobileNavItem icon={<Trophy size={18} />} label="Rank" active={activePage === 'Leaderboard'} onClick={() => handleNav('/dashboard/leaderboard')} />
-                <MobileNavItem icon={<Bell size={18} />} label="News" active={activePage === 'News'} onClick={() => handleNav('/dashboard/news')} />
+                <MobileNavItem icon={<Megaphone size={18} />} label="News" active={activePage === 'News'} onClick={() => handleNav('/dashboard/news')} />
             </nav>
 
             {/* Mobile Menu Overlay */}
@@ -371,13 +379,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                     )}
                     <nav className="mt-2 space-y-1 px-2">
-                        <NavItem collapsed={isSidebarCollapsed} icon={<LayoutDashboard size={20} />} label="Dashboard" active={activePage === 'Dashboard'} onClick={() => handleNav('/dashboard')} />
+                        <NavItem collapsed={isSidebarCollapsed} icon={<Home size={20} />} label="Dashboard" active={activePage === 'Dashboard'} onClick={() => handleNav('/dashboard')} />
                         <NavItem collapsed={isSidebarCollapsed} icon={<User size={20} />} label="My Profile" active={activePage === 'Profile'} onClick={() => handleNav('/dashboard/profile')} />
-                        <NavItem collapsed={isSidebarCollapsed} icon={<Play size={20} />} label="Sessions" active={activePage === 'Sessions'} onClick={() => handleNav('/dashboard/sessions')} />
-                        <NavItem collapsed={isSidebarCollapsed} icon={<BookOpen size={20} />} label="Training Sheets" active={activePage === 'Sheets'} onClick={() => handleNav('/dashboard/sheets')} />
+                        <NavItem collapsed={isSidebarCollapsed} icon={<History size={20} />} label="Sessions" active={activePage === 'Sessions'} onClick={() => handleNav('/dashboard/sessions')} />
+                        <NavItem collapsed={isSidebarCollapsed} icon={<ListChecks size={20} />} label="Training Sheets" active={activePage === 'Sheets'} onClick={() => handleNav('/dashboard/sheets')} />
                         <NavItem collapsed={isSidebarCollapsed} icon={<Trophy size={20} />} label="Leaderboard" active={activePage === 'Leaderboard'} onClick={() => handleNav('/dashboard/leaderboard')} />
-                        <NavItem collapsed={isSidebarCollapsed} icon={<Bell size={20} />} label="Team News" active={activePage === 'News'} onClick={() => handleNav('/dashboard/news')} />
-                        <NavItem collapsed={isSidebarCollapsed} icon={<Users size={20} />} label="Rooms" active={activePage === 'Rooms'} onClick={() => handleNav('/dashboard/rooms')} />
+                        <NavItem collapsed={isSidebarCollapsed} icon={<Megaphone size={20} />} label="Team News" active={activePage === 'News'} onClick={() => handleNav('/dashboard/news')} />
+                        <NavItem collapsed={isSidebarCollapsed} icon={<DoorOpen size={20} />} label="Rooms" active={activePage === 'Rooms'} onClick={() => handleNav('/dashboard/rooms')} />
                     </nav>
                 </div>
 

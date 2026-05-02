@@ -112,12 +112,12 @@ export default function PublicProfilePage() {
                             {profile.profilePicture ? (
                                 <img src={profile.profilePicture} alt="" className="w-full h-full object-cover" />
                             ) : (
-                                profile.displayName.charAt(0).toUpperCase()
+                                (profile.displayName || 'A').charAt(0).toUpperCase()
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h1 className="text-2xl font-bold text-white truncate">{profile.displayName}</h1>
-                            <p className="text-[#808080] text-sm">@{profile.username}</p>
+                            <h1 className="text-2xl font-bold text-white truncate">{profile.displayName || 'Anonymous'}</h1>
+                            <p className="text-[#808080] text-sm">@{profile.username || 'trainee'}</p>
 
                             {profile.university && (
                                 <Link

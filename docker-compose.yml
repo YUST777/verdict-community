@@ -19,8 +19,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.3'
-          memory: 1G
+          cpus: '0.6'
+          memory: 1.5G
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health')\" || exit 1"]
       interval: 30s
@@ -46,8 +46,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 2G
+          cpus: '2.0'
+          memory: 4G
 
   # ===========================================
   # FRONTEND (Next.js)
@@ -60,6 +60,8 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-placeholder}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
+        NEXT_PUBLIC_RYBBIT_HOST: ${NEXT_PUBLIC_RYBBIT_HOST:-https://rybbit.yust.dev}
+        NEXT_PUBLIC_RYBBIT_SITE_ID: ${NEXT_PUBLIC_RYBBIT_SITE_ID:-7d378aeea805}
         REDIS_PASSWORD: ${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
     image: verdict-frontend:latest
     container_name: verdict-frontend
@@ -68,6 +70,8 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://verdict.run}
+      - NEXT_PUBLIC_RYBBIT_HOST=${NEXT_PUBLIC_RYBBIT_HOST:-https://rybbit.yust.dev}
+      - NEXT_PUBLIC_RYBBIT_SITE_ID=${NEXT_PUBLIC_RYBBIT_SITE_ID:-7d378aeea805}
       - REDIS_HOST=verdict-redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-mbeEea6PMhRfRdA484IjDQ6WgHW9t7O6j8fUPg8F44}
@@ -85,6 +89,11 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
     depends_on:
       - verdict-mirror
       - verdict-redis
@@ -153,8 +162,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 1G
 
   verdict-judge0-worker-2:
     image: mrkushalsm/judge0:latest
@@ -176,8 +185,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 1G
 
   verdict-judge0-db:
     image: postgres:16.2-alpine

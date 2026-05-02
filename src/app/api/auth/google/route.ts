@@ -18,6 +18,11 @@ export async function GET(req: NextRequest) {
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
             {
+                global: {
+                    headers: {
+                        'apiKey': process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+                    },
+                },
                 cookies: {
                     getAll() {
                         return req.cookies.getAll();
@@ -28,6 +33,11 @@ export async function GET(req: NextRequest) {
                         );
                     },
                 },
+                cookieOptions: {
+                    path: '/',
+                    sameSite: 'lax',
+                    secure: true,
+                }
             }
         );
 
@@ -48,7 +58,20 @@ export async function GET(req: NextRequest) {
         }
 
         if (data?.url) {
-            return NextResponse.redirect(data.url);
+            // We must return the response object that has the cookies set on it
+            const redirectResponse = NextResponse.redirect(data.url);
+            
+            // Copy all cookies from our original response to the redirect response
+            response.cookies.getAll().forEach(cookie => {
+                redirectResponse.cookies.set(cookie.name, cookie.value, {
+                    ...cookie,
+                    path: '/',
+                    sameSite: 'lax',
+                    secure: true,
+                });
+            });
+            
+            return redirectResponse;
         }
 
         return NextResponse.redirect(new URL('/register?error=no_oauth_url', baseUrl));

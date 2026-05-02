@@ -321,8 +321,9 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                                     </div>
                                 ) : (
                                     topMembers.map((member, index) => (
-                                        <div
+                                        <Link
                                             key={member.id}
+                                            href={`/profile/${member.username || member.id}`}
                                             className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors"
                                         >
                                             <div className={`w-8 text-center font-bold ${getRankColor(member.rank)}`}>
@@ -336,7 +337,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                                                 <p className="font-bold text-emerald-400">{member.solvedCount}</p>
                                                 <p className="text-[10px] text-[#666]">solved</p>
                                             </div>
-                                        </div>
+                                        </Link>
                                     ))
                                 )}
                             </div>

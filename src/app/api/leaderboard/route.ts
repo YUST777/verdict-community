@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
+import { getCachedData, setCachedData } from '@/lib/redis';
 
 function getShortName(fullName: string | null): string {
   if (!fullName) return 'Anonymous';
@@ -30,50 +32,51 @@ function extractUsername(profileUrl: string, platform: string): string | null {
 
 export async function GET() {
   try {
-    const headers = {
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-    };
+    const cacheKey = 'leaderboard:codeforces:top100';
+    const cached = await getCachedData<any>(cacheKey);
+    if (cached) return NextResponse.json(cached);
 
     const result = await query(`
       SELECT
         COALESCE(u.display_name, u.name, u.email) as name,
         u.codeforces_handle as codeforces_profile,
         u.codeforces_data,
-        (u.codeforces_data::json->>'handle') as handle
+        (u.codeforces_data->>'handle') as handle,
+        (u.codeforces_data->>'rating')::int as rating
       FROM users u
       WHERE u.codeforces_data IS NOT NULL
         AND (u.show_on_cf_leaderboard = TRUE OR u.show_on_cf_leaderboard IS NULL)
         AND (u.is_shadow_banned IS NULL OR u.is_shadow_banned = FALSE)
+        AND (u.codeforces_data->>'rating')::int > 0
+      ORDER BY (u.codeforces_data->>'rating')::int DESC
+      LIMIT 100
     `);
 
-    const leaderboard = result.rows
-      .map((row: any) => {
-        let data: any = {};
-        try {
-          data = typeof row.codeforces_data === 'string' ? JSON.parse(row.codeforces_data) : row.codeforces_data;
-        } catch {
-          data = {};
-        }
+    const leaderboard = result.rows.map((row: any) => {
+      let data: any = row.codeforces_data || {};
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch { data = {}; }
+      }
 
-        const rating = parseInt(String(data.rating || 0), 10);
-        const username = row.handle || extractUsername(row.codeforces_profile || '', 'codeforces') || '?';
+      const username = row.handle || extractUsername(row.codeforces_profile || '', 'codeforces') || '?';
+      const decryptedName = decrypt(row.name) || row.name;
 
-        return {
-          name: getShortName(row.name),
-          handle: username,
-          rating,
-          rank: data.rank || 'unrated',
-          maxRating: parseInt(String(data.maxRating || 0), 10),
-          profileUrl: row.codeforces_profile,
-        };
-      })
-      .filter((user: any) => user.rating > 0)
-      .sort((a: any, b: any) => b.rating - a.rating);
+      return {
+        name: getShortName(decryptedName),
+        handle: username,
+        rating: row.rating,
+        rank: data.rank || 'unrated',
+        maxRating: parseInt(String(data.maxRating || 0), 10),
+        profileUrl: row.codeforces_profile,
+      };
+    });
 
-    return NextResponse.json({ success: true, leaderboard }, { headers });
-  } catch {
+    const responseData = { success: true, leaderboard };
+    await setCachedData(cacheKey, responseData, 300); // 5 minute cache
+
+    return NextResponse.json(responseData);
+  } catch (err) {
+    console.error('[CF-Leaderboard] Error:', err);
     return NextResponse.json({ success: false, leaderboard: [], error: 'Failed to fetch leaderboard' }, { status: 500 });
   }
 }

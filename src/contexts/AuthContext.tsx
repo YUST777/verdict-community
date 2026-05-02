@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { CACHE_VERSION } from '@/lib/cache-version';
 import { fetchWithCache, clearApiCache } from '@/lib/cache/api-cache';
 import { createClient } from '@/lib/supabase/client';
+import { trackEvent } from '@/lib/analytics';
 
 interface User {
   id: number;
@@ -94,12 +95,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchUserProfile]);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut().catch(() => {});
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
-    setUser(null);
-    setProfile(null);
-    setIsAuthenticated(false);
-    clearApiCache();
+    trackEvent('logout');
+    try {
+      // 1. Supabase sign out
+      await supabase.auth.signOut().catch(() => {});
+      
+      // 2. Server-side logout (clears cookies)
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+      
+      // 3. Clear local state
+      setUser(null);
+      setProfile(null);
+      setIsAuthenticated(false);
+      clearApiCache();
+      
+      // 4. Clear localStorage and sessionStorage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // 5. Hard redirect to home
+        window.location.replace('/');
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+      if (typeof window !== 'undefined') {
+        window.location.replace('/');
+      }
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -114,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (token: string, redirectUrl = '/problemsets') => {
     void token;
+    trackEvent('login');
     refreshSession().then(() => {
       if (typeof window !== 'undefined') {
         window.location.href = redirectUrl;

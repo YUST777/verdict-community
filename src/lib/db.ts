@@ -42,7 +42,36 @@ export function getPool(): pg.Pool {
     return pool;
 }
 
+let icpchuePool: pg.Pool | null = null;
+
+export function getIcpchuePool(): pg.Pool {
+    if (!icpchuePool) {
+        const connectionString = process.env.ICPCHUE_DATABASE_URL;
+        if (!connectionString) {
+            throw new Error('ICPCHUE_DATABASE_URL is not set');
+        }
+
+        icpchuePool = new Pool({
+            connectionString,
+            ssl: { rejectUnauthorized: false },
+            max: 5,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 10000,
+        });
+
+        icpchuePool.on('error', (err) => {
+            console.error('[ICPC HUE DB] Unexpected error on idle client:', err.message);
+        });
+    }
+    return icpchuePool;
+}
+
 export async function query(text: string, params?: (string | number | boolean | null | object)[]) {
     const pool = getPool();
+    return pool.query(text, params);
+}
+
+export async function icpchueQuery(text: string, params?: (string | number | boolean | null | object)[]) {
+    const pool = getIcpchuePool();
     return pool.query(text, params);
 }

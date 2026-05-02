@@ -12,6 +12,7 @@ const settingsUpdateSchema = z.object({
         achievementAlerts: z.boolean().optional(),
         leaderboardUpdates: z.boolean().optional(),
     }).optional(),
+    username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores').optional(),
     preferences: z.object({
         theme: z.enum(['dark', 'light', 'system']).optional(),
         showOnLeaderboard: z.boolean().optional(),
@@ -117,6 +118,16 @@ export async function PATCH(req: NextRequest) {
             updates.push(`name = $${paramIndex++}`);
             values.push(result.data.name);
         }
+
+        if (result.data.username !== undefined) {
+            // Check uniqueness
+            const existing = await query('SELECT id FROM public.users WHERE username = $1 AND id != $2', [result.data.username, user.id]);
+            if (existing.rows.length > 0) {
+                return NextResponse.json({ error: 'Username already taken' }, { status: 400 });
+            }
+            updates.push(`username = $${paramIndex++}`);
+            values.push(result.data.username.toLowerCase());
+        }
         
         if (result.data.codeforces_handle !== undefined) {
             updates.push(`codeforces_handle = $${paramIndex++}`);
@@ -131,8 +142,6 @@ export async function PATCH(req: NextRequest) {
                     if (cfRes.ok) {
                         const cfData = await cfRes.json();
                         if (cfData.status === 'OK' && cfData.result?.[0]) {
-                            updates.push(`codeforces_rating = $${paramIndex++}`);
-                            values.push(cfData.result[0].rating || null);
                             updates.push(`codeforces_data = $${paramIndex++}`);
                             values.push(JSON.stringify(cfData.result[0]));
                         }
@@ -141,8 +150,6 @@ export async function PATCH(req: NextRequest) {
                     console.warn('Failed to fetch CF data:', e);
                 }
             } else {
-                updates.push(`codeforces_rating = $${paramIndex++}`);
-                values.push(null);
                 updates.push(`codeforces_data = $${paramIndex++}`);
                 values.push(null);
             }

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
             `
             SELECT id
             FROM ai_conversations
-            WHERE user_id = $1 AND problem_id = $2
+            WHERE user_id = $1 AND context_id = $2 AND context_type = 'problem'
             ORDER BY updated_at DESC
             LIMIT 1
         `,
@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
         } else {
             const convResult = await query(
                 `
-                INSERT INTO ai_conversations (user_id, problem_id, updated_at)
-                VALUES ($1, $2, NOW())
+                INSERT INTO ai_conversations (user_id, context_id, context_type, updated_at)
+                VALUES ($1, $2, 'problem', NOW())
                 RETURNING id
             `,
                 [user.id, problemId]

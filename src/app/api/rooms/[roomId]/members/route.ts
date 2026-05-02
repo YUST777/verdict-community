@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
 
 // GET /api/rooms/[roomId]/members - Get room members with pagination
 export async function GET(
@@ -63,20 +64,24 @@ export async function GET(
             LIMIT $2 OFFSET $3
         `, [universityId, limit, offset]);
 
-        const members = membersResult.rows.map((m: any) => ({
-            id: m.id,
-            name: m.display_name || m.name || m.username || 'Anonymous',
-            username: m.username,
-            role: m.role || 'member',
-            joinedAt: m.created_at,
-            stats: {
-                solvedCount: parseInt(m.solved_count) || 0,
-                universityRank: parseInt(m.university_rank) || 0,
-                nationalRank: parseInt(m.national_rank) || 0,
-                currentStreak: parseInt(m.current_streak) || 0,
-                longestStreak: parseInt(m.longest_streak) || 0,
-            },
-        }));
+        const members = membersResult.rows.map((m: any) => {
+            const rawName = m.display_name || m.name;
+            const decryptedName = rawName ? (decrypt(rawName) || rawName) : (m.username || 'Anonymous');
+            return {
+                id: m.id,
+                name: decryptedName,
+                username: m.username,
+                role: m.role || 'member',
+                joinedAt: m.created_at,
+                stats: {
+                    solvedCount: parseInt(m.solved_count) || 0,
+                    universityRank: parseInt(m.university_rank) || 0,
+                    nationalRank: parseInt(m.national_rank) || 0,
+                    currentStreak: parseInt(m.current_streak) || 0,
+                    longestStreak: parseInt(m.longest_streak) || 0,
+                },
+            };
+        });
 
         return NextResponse.json({
             members,

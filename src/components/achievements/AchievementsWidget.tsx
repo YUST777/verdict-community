@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronRight, Lock } from 'lucide-react';
+import { ChevronRight, Lock, Zap, Flame, CheckCircle2, Trophy, Award, Crown, Star } from 'lucide-react';
 
 interface AchievementIconProps {
   imageSrc?: string | null;
@@ -31,7 +31,7 @@ function AchievementIcon({ imageSrc, icon, active, tier }: AchievementIconProps)
           )}
         </>
       ) : (
-        icon && <div className="w-5 h-5">{icon}</div>
+        icon && <div className={active ? '' : 'opacity-20 grayscale'}>{icon}</div>
       )}
       {active && <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />}
     </div>
@@ -65,12 +65,14 @@ export default function AchievementsWidget({ profile, user }: AchievementsWidget
   const isSheet1Unlocked = typedProfile?.sheet_1_solved === true;
   const isApprovalUnlocked = typedProfile?.is_approval_unlocked === true;
 
+  const unlockedIds = new Set((typedProfile?.achievements as any[])?.map(a => a.achievement_id || a.id) || []);
+
   const achievements = [
-    { id: 'welcome', imageSrc: '/images/achievements/WELCOME.webp', unlocked: true, rarity: 1 },
-    { id: 'approval', imageSrc: '/images/achievements/done_approvalcamp.webp', unlocked: isApprovalUnlocked, rarity: 2 },
-    { id: 'sheet-1', imageSrc: '/images/achievements/sheet1acheavment.webp', unlocked: isSheet1Unlocked, rarity: 2 },
-    { id: '500pts', imageSrc: hasCodeforcesLinked ? '/images/achievements/500pts.webp' : null, unlocked: is500PtsUnlocked, rarity: 2 },
-    { id: 'instructor', imageSrc: '/images/achievements/instructor.webp', unlocked: isInstructorUnlocked, rarity: 3 },
+    { id: 'first-solve', icon: <Zap size={24} />, unlocked: unlockedIds.has('first-solve'), rarity: 1 },
+    { id: 'streak-7', icon: <Flame size={24} />, unlocked: unlockedIds.has('streak-7'), rarity: 2 },
+    { id: 'problems-50', icon: <Trophy size={24} />, unlocked: unlockedIds.has('problems-50'), rarity: 2 },
+    { id: 'problems-100', icon: <Award size={24} />, unlocked: unlockedIds.has('problems-100'), rarity: 3 },
+    { id: 'problems-249', icon: <Crown size={24} />, unlocked: unlockedIds.has('problems-249'), rarity: 4 },
   ];
 
   const unlockedAchievements = achievements.filter(a => a.unlocked).sort((a, b) => b.rarity - a.rarity);
@@ -111,13 +113,14 @@ export default function AchievementsWidget({ profile, user }: AchievementsWidget
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-3 mb-6 relative z-10">
+          <div className="grid grid-cols-5 gap-3 mb-6 relative z-10">
             {displayAchievements.map((ach) => (
-              ach.imageSrc ? (
-                <AchievementIcon key={ach.id} imageSrc={ach.imageSrc} active={ach.unlocked} tier={ach.unlocked ? 'emerald' : 'locked'} />
-              ) : (
-                <AchievementIcon key={ach.id} icon={<Lock />} active={false} tier="locked" />
-              )
+              <AchievementIcon 
+                key={ach.id} 
+                icon={ach.icon} 
+                active={ach.unlocked} 
+                tier={ach.unlocked ? (ach.rarity >= 3 ? 'purple' : ach.rarity >= 2 ? 'blue' : 'emerald') : 'locked'} 
+              />
             ))}
           </div>
 

@@ -10,6 +10,7 @@ import { motion, useMotionValue, useMotionTemplate, useAnimationFrame } from "fr
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { parseCodeforcesUrl, getInternalRoute } from "@/lib/parseCodeforcesUrl";
+import { trackEvent } from "@/lib/analytics";
 
 /* Grid Background */
 const GridPattern = ({ offsetX, offsetY, size }: { offsetX: any; offsetY: any; size: number }) => (
@@ -86,6 +87,14 @@ export default function WorkspaceNewTabPage() {
 
             // Single problem â navigate directly
             const route = getInternalRoute(parsed);
+
+            trackEvent("workspace_search", {
+                url: inputUrl.trim(),
+                type: parsed.isSheet ? "sheet" : "problem",
+                contestId: parsed.contestId,
+                problemId: parsed.problemId || "N/A"
+            });
+
             router.push(route);
         } catch (err: any) {
             console.error(err?.message || err);
