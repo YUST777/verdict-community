@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { SmoothScroll } from "@/components/core/smooth-scroll";
 import { Providers } from "@/components/core/providers";
 import LocalToCloudSync from "@/components/auth/LocalToCloudSync";
+import EduStatusPrompt from "@/components/auth/EduStatusPrompt";
 import Script from "next/script";
 import "./globals.css";
 
@@ -158,6 +159,7 @@ export default function RootLayout({
       >
         <Providers>
           <LocalToCloudSync />
+          <EduStatusPrompt />
           <SmoothScroll>
             {children}
           </SmoothScroll>

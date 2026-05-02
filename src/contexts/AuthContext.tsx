@@ -25,6 +25,7 @@ interface User {
     slug: string;
     type: string;
   } | null;
+  edu_eg_status?: 'pending' | 'declined' | 'verified';
 }
 
 interface Profile {

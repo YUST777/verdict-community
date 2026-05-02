@@ -54,33 +54,42 @@ async function handleUniversityRegistration(body: Record<string, unknown>) {
         );
     }
 
-    // 2. Register with Supabase Auth
+    // 2. Check if user is already logged in (Linking flow)
     const supabase = await createClient();
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password: data.password,
-        options: {
-            data: {
-                full_name: data.name,
+    const { data: { user: existingUser } } = await supabase.auth.getUser();
+    
+    let authId: string;
+
+    if (existingUser) {
+        // Use existing Auth ID for linking
+        authId = existingUser.id;
+    } else {
+        // Register new user with Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: normalizedEmail,
+            password: data.password,
+            options: {
+                data: {
+                    full_name: data.name,
+                }
             }
+        });
+
+        if (authError) {
+            return NextResponse.json(
+                { success: false, error: authError.message },
+                { status: 400 }
+            );
         }
-    });
 
-    if (authError) {
-        return NextResponse.json(
-            { success: false, error: authError.message },
-            { status: 400 }
-        );
+        if (!authData.user) {
+            return NextResponse.json(
+                { success: false, error: 'Failed to create auth account' },
+                { status: 500 }
+            );
+        }
+        authId = authData.user.id;
     }
-
-    if (!authData.user) {
-        return NextResponse.json(
-            { success: false, error: 'Failed to create auth account' },
-            { status: 500 }
-        );
-    }
-
-    const authId = authData.user.id;
 
     // 3. Process extended profile data
     const universityDomain = extractUniversityDomain(normalizedEmail);
@@ -125,8 +134,21 @@ async function handleUniversityRegistration(body: Record<string, unknown>) {
                 student_id_encrypted, student_id_blind_index,
                 national_id_encrypted, national_id_blind_index,
                 telephone_encrypted, telephone_blind_index,
-                created_at, password_hash
-            ) VALUES ($1, $2, $3, $4, $5, 'university', $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), 'supabase-managed')
+                created_at, password_hash, edu_eg_status
+            ) VALUES ($1, $2, $3, $4, $5, 'university', $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), 'supabase-managed', 'verified')
+            ON CONFLICT (auth_id) DO UPDATE SET
+                university_id = EXCLUDED.university_id,
+                tier = EXCLUDED.tier,
+                faculty = EXCLUDED.faculty,
+                student_level = EXCLUDED.student_level,
+                student_id_encrypted = EXCLUDED.student_id_encrypted,
+                student_id_blind_index = EXCLUDED.student_id_blind_index,
+                national_id_encrypted = EXCLUDED.national_id_encrypted,
+                national_id_blind_index = EXCLUDED.national_id_blind_index,
+                telephone_encrypted = EXCLUDED.telephone_encrypted,
+                telephone_blind_index = EXCLUDED.telephone_blind_index,
+                edu_eg_status = 'verified',
+                is_email_verified = true
             RETURNING id`,
             [
                 encryptedEmail, emailBlindIndex, authId, encryptedName,

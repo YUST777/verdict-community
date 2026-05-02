@@ -33,7 +33,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https:",
       "font-src 'self' https://fonts.gstatic.com",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://codeforces.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.groq.com https://openrouter.ai https://api.together.xyz https://api.fireworks.ai https://api.mistral.ai https://api.deepseek.com https://api.cohere.ai https://texttospeech.googleapis.com",
+      "connect-src 'self' https://rybbit.yust.dev https://*.supabase.co wss://*.supabase.co https://codeforces.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.groq.com https://openrouter.ai https://api.together.xyz https://api.fireworks.ai https://api.mistral.ai https://api.deepseek.com https://api.cohere.ai https://texttospeech.googleapis.com",
       "frame-src https://www.google.com",
       "frame-ancestors 'self'",
     ].join("; "),
@@ -67,6 +67,26 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/script.js",
+        destination: `${process.env.NEXT_PUBLIC_RYBBIT_HOST}/api/script.js`,
+      },
+      {
+        source: "/api/track",
+        destination: `${process.env.NEXT_PUBLIC_RYBBIT_HOST}/api/track`,
+      },
+      {
+        source: "/api/site/tracking-config/:path*",
+        destination: `${process.env.NEXT_PUBLIC_RYBBIT_HOST}/api/site/tracking-config/:path*`,
+      },
+      {
+        source: "/api/identify",
+        destination: `${process.env.NEXT_PUBLIC_RYBBIT_HOST}/api/identify`,
       },
     ];
   },

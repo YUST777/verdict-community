@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       `SELECT id, email, last_login_at, created_at,
               telegram_username, role, profile_picture, codeforces_handle, codeforces_data,
               university_id, faculty, username, display_name, name, student_level,
-              student_id_encrypted, national_id_encrypted, telephone_encrypted
+              student_id_encrypted, national_id_encrypted, telephone_encrypted, edu_eg_status
        FROM users
        WHERE id = $1`,
       [authUser.id]
@@ -106,6 +106,7 @@ export async function GET(req: NextRequest) {
         faculty: user.faculty || null,
         studentLevel: user.student_level || null,
         university: universityInfo,
+        edu_eg_status: user.edu_eg_status || 'pending',
       },
       profile,
     });
