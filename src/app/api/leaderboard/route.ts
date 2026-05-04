@@ -38,14 +38,14 @@ export async function GET() {
 
     const result = await query(`
       SELECT
-        COALESCE(u.display_name, u.name, u.email) as name,
+        COALESCE(u.display_name, u.username, u.email) as name,
         u.codeforces_handle as codeforces_profile,
         u.codeforces_data,
         (u.codeforces_data->>'handle') as handle,
         (u.codeforces_data->>'rating')::int as rating
       FROM users u
       WHERE u.codeforces_data IS NOT NULL
-        AND (u.show_on_cf_leaderboard = TRUE OR u.show_on_cf_leaderboard IS NULL)
+        AND (u.show_on_leaderboard = TRUE OR u.show_on_leaderboard IS NULL)
         AND (u.is_shadow_banned IS NULL OR u.is_shadow_banned = FALSE)
         AND (u.codeforces_data->>'rating')::int > 0
       ORDER BY (u.codeforces_data->>'rating')::int DESC

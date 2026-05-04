@@ -20,30 +20,53 @@ export async function GET(req: NextRequest) {
     const cached = await getCachedData<any>(cacheKey);
     if (cached) return NextResponse.json(cached);
 
-    const uniFilter = universityId ? 'AND u.university_id = $1' : '';
-    const params = universityId ? [universityId] : [];
-
-    const result = await query(`
-      SELECT
-        u.id,
-        u.email,
-        u.username,
-        u.university_id,
-        u.display_name,
-        uni.short_name AS university_short_name,
-        lc.solved_count,
-        lc.accepted_count,
-        lc.total_submissions,
-        u.cheating_flags
-      FROM public.leaderboard_cache lc
-      INNER JOIN public.users u ON u.id = lc.user_id
-      LEFT JOIN public.universities uni ON uni.id = u.university_id
-      WHERE (u.is_shadow_banned = FALSE OR u.is_shadow_banned IS NULL)
-        AND lc.solved_count > 0
-        ${uniFilter}
-      ORDER BY lc.solved_count DESC, lc.total_submissions ASC, lc.last_solve_at ASC
-      LIMIT 100
-    `, params);
+    let result;
+    if (universityId === '1') {
+      const { icpchueQuery } = await import('@/lib/db');
+      result = await icpchueQuery(`
+        SELECT
+          u.id,
+          u.email,
+          a.name AS display_name,
+          ss.distinct_solved AS solved_count,
+          ss.total_accepted AS accepted_count,
+          ss.total_submissions,
+          u.cheating_flags,
+          'HUE' AS university_short_name
+        FROM public.users u
+        INNER JOIN public.applications a ON a.id = u.application_id
+        LEFT JOIN public.user_solve_stats ss ON ss.user_id = u.id
+        WHERE (u.is_shadow_banned = FALSE)
+          AND (u.show_on_sheets_leaderboard = TRUE)
+          AND ss.distinct_solved > 0
+        ORDER BY ss.distinct_solved DESC, ss.total_submissions ASC, ss.last_solve_at ASC
+        LIMIT 100
+      `);
+    } else {
+      const uniFilter = universityId ? 'AND u.university_id = $1' : '';
+      const params = universityId ? [universityId] : [];
+      result = await query(`
+        SELECT
+          u.id,
+          u.email,
+          u.username,
+          u.university_id,
+          u.display_name,
+          uni.short_name AS university_short_name,
+          lc.solved_count,
+          lc.accepted_count,
+          lc.total_submissions,
+          u.cheating_flags
+        FROM public.leaderboard_cache lc
+        INNER JOIN public.users u ON u.id = lc.user_id
+        LEFT JOIN public.universities uni ON uni.id = u.university_id
+        WHERE (u.is_shadow_banned = FALSE OR u.is_shadow_banned IS NULL)
+          AND lc.solved_count > 0
+          ${uniFilter}
+        ORDER BY lc.solved_count DESC, lc.total_submissions ASC, lc.last_solve_at ASC
+        LIMIT 100
+      `, params);
+    }
 
     const leaderboard = result.rows.map((row: any) => {
       // 1. Prioritize plaintext display_name if available

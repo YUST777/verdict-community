@@ -56,7 +56,7 @@ export async function GET(
                 a.body,
                 a.pinned,
                 a.created_at,
-                u.name as author_name
+                u.display_name as author_name
             FROM room_announcements a
             LEFT JOIN users u ON u.id = a.author_id
             WHERE a.room_id = $1
@@ -68,7 +68,6 @@ export async function GET(
         const topMembersResult = await query(`
             SELECT 
                 u.id,
-                u.name,
                 u.display_name,
                 u.username,
                 u.email,

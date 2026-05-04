@@ -46,7 +46,6 @@ export async function GET(
         const membersResult = await query(`
             SELECT 
                 u.id,
-                u.name,
                 u.display_name,
                 u.username,
                 u.created_at,

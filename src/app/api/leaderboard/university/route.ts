@@ -56,43 +56,74 @@ export async function GET(req: NextRequest) {
                 })),
             };
         } else if (scope === 'university' && universityId) {
-            // ... (university logic) ...
-            const result = await query(`
-                SELECT
-                    u.id as user_id,
-                    u.username,
-                    u.display_name,
-                    u.name,
-                    u.email,
-                    u.student_id_encrypted,
-                    u.codeforces_handle,
-                    u.profile_picture,
-                    lc.solved_count,
-                    lc.university_rank,
-                    lc.last_solve_at,
-                    u.cheating_flags
-                FROM leaderboard_cache lc
-                INNER JOIN users u ON u.id = lc.user_id
-                WHERE lc.university_id = $1
-                  AND (u.is_shadow_banned = false OR u.is_shadow_banned IS NULL)
-                  AND (u.show_on_leaderboard = true OR u.show_on_leaderboard IS NULL)
-                ORDER BY lc.solved_count DESC, lc.last_solve_at ASC
-                LIMIT 100
-            `, [universityId]);
+            let result;
+            let uni;
 
-            const uniResult = await query(
-                'SELECT name, short_name, slug FROM universities WHERE id = $1',
-                [universityId]
-            );
-            const uni = uniResult.rows[0];
+            if (universityId === '1') {
+                // Fetch HUE students from legacy icpchue database
+                const { icpchueQuery } = await import('@/lib/db');
+                const legacyResult = await icpchueQuery(`
+                    SELECT
+                        u.id as user_id,
+                        a.name as display_name,
+                        u.codeforces_handle,
+                        u.profile_picture,
+                        ss.distinct_solved as solved_count,
+                        ss.total_accepted as accepted_count,
+                        ss.total_submissions,
+                        u.cheating_flags,
+                        ss.last_solve_at
+                    FROM users u
+                    INNER JOIN applications a ON a.id = u.application_id
+                    LEFT JOIN user_solve_stats ss ON ss.user_id = u.id
+                    WHERE u.is_shadow_banned = false
+                      AND u.show_on_sheets_leaderboard = true
+                    ORDER BY ss.distinct_solved DESC, ss.last_solve_at ASC
+                    LIMIT 100
+                `);
+                
+                result = legacyResult;
+                uni = { name: 'ICPC HUE', shortName: 'HUE', slug: 'hue' };
+            } else {
+                // Fetch other universities from current verdict database
+                const currentResult = await query(`
+                    SELECT
+                        u.id as user_id,
+                        u.username,
+                        u.display_name,
+                        u.email,
+                        u.student_id_encrypted,
+                        u.codeforces_handle,
+                        u.profile_picture,
+                        lc.solved_count,
+                        lc.university_rank,
+                        lc.last_solve_at,
+                        u.cheating_flags
+                    FROM leaderboard_cache lc
+                    INNER JOIN users u ON u.id = lc.user_id
+                    WHERE lc.university_id = $1
+                      AND (u.is_shadow_banned = false OR u.is_shadow_banned IS NULL)
+                      AND (u.show_on_leaderboard = true OR u.show_on_leaderboard IS NULL)
+                    ORDER BY lc.solved_count DESC, lc.last_solve_at ASC
+                    LIMIT 100
+                `, [universityId]);
+                
+                result = currentResult;
+                const uniResult = await query(
+                    'SELECT name, short_name, slug FROM universities WHERE id = $1',
+                    [universityId]
+                );
+                uni = uniResult.rows[0];
+            }
 
             responseData = {
                 success: true,
                 scope: 'university',
                 university: uni ? { name: uni.name, shortName: uni.short_name, slug: uni.slug } : null,
                 leaderboard: result.rows.map((r: any, i: number) => {
-                    const rawName = r.display_name || r.name;
-                    const decryptedName = rawName ? (decrypt(rawName) || rawName) : (r.username || 'Anonymous');
+                    // For legacy, we don't have encrypted names, they are plaintext in applications table
+                    const rawName = r.display_name;
+                    const decryptedName = universityId === '1' ? rawName : (rawName ? (decrypt(rawName) || rawName) : (r.username || 'Anonymous'));
                     
                     let identifier = r.username;
                     if (!identifier && r.student_id_encrypted) {
@@ -109,7 +140,7 @@ export async function GET(req: NextRequest) {
                         rank: i + 1,
                         userId: parseInt(r.user_id),
                         username: decryptedName,
-                        handle: identifier || 'trainee',
+                        handle: identifier || r.codeforces_handle || 'trainee',
                         codeforcesHandle: r.codeforces_handle,
                         profilePicture: r.profile_picture,
                         solvedCount: parseInt(r.solved_count) || 0,
@@ -125,7 +156,6 @@ export async function GET(req: NextRequest) {
                     u.id as user_id,
                     u.username,
                     u.display_name,
-                    u.name,
                     u.codeforces_handle,
                     u.profile_picture,
                     uni.short_name as university_short_name,
