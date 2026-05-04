@@ -3,6 +3,8 @@ import { checkRateLimit } from '@/lib/simple-rate-limit';
 import { query } from '@/lib/db';
 import { createBlindIndex, hashOTP } from '@/lib/encryption';
 import { otpSchema, emailSchema } from '@/lib/validation';
+import { verifyAuth } from '@/lib/auth';
+import { icpchueQuery } from '@/lib/icpchue_db';
 
 const MAX_ATTEMPTS = 5;
 
@@ -117,28 +119,79 @@ export async function POST(req: NextRequest) {
             [otpRecord.id]
         );
 
+        // --- AUTH LINKING LOGIC ---
+        const authUser = await verifyAuth(req);
+        if (authUser) {
+            console.log('[Verify-OTP] Linking email to authenticated user:', { authId: authUser.id, eduEmail: normalizedEmail });
+            
+            // Check if another user already has this edu email verified in Verdict
+            const conflictUser = await query(
+                'SELECT id FROM public.users WHERE edu_eg_email_blind_index = $1 AND auth_id != $2',
+                [emailBlindIndex, authUser.id]
+            );
+
+            if (conflictUser.rows.length > 0) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'This university email is already linked to another account.'
+                }, { status: 400 });
+            }
+
+            // --- ICPCHUE CHECK ---
+            const icpchueUser = await icpchueQuery(
+                'SELECT id FROM public.users WHERE email_blind_index = $1',
+                [emailBlindIndex]
+            );
+
+            const isExistingIcpchue = icpchueUser.rows.length > 0;
+
+            // Update current user
+            await query(
+                `UPDATE public.users 
+                 SET edu_eg_status = 'verified', 
+                     edu_eg_email_blind_index = $1,
+                     is_university_verified = true
+                 WHERE auth_id = $2`,
+                [emailBlindIndex, authUser.auth_id]
+            );
+
+            return NextResponse.json({
+                success: true,
+                verified: true,
+                linked: true,
+                hasAccount: true,
+                isIcpchueUser: isExistingIcpchue
+            });
+        }
+
+        // --- STANDARD REGISTRATION FLOW (If not logged in) ---
         // Check if user already exists (returning user)
         const existingUser = await query(
-            'SELECT id, name FROM public.users WHERE email_blind_index = $1',
+            'SELECT id, display_name FROM public.users WHERE email_blind_index = $1',
             [emailBlindIndex]
         );
 
-        if (existingUser.rows.length > 0) {
+        // Check icpchue too
+        const icpchueUser2 = await icpchueQuery(
+            'SELECT id FROM public.users WHERE email_blind_index = $1',
+            [emailBlindIndex]
+        );
+
+        if (existingUser.rows.length > 0 || icpchueUser2.rows.length > 0) {
             return NextResponse.json({
                 success: true,
                 verified: true,
                 hasAccount: true,
-                userName: existingUser.rows[0].name
+                isIcpchueUser: icpchueUser2.rows.length > 0,
+                userName: existingUser.rows[0]?.display_name || 'Student'
             });
         }
-
-        // Applications table removed
 
         return NextResponse.json({
             success: true,
             verified: true,
             hasAccount: false,
-            hasApplication: false
+            isIcpchueUser: false
         });
 
     } catch (err) {

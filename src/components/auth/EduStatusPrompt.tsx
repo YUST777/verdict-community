@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { X, GraduationCap, ArrowRight, Loader2 } from 'lucide-react';
+import { Check, Trophy, LineChart, Bot, Users, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function EduStatusPrompt() {
@@ -25,7 +25,6 @@ export default function EduStatusPrompt() {
     const handleAction = async (isStudent: boolean) => {
         try {
             setLoading(true);
-            const status = isStudent ? 'pending_verification' : 'declined';
             
             const res = await fetch('/api/user/edu-status', {
                 method: 'POST',
@@ -35,8 +34,8 @@ export default function EduStatusPrompt() {
 
             if (res.ok) {
                 if (isStudent) {
-                    // Redirect to registration/verification flow
-                    router.push('/register');
+                    // Redirect to registration/verification flow with edu mode
+                    router.push('/register?mode=edu');
                     setIsVisible(false);
                 } else {
                     // Just close and refresh
@@ -52,54 +51,77 @@ export default function EduStatusPrompt() {
     };
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div 
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300" 
-                onClick={() => handleAction(false)} // Safe fallback to close
+        <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
+            {/* Dialog Overlay */}
+            <div
+                onClick={() => handleAction(false)}
+                className="fixed inset-0 bg-black/60 backdrop-blur-md animate-in fade-in duration-500"
             />
 
-            {/* Modal */}
-            <div className="relative w-full max-w-md bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                {/* Accent line */}
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-600" />
+            {/* Dialog Content */}
+            <div className="relative flex max-h-[calc(100%-2rem)] w-full flex-col overflow-hidden border border-white/10 bg-[#121212]/90 backdrop-blur-2xl shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] duration-500 animate-in fade-in zoom-in-95 slide-in-from-bottom-4 sm:max-w-[440px] rounded-[2.5rem] ring-1 ring-white/5">
                 
-                <div className="p-8 pt-10">
-                    <div className="flex flex-col items-center text-center">
-                        <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 border border-emerald-500/20">
-                            <GraduationCap className="text-emerald-400" size={32} />
+                {/* Video Banner */}
+                <div className="relative h-40 w-full shrink-0 bg-black overflow-hidden">
+                    <video
+                        src="/video.mp4"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="h-full w-full object-cover opacity-60 scale-105"
+                    />
+                    {/* Gradient overlay to blend video into the background smoothly */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#121212]/20 to-transparent" />
+                </div>
+
+                {/* Main Content Wrapper */}
+                <div className="flex-1 overflow-y-auto px-8 pb-10 pt-4">
+                    
+                    {/* Dialog Header & Features Combined */}
+                    <div className="flex flex-col space-y-6 text-center">
+                        <div className="space-y-2">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Member Exclusive</span>
+                            <h2 className="text-3xl font-bold tracking-tight text-white">
+                                Are you a student in Egypt?
+                            </h2>
                         </div>
-
-                        <h2 className="text-2xl font-bold text-white mb-2">
-                            Are you a student in Egypt?
-                        </h2>
-                        <p className="text-white/60 mb-8 max-w-sm">
-                            Unlock ECPC training with <span className="text-emerald-400 font-semibold">+650 problems</span>, private leaderboard rooms, monitoring, and exclusive rewards.
+                        
+                        <p className="text-[15px] text-zinc-400 leading-[1.8] font-medium">
+                            Unlock your full potential in competitive programming with exclusive ECPC training benefits.
+                            Unlock access to <span className="text-white decoration-zinc-500 underline underline-offset-4">+650 curated problems</span>, 
+                            private <span className="text-white decoration-zinc-500 underline underline-offset-4">leaderboard rooms</span>, 
+                            and <span className="text-white decoration-zinc-500 underline underline-offset-4">progress monitoring</span>—plus 
+                            your own <span className="text-white decoration-zinc-500 underline underline-offset-4">free personalized AI tutor</span>.
                         </p>
+                    </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                            <button
-                                onClick={() => handleAction(true)}
-                                disabled={loading}
-                                className="flex items-center justify-center gap-2 px-6 py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-                            >
-                                {loading ? <Loader2 className="animate-spin" size={20} /> : (
-                                    <>
-                                        Yes, I am! <ArrowRight size={18} />
-                                    </>
-                                )}
-                            </button>
+                    {/* Dialog Footer */}
+                    <div className="mt-10 flex flex-col items-center gap-6">
+                        <div className="grid w-full grid-cols-1 sm:grid-cols-2 gap-4">
                             <button
                                 onClick={() => handleAction(false)}
                                 disabled={loading}
-                                className="flex items-center justify-center px-6 py-4 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-2xl border border-white/5 transition-all disabled:opacity-50"
+                                className="inline-flex h-14 items-center justify-center rounded-2xl text-[15px] font-semibold transition-all hover:bg-white/5 border border-white/10 text-zinc-400 hover:text-white disabled:opacity-50"
                             >
                                 Not a student
                             </button>
+                            <button
+                                onClick={() => handleAction(true)}
+                                disabled={loading}
+                                className="relative group inline-flex h-14 items-center justify-center rounded-2xl text-[15px] font-bold transition-all bg-white text-black hover:scale-[1.02] active:scale-[0.98] shadow-[0_20px_40px_-12px_rgba(255,255,255,0.2)] disabled:opacity-50"
+                            >
+                                {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                                    <>
+                                        <span className="relative z-10">Yes, I am!</span>
+                                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white via-white to-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </>
+                                )}
+                            </button>
                         </div>
-
-                        <p className="mt-6 text-xs text-white/30 italic">
-                            You can always update this later in your profile settings.
+                        <p className="text-xs text-zinc-600 font-medium tracking-wide">
+                            Settings can be updated later in your profile.
                         </p>
                     </div>
                 </div>
@@ -107,3 +129,4 @@ export default function EduStatusPrompt() {
         </div>
     );
 }
+

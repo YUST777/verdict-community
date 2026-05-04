@@ -164,11 +164,6 @@ export default function RootLayout({
             {children}
           </SmoothScroll>
         </Providers>
-        <Script
-          src="/api/script.js"
-          data-site-id={process.env.NEXT_PUBLIC_RYBBIT_SITE_ID}
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

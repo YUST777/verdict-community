@@ -19,6 +19,7 @@ export async function GET(
                     p.codeforces_url,
                     p.solution_video_url,
                     p.rating,
+                    p.content,
                     s.id as sheet_id,
                     s.name as sheet_name,
                     s.contest_id,
@@ -47,6 +48,7 @@ export async function GET(
                         contestId: d.contest_id,
                         groupId,
                         contestUrl: d.contest_url,
+                        content: d.content,
                     },
                 }, { headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600' } });
             }

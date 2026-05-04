@@ -21,14 +21,18 @@ export async function POST(req: NextRequest) {
             settings
         } = await req.json();
 
-        if (!settings?.apiKey) {
+        const finalApiKey = settings?.apiKey || process.env.OPENAI_API_KEY;
+        const finalBaseURL = settings?.baseURL || process.env.OPENAI_BASE_URL;
+        const finalModel = settings?.model || 'gpt-4o';
+
+        if (!finalApiKey) {
             return NextResponse.json({ error: 'LLM not configured' }, { status: 400 });
         }
 
-        // Validate baseURL to prevent SSRF - only allow known LLM API hosts
-        if (settings.baseURL) {
+        // Validate baseURL to prevent SSRF - only allow known LLM API hosts (and our default backend)
+        if (finalBaseURL && finalBaseURL !== process.env.OPENAI_BASE_URL) {
             try {
-                const parsedUrl = new URL(settings.baseURL);
+                const parsedUrl = new URL(finalBaseURL);
                 const allowedHosts = [
                     'api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com',
                     'api.groq.com', 'openrouter.ai', 'api.together.xyz', 'api.fireworks.ai',
@@ -223,14 +227,14 @@ Generate the video script following the STRICT PHASE ORDER. Remember: code scene
 
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
-                const response = await fetch(`${settings.baseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
+                const response = await fetch(`${finalBaseURL}/chat/completions`.replace(/([^:])\/\/+/g, "$1/"), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${settings.apiKey}`
+                        'Authorization': `Bearer ${finalApiKey}`
                     },
                     body: JSON.stringify({
-                        model: settings.model,
+                        model: finalModel,
                         temperature: 0.4 + (attempt * 0.15), // Slightly increase temp on retry
                         response_format: { type: "json_object" },
                         messages: [

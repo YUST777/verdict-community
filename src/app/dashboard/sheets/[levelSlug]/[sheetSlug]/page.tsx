@@ -69,7 +69,7 @@ export default function SheetDetailPage({ params }: { params: Promise<{ levelSlu
 
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch(`/api/curriculum/problems/${sheetSlug}`, { credentials: 'include' });
+            const res = await fetch(`/api/curriculum/problems/${sheetSlug}?levelSlug=${levelSlug}`, { credentials: 'include' });
             if (!res.ok) { router.push(`/dashboard/sheets/${levelSlug}`); return; }
             const data = await res.json();
             setLevel(data.level);

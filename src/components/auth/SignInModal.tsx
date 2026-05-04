@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { X, Loader2, Github } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
 interface SignInModalProps {
@@ -23,25 +22,16 @@ export default function SignInModal({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const supabase = createClient();
-
     if (!isOpen) return null;
 
     const handleOAuth = async (provider: 'github' | 'google') => {
         try {
             setLoading(true);
 
-            // Store the current page URL to redirect back after auth
+            // Redirect through our server-side OAuth routes which handle
+            // cookie domain scoping correctly for cross-subdomain auth
             const returnUrl = window.location.href;
-
-            const { error: oauthError } = await supabase.auth.signInWithOAuth({
-                provider,
-                options: {
-                    redirectTo: `${window.location.origin}/api/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`
-                }
-            });
-
-            if (oauthError) throw oauthError;
+            window.location.href = `/api/auth/${provider}?returnUrl=${encodeURIComponent(returnUrl)}`;
         } catch (err) {
             setError(err instanceof Error ? err.message : 'OAuth failed');
             setLoading(false);

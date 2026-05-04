@@ -6,6 +6,9 @@ export async function updateSession(request: NextRequest) {
         request,
     })
 
+    const isLocalhost = process.env.NEXT_PUBLIC_SITE_URL?.includes('localhost');
+    const cookieDomain = isLocalhost ? undefined : '.verdict.run';
+
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
@@ -25,9 +28,10 @@ export async function updateSession(request: NextRequest) {
                 },
             },
             cookieOptions: {
+                domain: cookieDomain,
                 path: '/',
                 sameSite: 'lax',
-                secure: true,
+                secure: !isLocalhost,
             }
         }
     )

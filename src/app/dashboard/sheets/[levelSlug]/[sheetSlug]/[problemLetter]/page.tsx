@@ -79,18 +79,19 @@ export default function CurriculumProblemPage({ params }: { params: Promise<{ le
             problemId={problemLetter}
             levelSlug={levelSlug}
             sheetSlug={sheetSlug}
+            initialData={meta.content}
         />
     );
 }
 
-function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug }: {
-    contestId: string; groupId: string; problemId: string; levelSlug: string; sheetSlug: string;
+function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug, initialData }: {
+    contestId: string; groupId: string; problemId: string; levelSlug: string; sheetSlug: string; initialData?: any;
 }) {
     const urlType = 'group';
     const navigationBaseUrl = `/dashboard/sheets/${levelSlug}/${sheetSlug}`;
 
     const { problem, cfData, loading, error, cfStats, sampleTestCases } = useProblemData({
-        contestId, problemId, urlType, groupId
+        contestId, problemId, urlType, groupId, initialData
     });
 
     const { code, setCode, language, setLanguage } = useCodePersistence({ contestId, problemId });
@@ -111,6 +112,7 @@ function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug }: {
     const [isTestPanelVisible, setIsTestPanelVisible] = useState(false);
     const [testPanelActiveTab, setTestPanelActiveTab] = useState<'testcase' | 'result' | 'codeforces'>('testcase');
     const [testPanelHeight, setTestPanelHeight] = useState(40);
+    const [isWhiteboardExpanded, setIsWhiteboardExpanded] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeSheet, setActiveSheet] = useState<ActiveSheet | null>(null);
     const [showNotes, setShowNotes] = useState(false);
@@ -195,8 +197,8 @@ function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug }: {
                     <ProblemLeftPanel
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
-                            isWhiteboardExpanded={false}
-                            setIsWhiteboardExpanded={() => {}}
+                            isWhiteboardExpanded={isWhiteboardExpanded}
+                            setIsWhiteboardExpanded={setIsWhiteboardExpanded}
                             cfData={cfData}
                             submissions={submissions}
                             submissionsLoading={submissionsLoading}

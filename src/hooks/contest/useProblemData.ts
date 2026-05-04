@@ -6,6 +6,7 @@ interface UseProblemDataParams {
     problemId: string;
     urlType: string;
     groupId?: string;
+    initialData?: CFProblemData | null;
 }
 
 interface UseProblemDataReturn {
@@ -17,13 +18,43 @@ interface UseProblemDataReturn {
     sampleTestCases: Example[];
 }
 
-export function useProblemData({ contestId, problemId, urlType, groupId }: UseProblemDataParams): UseProblemDataReturn {
-    const [cfData, setCfData] = useState<CFProblemData | null>(null);
+export function useProblemData({ contestId, problemId, urlType, groupId, initialData }: UseProblemDataParams): UseProblemDataReturn {
+    const [cfData, setCfData] = useState<CFProblemData | null>(initialData || null);
     const [problem, setProblem] = useState<Problem | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!initialData);
     const [error, setError] = useState<string | null>(null);
     const [cfStats, setCfStats] = useState<{ rating?: number; solvedCount: number; tags?: string[] } | null>(null);
     const [sampleTestCases, setSampleTestCases] = useState<Example[]>([]);
+
+    // Transform logic helper
+    const transformData = (data: CFProblemData) => {
+        const mappedProblem: Problem = {
+            id: Array.isArray(problemId) ? problemId[0].toUpperCase() : problemId.toUpperCase(),
+            title: data.meta.title,
+            statement: data.story,
+            inputFormat: data.inputSpec || 'See problem statement',
+            outputFormat: data.outputSpec || 'See problem statement',
+            examples: data.testCases.map((tc) => ({
+                input: tc.input,
+                output: tc.output,
+                expectedOutput: tc.output
+            })),
+            note: data.note || undefined,
+            timeLimit: data.meta.timeLimitMs,
+            memoryLimit: data.meta.memoryLimitMB
+        };
+        return mappedProblem;
+    };
+
+    // Handle initialData transformation on mount
+    useEffect(() => {
+        if (initialData) {
+            const mapped = transformData(initialData);
+            setProblem(mapped);
+            setSampleTestCases(mapped.examples);
+            setLoading(false);
+        }
+    }, [initialData]);
 
     // Fetch Low Cost Global Stats
     useEffect(() => {
@@ -45,9 +76,10 @@ export function useProblemData({ contestId, problemId, urlType, groupId }: UsePr
     // Fetch problem from Codeforces Mirror API
     useEffect(() => {
         const fetchProblem = async () => {
+            if (initialData) return; // Skip if we have initial data
+
             try {
                 // Smart Fallback: If contestId >= 100,000, it's likely a Gym/Sheet problem
-                // This prevents 404s when users hit /contest/ID/ instead of /gym/ID/
                 let effectiveType = urlType;
                 const numericId = parseInt(contestId);
                 if (urlType === 'contest' && !isNaN(numericId) && numericId >= 100000) {
@@ -59,23 +91,7 @@ export function useProblemData({ contestId, problemId, urlType, groupId }: UsePr
                     const data: CFProblemData = await res.json();
                     setCfData(data);
 
-                    // Transform to Problem interface for components that need it
-                    const mappedProblem: Problem = {
-                        id: Array.isArray(problemId) ? problemId[0].toUpperCase() : problemId.toUpperCase(),
-                        title: data.meta.title,
-                        statement: data.story,
-                        inputFormat: data.inputSpec || 'See problem statement',
-                        outputFormat: data.outputSpec || 'See problem statement',
-                        examples: data.testCases.map((tc) => ({
-                            input: tc.input,
-                            output: tc.output,
-                            expectedOutput: tc.output
-                        })),
-                        note: data.note || undefined,
-                        timeLimit: data.meta.timeLimitMs,
-                        memoryLimit: data.meta.memoryLimitMB
-                    };
-
+                    const mappedProblem = transformData(data);
                     setProblem(mappedProblem);
                     setSampleTestCases(mappedProblem.examples);
                 } else {
@@ -89,8 +105,7 @@ export function useProblemData({ contestId, problemId, urlType, groupId }: UsePr
             }
         };
 
-        if (contestId && problemId) {
-            // Reset state before fetching to prevent stale data flash
+        if (contestId && problemId && !initialData) {
             setCfData(null);
             setProblem(null);
             setCfStats(null);
@@ -100,7 +115,7 @@ export function useProblemData({ contestId, problemId, urlType, groupId }: UsePr
 
             fetchProblem();
         }
-    }, [contestId, problemId, urlType, groupId]);
+    }, [contestId, problemId, urlType, groupId, initialData]);
 
     return {
         problem,

@@ -68,9 +68,13 @@ export const decrypt = (ciphertext: string | null | undefined, customKey?: strin
     }
 
     try {
+        // Simple hex check for cryptr format
+        if (!/^[0-9a-fA-F]+$/.test(ciphertext)) {
+            return null;
+        }
         return cryptr.decrypt(ciphertext);
     } catch (err) {
-        console.error('[decrypt] Failed:', err);
+        // If it's not a valid cryptr format, don't crash
         return null;
     }
 };

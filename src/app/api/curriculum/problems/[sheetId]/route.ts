@@ -8,17 +8,29 @@ export async function GET(
 ) {
     try {
         const { sheetId } = await params;
+        const { searchParams } = new URL(req.url);
+        const levelSlug = searchParams.get('levelSlug');
 
         // 1. Try DB first (ICPCHUE schema with curriculum_problems)
         try {
-            const sheetResult = await query(`
+            let sheetQuery = `
                 SELECT s.id, s.sheet_letter, s.name, s.slug, s.description,
                        s.contest_id, s.contest_url, s.total_problems,
                        l.id as level_id, l.slug as level_slug, l.name as level_name
                 FROM curriculum_sheets s
                 JOIN curriculum_levels l ON s.level_id = l.id
-                WHERE s.slug = $1 OR s.id::text = $1
-            `, [sheetId]);
+                WHERE (s.slug = $1 OR s.id::text = $1)
+            `;
+            const queryParams: any[] = [sheetId];
+
+            if (levelSlug) {
+                sheetQuery += ` AND l.slug = $2`;
+                queryParams.push(levelSlug);
+            }
+
+            sheetQuery += ` LIMIT 1`;
+
+            const sheetResult = await query(sheetQuery, queryParams);
 
             if (sheetResult.rows.length > 0) {
                 const s = sheetResult.rows[0];

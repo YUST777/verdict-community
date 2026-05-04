@@ -11,6 +11,8 @@ import { checkRateLimit } from '@/lib/simple-rate-limit';
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const DEFAULT_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEFAULT_OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
 
 // Detect provider from base URL
 function detectProvider(baseURL: string): 'openai' | 'anthropic' | 'gemini' {
@@ -53,8 +55,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Messages required' }, { status: 400 });
         }
 
-        // If no user key, use built-in Gemini
-        const useBuiltIn = !apiKey || !baseURL;
+        const finalApiKey = apiKey || DEFAULT_OPENAI_API_KEY;
+        const finalBaseURL = baseURL || DEFAULT_OPENAI_BASE_URL;
+
+        // If no user key and no default, use built-in Gemini
+        const useBuiltIn = !finalApiKey || !finalBaseURL;
         
         if (useBuiltIn) {
             if (!GEMINI_API_KEY) {
@@ -124,19 +129,19 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // User-provided key — detect provider and proxy
-        const provider = detectProvider(baseURL);
+        // User-provided key (or default) — detect provider and proxy
+        const provider = detectProvider(finalBaseURL);
 
         if (provider === 'anthropic') {
             // Anthropic format
             const { system, messages: anthropicMsgs } = toAnthropicMessages(messages);
-            const anthropicURL = baseURL.replace(/\/+$/, '') + '/v1/messages';
+            const anthropicURL = finalBaseURL.replace(/\/+$/, '') + '/v1/messages';
 
             const res = await fetch(anthropicURL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
+                    'x-api-key': finalApiKey,
                     'anthropic-version': '2023-06-01',
                 },
                 body: JSON.stringify({
@@ -167,12 +172,12 @@ export async function POST(req: NextRequest) {
         }
 
         // OpenAI-compatible (default)
-        const openaiURL = baseURL.replace(/\/+$/, '') + '/chat/completions';
+        const openaiURL = finalBaseURL.replace(/\/+$/, '') + '/chat/completions';
         const res = await fetch(openaiURL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
+                'Authorization': `Bearer ${finalApiKey}`,
             },
             body: JSON.stringify({
                 model: model || 'gpt-4o',

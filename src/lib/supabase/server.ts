@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 
 export async function createClient() {
     const cookieStore = await cookies()
+    const isLocalhost = process.env.NEXT_PUBLIC_SITE_URL?.includes('localhost');
+    const cookieDomain = isLocalhost ? undefined : '.verdict.run';
 
     return createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,30 +19,15 @@ export async function createClient() {
                         cookiesToSet.forEach(({ name, value, options }) =>
                             cookieStore.set(name, value, options)
                         )
-                    } catch {
-                        // The `setAll` method was called from a Server Component.
-                        // This can be ignored if you have middleware refreshing
-                        // user sessions.
-                    }
+                    } catch { }
                 },
             },
             cookieOptions: {
+                domain: cookieDomain,
                 path: '/',
                 sameSite: 'lax',
-                secure: true,
+                secure: !isLocalhost,
             }
-        }
-    )
-}
-export async function createAdminClient() {
-    return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-            cookies: {
-                getAll() { return [] },
-                setAll() { },
-            },
         }
     )
 }

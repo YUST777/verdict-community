@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2, ArrowRight, CheckCircle2, ArrowLeft, Github, ChevronDown, Check } from 'lucide-react';
 import { z } from 'zod';
 
@@ -91,10 +91,10 @@ function CustomDropdown({ value, onChange, options, placeholder, error }: Dropdo
 
 const emailSchema = z.object({
     email: z.string()
-        .min(1, 'Email or Handle is required')
+        .min(1, 'Email is required')
         .refine(
-            (val) => val.includes('@') ? val.toLowerCase().endsWith('.edu.eg') : true,
-            'Please use your university email (.edu.eg) or your handle'
+            (val) => val.toLowerCase().endsWith('.edu.eg'),
+            'Please use your university email ending in .edu.eg'
         ),
 });
 
@@ -135,7 +135,11 @@ function cn(...classes: (string | boolean | undefined)[]) {
 type AuthMode = 'unknown' | 'login' | 'register';
 type Step = 'email' | 'otp' | 'password' | 'profile';
 
-export default function UniversityAuth() {
+function UniversityAuthContent() {
+    const searchParams = useSearchParams();
+    const mode = searchParams.get('mode');
+    const isEduMode = mode === 'edu';
+
     const [step, setStep] = useState<Step>('email');
     const [authMode, setAuthMode] = useState<AuthMode>('unknown');
     const [universityName, setUniversityName] = useState<string | null>(null);
@@ -233,9 +237,12 @@ export default function UniversityAuth() {
         return data;
     };
 
-    const handleOAuthLogin = (provider: 'google' | 'github') => {
-        setOauthLoading(provider);
-        window.location.href = `/api/auth/${provider}`;
+    const handleOAuthLogin = (provider: 'google' | 'github' | 'codeforces') => {
+        setOauthLoading(provider === 'codeforces' ? 'google' as any : provider);
+        
+        // Pass the current page URL as returnUrl so the callback brings us back here
+        const currentUrl = window.location.href;
+        window.location.href = `/api/auth/${provider}?returnUrl=${encodeURIComponent(currentUrl)}`;
     };
 
     const handleEmailSubmit = async () => {
@@ -307,6 +314,12 @@ export default function UniversityAuth() {
                 return;
             }
 
+            if (data.linked) {
+                // Account already linked successfully (user was logged in)
+                router.replace('/dashboard');
+                return;
+            }
+
             if (data.hasAccount) {
                 setAuthMode('login');
                 setStep('password');
@@ -359,6 +372,12 @@ export default function UniversityAuth() {
 
             if (!res.ok) {
                 setSubmitError(data.error || 'Login failed');
+                return;
+            }
+
+            // If accounts were linked (edu mode), redirect to dashboard
+            if (data.linked) {
+                router.replace('/dashboard');
                 return;
             }
 
@@ -509,7 +528,11 @@ export default function UniversityAuth() {
     };
 
     const getSubtitle = () => {
-        if (step === 'email') return 'Use OAuth or your university email';
+        if (step === 'email') {
+            return isEduMode 
+                ? 'Put your .edu.eg for your college or institute' 
+                : 'Use OAuth or your university email';
+        }
         if (step === 'otp') return `We sent a code to ${email}`;
         if (step === 'password' && authMode === 'login') return 'Enter your password';
         if (step === 'password') return 'Choose a secure password';
@@ -596,36 +619,54 @@ export default function UniversityAuth() {
                     {/* Email Step */}
                     {step === 'email' && (
                         <div className="space-y-6">
-                            {/* OAuth buttons */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => handleOAuthLogin('google')}
-                                    disabled={oauthLoading !== null}
-                                    className="py-2.5 px-4 bg-white text-gray-800 text-sm font-medium rounded-lg flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors disabled:opacity-50"
-                                >
-                                    {oauthLoading === 'google' ? <Loader2 className="animate-spin" size={18} /> : <><GoogleIcon /> Google</>}
-                                </button>
+                            {!isEduMode && (
+                                <>
+                                    {/* OAuth buttons */}
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOAuthLogin('google')}
+                                                disabled={oauthLoading !== null}
+                                                className="py-2.5 px-4 bg-white text-gray-800 text-sm font-medium rounded-lg flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                            >
+                                                {oauthLoading === 'google' ? <Loader2 className="animate-spin" size={18} /> : <><GoogleIcon /> Google</>}
+                                            </button>
 
-                                <button
-                                    type="button"
-                                    onClick={() => handleOAuthLogin('github')}
-                                    disabled={oauthLoading !== null}
-                                    className="py-2.5 px-4 bg-[#24292F] text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 hover:bg-[#32383F] transition-colors disabled:opacity-50"
-                                >
-                                    {oauthLoading === 'github' ? <Loader2 className="animate-spin" size={18} /> : <><Github size={18} /> GitHub</>}
-                                </button>
-                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOAuthLogin('github')}
+                                                disabled={oauthLoading !== null}
+                                                className="py-2.5 px-4 bg-[#24292F] text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 hover:bg-[#32383F] transition-colors disabled:opacity-50"
+                                            >
+                                                {oauthLoading === 'github' ? <Loader2 className="animate-spin" size={18} /> : <><Github size={18} /> GitHub</>}
+                                            </button>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOAuthLogin('codeforces')}
+                                            className="py-2.5 px-4 bg-[#1a1a1a] border border-white/10 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 hover:bg-white/5 transition-colors"
+                                        >
+                                            <svg width="18" height="18" viewBox="0 0 24 24" className="brightness-125">
+                                                <rect width="4" height="12" x="1" y="11" fill="#4B89D4" rx="1" />
+                                                <rect width="4" height="20" x="8" y="3" fill="#4B89D4" rx="1" />
+                                                <rect width="4" height="15" x="15" y="8" fill="#4B89D4" rx="1" />
+                                            </svg>
+                                            Continue with Codeforces
+                                        </button>
+                                    </div>
 
-                            {/* Divider */}
-                            <div className="relative">
-                                <div className="absolute inset-0 flex items-center">
-                                    <div className="w-full border-t border-white/10"></div>
-                                </div>
-                                <div className="relative flex justify-center">
-                                    <span className="px-3 bg-[#0d0d0d] text-white/30 text-xs">or</span>
-                                </div>
-                            </div>
+                                    {/* Divider */}
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-white/10"></div>
+                                        </div>
+                                        <div className="relative flex justify-center">
+                                            <span className="px-3 bg-[#0d0d0d] text-white/30 text-xs">or</span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
 
                             {/* Email input */}
                             <form onSubmit={handleSubmit}>
@@ -634,7 +675,7 @@ export default function UniversityAuth() {
                                         type="text"
                                         value={email}
                                         onChange={handleEmailChange}
-                                        placeholder="Email or Codeforces Handle"
+                                        placeholder="University Email (.edu.eg)"
                                         className={cn(inputBase, errors.email && inputError)}
                                         autoFocus
                                     />
@@ -859,5 +900,17 @@ export default function UniversityAuth() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function UniversityAuth() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+                <Loader2 className="animate-spin text-emerald-500" size={48} />
+            </div>
+        }>
+            <UniversityAuthContent />
+        </Suspense>
     );
 }

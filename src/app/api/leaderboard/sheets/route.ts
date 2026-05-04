@@ -27,7 +27,6 @@ export async function GET(req: NextRequest) {
       SELECT
         u.id,
         u.email,
-        u.name,
         u.username,
         u.university_id,
         u.display_name,
@@ -54,7 +53,7 @@ export async function GET(req: NextRequest) {
       
       let finalName = 'Anonymous';
       
-      const rawName = row.display_name || row.name;
+      const rawName = row.display_name;
       if (rawName) {
         const decrypted = decrypt(rawName);
         if (decrypted) {

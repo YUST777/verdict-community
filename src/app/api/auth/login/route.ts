@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/simple-rate-limit';
 import { query, icpchueQuery } from '@/lib/db';
 import { createBlindIndex, decrypt } from '@/lib/encryption';
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { createClient as createSimpleClient } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 
@@ -41,15 +41,122 @@ export async function POST(req: NextRequest) {
         }
 
         const supabase = await createClient();
+        
+        // Check if there is an active session (e.g. Google OAuth session)
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        const isLinking = !!currentUser;
+
+        // Use ephemeral client to verify credentials without losing current session cookies
+        const tempSupabase = createSimpleClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+        );
 
         // 1. Primary Attempt: Verdict Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        const { data: authData, error: authError } = await tempSupabase.auth.signInWithPassword({
             email: normalizedEmail,
             password: password,
         });
 
         if (authData?.user) {
-            await query('UPDATE public.users SET last_login_at = NOW(), auth_id = $1 WHERE email = $2', [authData.user.id, normalizedEmail]);
+            if (isLinking && currentUser.email !== normalizedEmail) {
+                console.log(`[Login] Linking ${normalizedEmail} to active session ${currentUser.email}`);
+                
+                const eduBlindIndex = createBlindIndex(normalizedEmail);
+                
+                // --- Pull profile from ICPCHUE DB ---
+                let icpchueProfile: any = null;
+                try {
+                    // Find user in icpchue auth.users by email to get supabase_uid
+                    const icpchueAuthRes = await icpchueQuery(
+                        'SELECT id FROM auth.users WHERE email = $1 LIMIT 1',
+                        [normalizedEmail]
+                    );
+                    if (icpchueAuthRes.rows.length > 0) {
+                        const icpchueSuid = icpchueAuthRes.rows[0].id;
+                        const profileRes = await icpchueQuery(
+                            'SELECT id, codeforces_handle, codeforces_data, telegram_username FROM users WHERE supabase_uid = $1 LIMIT 1',
+                            [icpchueSuid]
+                        );
+                        if (profileRes.rows.length > 0) {
+                            icpchueProfile = profileRes.rows[0];
+                            console.log(`[Login] Found ICPCHUE profile: cf=${icpchueProfile.codeforces_handle}, id=${icpchueProfile.id}`);
+                        }
+                    }
+                } catch (err) {
+                    console.error('[Login] ICPCHUE profile lookup failed:', err);
+                }
+
+                // Also check local Verdict rows for this edu email
+                const oldRows = await query(`
+                    SELECT * FROM public.users 
+                    WHERE (email = $1 OR email_blind_index = $2) AND (auth_id IS NULL OR auth_id != $3::uuid)
+                `, [normalizedEmail, eduBlindIndex, currentUser.id]);
+                
+                // Build dynamic update
+                let updates: string[] = [];
+                let params: any[] = [];
+                let paramIndex = 1;
+
+                // Merge from icpchue profile first
+                if (icpchueProfile?.codeforces_handle) {
+                    updates.push(`codeforces_handle = COALESCE(codeforces_handle, $${paramIndex++})`);
+                    params.push(icpchueProfile.codeforces_handle);
+                }
+                if (icpchueProfile?.codeforces_data) {
+                    updates.push(`codeforces_data = COALESCE(codeforces_data, $${paramIndex++}::jsonb)`);
+                    params.push(JSON.stringify(icpchueProfile.codeforces_data));
+                }
+                if (icpchueProfile?.telegram_username) {
+                    updates.push(`telegram_username = COALESCE(telegram_username, $${paramIndex++})`);
+                    params.push(icpchueProfile.telegram_username);
+                }
+                if (icpchueProfile?.id) {
+                    updates.push(`original_id = $${paramIndex++}`);
+                    params.push(icpchueProfile.id);
+                    updates.push(`source_platform = 'merged'`);
+                }
+
+                // Merge from old Verdict rows
+                if (oldRows.rows.length > 0) {
+                    const oldRow = oldRows.rows.find((r: any) => r.codeforces_handle) || oldRows.rows[0];
+                    if (oldRow.university_id) { updates.push(`university_id = COALESCE(university_id, $${paramIndex++}::integer)`); params.push(oldRow.university_id); }
+                    if (oldRow.codeforces_handle && !icpchueProfile?.codeforces_handle) { updates.push(`codeforces_handle = COALESCE(codeforces_handle, $${paramIndex++})`); params.push(oldRow.codeforces_handle); }
+                    if (oldRow.telegram_username && !icpchueProfile?.telegram_username) { updates.push(`telegram_username = COALESCE(telegram_username, $${paramIndex++})`); params.push(oldRow.telegram_username); }
+                }
+
+                // Always set university_id = 1 for .edu.eg accounts
+                if (!updates.some(u => u.includes('university_id'))) {
+                    updates.push(`university_id = COALESCE(university_id, 1)`);
+                }
+                
+                updates.push(`edu_eg_status = 'verified'`);
+                updates.push(`is_university_verified = true`);
+                updates.push(`edu_eg_email_blind_index = $${paramIndex++}`);
+                params.push(eduBlindIndex);
+                updates.push(`role = 'trainee'`);
+                updates.push(`last_login_at = NOW()`);
+                
+                params.push(currentUser.id); // The WHERE parameter
+                
+                await query(`
+                    UPDATE public.users 
+                    SET ${updates.join(', ')}
+                    WHERE auth_id = $${paramIndex}::uuid
+                `, params);
+                
+                // Delete old duplicate rows safely
+                await query(`
+                    DELETE FROM public.users 
+                    WHERE (email = $1 OR email_blind_index = $2) AND (auth_id IS NULL OR auth_id != $3::uuid)
+                `, [normalizedEmail, eduBlindIndex, currentUser.id]);
+                
+                return NextResponse.json({ success: true, linked: true, user: { id: currentUser.id, email: normalizedEmail } });
+            }
+            
+            // If not linking, proceed with normal login (which swaps session)
+            await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+            await query('UPDATE public.users SET last_login_at = NOW(), auth_id = $1 WHERE email = $2 OR email_blind_index = $3', [authData.user.id, normalizedEmail, createBlindIndex(normalizedEmail)]);
             return NextResponse.json({ success: true, user: { id: authData.user.id, email: normalizedEmail } });
         }
 
@@ -65,11 +172,30 @@ export async function POST(req: NextRequest) {
             if (user.password_hash && user.password_hash !== 'supabase-managed' && user.password_hash !== 'oauth_user') {
                 const isMatch = await bcrypt.compare(password, user.password_hash);
                 if (isMatch) {
-                    const { data: newData, error: signUpError } = await supabase.auth.signUp({
+                    const { data: newData, error: signUpError } = await tempSupabase.auth.signUp({
                         email: normalizedEmail,
                         password: password,
                     });
                     if (newData?.user) {
+                        if (isLinking && currentUser.email !== normalizedEmail) {
+                            console.error(`[Login] Linking legacy ${normalizedEmail} to active session ${currentUser.email}`);
+                            await query(`
+                                UPDATE public.users 
+                                SET auth_id = $1, last_login_at = NOW(), password_hash = 'supabase-managed', edu_eg_status = 'verified',
+                                    edu_eg_email_blind_index = $2
+                                WHERE id = $3
+                            `, [currentUser.id, createBlindIndex(normalizedEmail), user.id]);
+                            
+                            await query(`
+                                DELETE FROM public.users 
+                                WHERE auth_id = $1 AND id != $2
+                            `, [currentUser.id, user.id]);
+                            
+                            return NextResponse.json({ success: true, linked: true, user: { id: user.id, email: normalizedEmail } });
+                        }
+
+                        // Normal login with legacy account migration
+                        await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
                         await query('UPDATE public.users SET auth_id = $1, last_login_at = NOW(), password_hash = \'supabase-managed\' WHERE id = $2', [newData.user.id, user.id]);
                         return NextResponse.json({ success: true, user: { id: user.id, email: normalizedEmail } });
                     }
@@ -98,7 +224,10 @@ export async function POST(req: NextRequest) {
                 if (hueData?.user) {
                     console.error(`[Login] HUE auth success for ${normalizedEmail}. Force-migrating to Verdict...`);
                     
-                    const adminSupabase = await createAdminClient();
+                    const adminSupabase = createSimpleClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                        process.env.SUPABASE_SERVICE_ROLE_KEY!
+                    );
                     
                     // Try to get existing user first to avoid conflict error
                     const { data: usersData, error: listError } = await adminSupabase.auth.admin.listUsers();
@@ -151,7 +280,7 @@ export async function POST(req: NextRequest) {
                                 await query(
                                     `UPDATE public.users SET 
                                         auth_id = $1, 
-                                        name = COALESCE(name, $2),
+                                        display_name = COALESCE(display_name, $2),
                                         codeforces_handle = COALESCE(codeforces_handle, $3),
                                         telegram_username = COALESCE(telegram_username, $4),
                                         university_id = 1,
@@ -159,16 +288,16 @@ export async function POST(req: NextRequest) {
                                         last_login_at = NOW(),
                                         password_hash = 'supabase-managed'
                                     WHERE email = $6`,
-                                    [targetAuthId, hueProfile.name || hueProfile.codeforces_handle || normalizedEmail.split('@')[0], hueProfile.codeforces_handle, hueProfile.telegram_username, hueProfile.id, normalizedEmail]
+                                    [targetAuthId, hueProfile.display_name || hueProfile.codeforces_handle || normalizedEmail.split('@')[0], hueProfile.codeforces_handle, hueProfile.telegram_username, hueProfile.id, normalizedEmail]
                                 );
                             } else {
                                 await query(
                                     `INSERT INTO public.users (
-                                        email, auth_id, name, codeforces_handle, telegram_username, 
+                                        email, auth_id, display_name, codeforces_handle, telegram_username, 
                                         university_id, original_id,
-                                        tier, is_email_verified, created_at, last_login_at, password_hash, email_blind_index
-                                    ) VALUES ($1, $2, $3, $4, $5, 1, $6, 'university', true, NOW(), NOW(), 'supabase-managed', $7)`,
-                                    [normalizedEmail, targetAuthId, hueProfile.name || hueProfile.codeforces_handle || normalizedEmail.split('@')[0], hueProfile.codeforces_handle, hueProfile.telegram_username, hueProfile.id, createBlindIndex(normalizedEmail)]
+                                        is_verified, created_at, last_login_at, password_hash, email_blind_index
+                                    ) VALUES ($1, $2, $3, $4, $5, 1, $6, true, NOW(), NOW(), 'supabase-managed', $7)`,
+                                    [normalizedEmail, targetAuthId, hueProfile.display_name || hueProfile.codeforces_handle || normalizedEmail.split('@')[0], hueProfile.codeforces_handle, hueProfile.telegram_username, hueProfile.id, createBlindIndex(normalizedEmail)]
                                 );
                             }
                         }

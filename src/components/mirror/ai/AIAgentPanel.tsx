@@ -10,7 +10,7 @@ import { CODE_TUTOR_CHAT_APPENDIX } from '@/lib/ai-code-tutor-instructions';
 
 import AIPreferencesModal from './AIPreferencesModal';
 import SignInModal from '@/components/auth/SignInModal';
-import { createClient } from '@/lib/supabase/client';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useAIChatPersistence } from '@/hooks/contest/useAIChatPersistence';
 
@@ -136,18 +136,30 @@ export default function AIAgentPanel({
 
     const handleOAuth = async (provider: 'github' | 'google') => {
         try {
-            const supabase = createClient();
+            // Redirect through our server-side OAuth routes which handle
+            // cookie domain scoping correctly for cross-subdomain auth
             const returnUrl = window.location.href;
-            await supabase.auth.signInWithOAuth({
-                provider,
-                options: {
-                    redirectTo: `${window.location.origin}/api/auth/callback?returnUrl=${encodeURIComponent(returnUrl)}`
-                }
-            });
+            window.location.href = `/api/auth/${provider}?returnUrl=${encodeURIComponent(returnUrl)}`;
         } catch (err: any) {
             console.error('OAuth failed', err?.message || err);
         }
     };
+
+    const [isQuizMode, setIsQuizMode] = useState(quizMode);
+
+    // Sync prop with local state
+    useEffect(() => {
+        setIsQuizMode(quizMode);
+    }, [quizMode]);
+
+    const handleStartQuiz = useCallback(() => {
+        if (!user) {
+            setShowSignInModal(true);
+            return;
+        }
+        setIsQuizMode(true);
+        onQuizMe?.();
+    }, [user, onQuizMe]);
 
     // Chat tabs state is now managed by useAIChatPersistence hook
     const [activeChatTab, setActiveChatTab] = useState('default');
@@ -959,13 +971,16 @@ export default function AIAgentPanel({
 
 
                 {/* ── Messages or Quiz ───────────────────────────────────── */}
-                {quizMode ? (
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                {isQuizMode ? (
+                    <div className="flex-1 overflow-hidden relative">
                         <QuizPanel
                             code={userCode}
-                            problemTitle={problemDescription?.match(/\*\*Problem: (.+?)\*\*/)?.[1]}
+                            problemTitle={problemDescription?.match(/\*\*Problem: (.+?)\*\*/)?.[1] || 'Unknown Problem'}
                             problemStatement={problemDescription}
-                            onExit={() => onQuizMe?.()}
+                            onExit={() => {
+                                setIsQuizMode(false);
+                                onQuizMe?.();
+                            }}
                         />
                     </div>
                 ) : (
@@ -1041,7 +1056,7 @@ export default function AIAgentPanel({
                 </Conversation>
                 )}
 
-                <div className={`bg-[#121212] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10 ${quizMode ? 'hidden' : ''}`}>
+                <div className={`bg-[#121212] border-t border-white/[0.06] px-3 pt-2.5 pb-3 shrink-0 relative z-10 ${isQuizMode ? 'hidden' : ''}`}>
 
                     {/* Selected code context badge */}
                     {selectedCode?.trim() && selectedLineReference && (
@@ -1056,16 +1071,7 @@ export default function AIAgentPanel({
                         </div>
                     )}
 
-                    {/* Configure LLM banner */}
-                    {user && (!settings.enabled || !settings.apiKey) && (
-                        <button
-                            onClick={() => setShowPreferencesModal(true)}
-                            className="w-full mb-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#2cbb5d]/10 hover:bg-[#2cbb5d]/15 border border-[#2cbb5d]/20 rounded-xl text-[#2cbb5d] text-[12px] font-medium transition-all group"
-                        >
-                            <BrainCircuit size={14} strokeWidth={2} />
-                            {isArabic ? 'إعداد النموذج بتاعك' : 'Configure Bring Your Own LLM'}
-                        </button>
-                    )}
+                    {/* Configure LLM banner removed */}
 
                     {/* Chat input + action buttons */}
                     {!authLoading && !user ? (
@@ -1102,7 +1108,7 @@ export default function AIAgentPanel({
                                 isTutorLoading={isLoadingMessage && isTutorActive}
                                 isTutorActive={isTutorActive}
                                 hasUsedTutor={hasUsedTutor && !(onSolveProblem || onAiCodeUpdate)}
-                                onQuizMe={onQuizMe}
+                                onQuizMe={handleStartQuiz}
                             />
                         </div>
                     )}

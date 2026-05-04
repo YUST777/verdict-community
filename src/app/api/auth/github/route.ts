@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
                     },
                 },
                 cookieOptions: {
+                    domain: '.verdict.run',
                     path: '/',
                     sameSite: 'lax',
                     secure: true,
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest) {
             response.cookies.getAll().forEach(cookie => {
                 redirectResponse.cookies.set(cookie.name, cookie.value, {
                     ...cookie,
+                    domain: '.verdict.run',
                     path: '/',
                     sameSite: 'lax',
                     secure: true,

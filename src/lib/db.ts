@@ -27,8 +27,8 @@ export function getPool(): pg.Pool {
                 // If migrating to a different DB provider, set this to true.
                 rejectUnauthorized: false
             },
-            // Small pool — Supavisor handles the real pooling upstream.
-            max: 10,
+            // Very small pool — Supavisor handles the real pooling upstream.
+            max: 5,
             // Release idle connections after 30s
             idleTimeoutMillis: 30000,
             // Wait up to 10s for a connection

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const userResult = await query(
       `SELECT id, email, last_login_at, created_at,
               telegram_username, role, profile_picture, codeforces_handle, codeforces_data,
-              university_id, faculty, username, display_name, name, student_level,
+              university_id, faculty, username, display_name, student_level,
               student_id_encrypted, national_id_encrypted, telephone_encrypted, edu_eg_status
        FROM users
        WHERE id = $1`,
@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
       } catch { /* universities table may have different schema */ }
     }
     const decryptedEmail = decrypt(user.email) || user.email;
-    const decryptedName = user.display_name ? (decrypt(user.display_name) || user.display_name) : (user.name ? (decrypt(user.name) || user.name) : null);
+    const isEduEmail = decryptedEmail.toLowerCase().endsWith('.edu.eg');
+    const decryptedName = user.display_name ? (decrypt(user.display_name) || user.display_name) : null;
 
     let profile: any = {
       faculty: user.faculty,
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest) {
         faculty: user.faculty || null,
         studentLevel: user.student_level || null,
         university: universityInfo,
-        edu_eg_status: user.edu_eg_status || 'pending',
+        edu_eg_status: isEduEmail ? 'verified' : (user.edu_eg_status || 'pending'),
       },
       profile,
     });

@@ -181,8 +181,8 @@ export default function Whiteboard({ contestId, problemIndex, isExpanded, onTogg
 
     return (
         <div
-            className={`flex flex-col bg-[#1a1a1a] border-t border-white/10 shrink-0 transition-all duration-300 overflow-hidden`}
-            style={{ height: isExpanded ? height : 0 }}
+            className={`flex flex-col bg-[#1a1a1a] border-t border-white/10 shrink-0 transition-all duration-300 w-full`}
+            style={{ height: isExpanded ? height : 0, overflow: isExpanded ? 'visible' : 'hidden' }}
         >
             {isExpanded && (
                 <>
