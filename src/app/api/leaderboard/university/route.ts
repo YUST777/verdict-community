@@ -177,7 +177,7 @@ export async function GET(req: NextRequest) {
                 success: true,
                 scope: 'national',
                 leaderboard: result.rows.map((r: any, i: number) => {
-                    const rawName = r.display_name || r.name;
+                    const rawName = r.display_name;
                     const decryptedName = rawName ? (decrypt(rawName) || rawName) : (r.username || 'Anonymous');
                     return {
                         rank: i + 1,

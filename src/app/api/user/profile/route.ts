@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 // Validation schema for profile updates
 const profileUpdateSchema = z.object({
-    name: z.string().min(1).max(100).optional(),
+    display_name: z.string().min(1).max(100).optional(),
     codeforces_handle: z.string().max(50).optional(),
 });
 
@@ -96,9 +96,9 @@ export async function PATCH(req: NextRequest) {
         const values: (string | number | null | object)[] = [];
         let paramIndex = 1;
         
-        if (result.data.name !== undefined) {
-            updates.push(`name = $${paramIndex++}`);
-            values.push(result.data.name);
+        if (result.data.display_name !== undefined) {
+            updates.push(`display_name = $${paramIndex++}`);
+            values.push(result.data.display_name);
         }
         
         if (result.data.codeforces_handle !== undefined) {

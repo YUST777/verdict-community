@@ -116,7 +116,7 @@ export async function GET(
                 authorName: a.author_name,
             })),
             topMembers: topMembersResult.rows.map((m: any, index: number) => {
-                const rawName = m.display_name || m.name;
+                const rawName = m.display_name;
                 const decryptedName = rawName ? (decrypt(rawName) || rawName) : (m.username || 'Anonymous');
                 
                 // Fallback for identifier: username -> student_id -> email prefix

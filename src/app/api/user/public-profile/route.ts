@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
                 u.id,
                 u.username,
                 u.display_name,
-                u.name,
                 u.email,
                 u.profile_picture,
                 u.codeforces_handle,
@@ -48,7 +47,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Profile is private' }, { status: 403 });
         }
 
-        // ... stats/achievements queries stay the same ...
+        // Stats and ranks
         const cacheResult = await query(`
             SELECT solved_count, total_submissions
             FROM leaderboard_cache
@@ -79,9 +78,6 @@ export async function GET(req: NextRequest) {
 
         // Decrypt display name or fallback to email prefix
         let displayName = user.display_name ? (decrypt(user.display_name) || user.display_name) : null;
-        if (!displayName) {
-            displayName = user.name ? (decrypt(user.name) || user.name) : null;
-        }
         if (!displayName && user.email) {
             const decryptedEmail = decrypt(user.email) || user.email;
             displayName = decryptedEmail.split('@')[0];

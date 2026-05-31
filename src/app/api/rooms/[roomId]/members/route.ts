@@ -64,7 +64,7 @@ export async function GET(
         `, [universityId, limit, offset]);
 
         const members = membersResult.rows.map((m: any) => {
-            const rawName = m.display_name || m.name;
+            const rawName = m.display_name;
             const decryptedName = rawName ? (decrypt(rawName) || rawName) : (m.username || 'Anonymous');
             return {
                 id: m.id,

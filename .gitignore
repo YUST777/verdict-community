@@ -55,3 +55,6 @@ mirror/node_modules/
 public/remotion-bundle/
 *.wasm
 scrapling-bridge/__pycache__/
+scratch/
+public/*.mp4
+
