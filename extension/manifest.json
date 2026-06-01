@@ -4,7 +4,7 @@
   "manifest_version": 3,
   "name": "Verdict Helper",
   "description": "One-click submission to Codeforces - the modern competitive programming interface helper.",
-  "version": "1.1.0",
+  "version": "1.0.9",
   "permissions": [
     "cookies"
   ],
@@ -18,8 +18,6 @@
   "content_scripts": [
     {
       "matches": [
-        "*://localhost/*",
-        "*://127.0.0.1/*",
         "*://icpchue.com/*",
         "*://*.icpchue.com/*",
         "*://icpchue.xyz/*",
@@ -49,8 +47,6 @@
     {
       "resources": ["icons/*", "logo.webp"],
       "matches": [
-        "*://localhost/*",
-        "*://127.0.0.1/*",
         "*://icpchue.com/*",
         "*://*.icpchue.com/*",
         "*://icpchue.xyz/*",

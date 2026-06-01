@@ -1,5 +1,5 @@
 /**
- * Verdict Helper Extension v1.1.0 — Content Script
+ * Verdict Helper Extension v1.0.9 — Content Script
  *
  * Bridges window.postMessage (from the Verdict page) ↔ chrome.runtime.sendMessage (to background).
  * Also injects a marker element so the page knows the extension is installed.
@@ -9,7 +9,7 @@
 (() => {
     const marker = document.createElement('div');
     marker.id = 'verdict-extension-installed';
-    marker.setAttribute('data-version', '1.1.0');
+    marker.setAttribute('data-version', '1.0.9');
     marker.style.display = 'none';
     document.documentElement.appendChild(marker);
 })();
@@ -107,31 +107,6 @@ window.addEventListener('message', async (event) => {
                 type: 'VERDICT_SUBMISSION_RESULT',
                 success: false,
                 error: err.message || 'Extension error'
-            }, '*');
-        }
-    }
-
-    // ── Verify Codeforces Submission ──
-    if (type === 'VERDICT_VERIFY_CF') {
-        try {
-            const { contestId, problemIndex, cfHandle } = payload;
-            const result = await chrome.runtime.sendMessage({
-                type: 'VERDICT_VERIFY_CF_BACKGROUND',
-                payload: { contestId, problemIndex, cfHandle }
-            });
-            window.postMessage({
-                type: 'VERDICT_VERIFY_CF_RESPONSE',
-                success: result.success,
-                submissionId: result.submissionId || null,
-                timeMs: result.timeMs || 0,
-                memoryKb: result.memoryKb || 0,
-                error: result.error || null
-            }, '*');
-        } catch (err) {
-            window.postMessage({
-                type: 'VERDICT_VERIFY_CF_RESPONSE',
-                success: false,
-                error: err.message || 'Extension verification error'
             }, '*');
         }
     }
