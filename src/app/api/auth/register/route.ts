@@ -41,7 +41,8 @@ async function handleUniversityRegistration(body: Record<string, unknown>) {
     const normalizedEmail = data.email.trim().toLowerCase();
     const emailBlindIndex = createBlindIndex(normalizedEmail);
 
-    // 1. Verify email via OTP
+    // 1. Verify email via OTP (Bypassed since OTP functions are disabled)
+    /*
     const verificationResult = await query(
         'SELECT verified_at FROM public.email_verification_otps WHERE email_blind_index = $1 AND verified_at IS NOT NULL',
         [emailBlindIndex]
@@ -53,6 +54,7 @@ async function handleUniversityRegistration(body: Record<string, unknown>) {
             { status: 400 }
         );
     }
+    */
 
     // 2. Check if user is already logged in (Linking flow)
     const supabase = await createClient();
