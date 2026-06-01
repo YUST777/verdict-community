@@ -99,27 +99,79 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Dedup
-        if (cfSubmissionId) {
+        const submissionIdNum = cfSubmissionId ? Number(cfSubmissionId) : null;
+
+        // Dedup for regular positive submission IDs
+        if (submissionIdNum && submissionIdNum > 0) {
             const existing = await query(
                 'SELECT id FROM cf_submissions WHERE cf_submission_id = $1 AND user_id = $2 LIMIT 1',
-                [cfSubmissionId, user.id]
+                [submissionIdNum, user.id]
             );
             if (existing.rows.length > 0) {
                 return NextResponse.json({ success: true, duplicate: true, id: existing.rows[0].id });
             }
         }
 
+        // 1. Save / Upsert to cf_submissions
         const result = await query(
             `INSERT INTO cf_submissions (
                 user_id, contest_id, problem_index, source_code, language,
                 cf_submission_id, verdict, time_ms, memory_kb, sheet_id, url_type, group_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (cf_submission_id) DO UPDATE SET
+                verdict = EXCLUDED.verdict,
+                time_ms = EXCLUDED.time_ms,
+                memory_kb = EXCLUDED.memory_kb,
+                source_code = EXCLUDED.source_code,
+                language = EXCLUDED.language
             RETURNING id`,
-            [user.id, contestId, problemIndex.toUpperCase(), sourceCode || '', language || 'C++', cfSubmissionId || null, verdict, timeMs || null, memoryKb || null, sheetId || null, urlType || 'contest', groupId || null]
+            [
+                user.id, 
+                contestId, 
+                problemIndex.toUpperCase(), 
+                sourceCode || '', 
+                language || 'C++', 
+                submissionIdNum, 
+                verdict, 
+                timeMs || 0, 
+                memoryKb || 0, 
+                sheetId || null, 
+                urlType || 'contest', 
+                groupId || null
+            ]
         );
 
-        return NextResponse.json({ success: true, id: result.rows[0].id });
+        const savedId = result.rows[0]?.id;
+
+        // 2. Update user_progress (the source of truth for "did user solve this?")
+        const trackingProblemId = `${contestId}:${problemIndex.toUpperCase()}`;
+        const verdictLower = verdict.toLowerCase();
+        const isAc = verdictLower.includes('accepted') || verdictLower === 'ok';
+        const status = isAc ? 'SOLVED' : 'ATTEMPTED';
+
+        try {
+            await query(
+                `INSERT INTO user_progress (user_id, problem_id, sheet_id, status, submission_id, solved_at)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (user_id, problem_id) 
+                 DO UPDATE SET 
+                     status = CASE WHEN user_progress.status = 'SOLVED' THEN 'SOLVED' ELSE EXCLUDED.status END,
+                     submission_id = CASE WHEN user_progress.status = 'SOLVED' THEN user_progress.submission_id ELSE EXCLUDED.submission_id END,
+                     solved_at = CASE WHEN EXCLUDED.status = 'SOLVED' AND user_progress.status != 'SOLVED' THEN EXCLUDED.solved_at ELSE user_progress.solved_at END`,
+                [
+                    user.id,
+                    trackingProblemId,
+                    sheetId || null,
+                    status,
+                    submissionIdNum,
+                    status === 'SOLVED' ? new Date() : null
+                ]
+            );
+        } catch (progressErr) {
+            console.error('[submissions POST] Failed to update user_progress:', progressErr);
+        }
+
+        return NextResponse.json({ success: true, id: savedId, status });
     } catch (err) {
         console.error('[submissions POST]', err);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

@@ -124,7 +124,9 @@ function MirrorUI({ contestId, groupId, problemId, levelSlug, sheetSlug, initial
 
     const { cfStatus, handleSubmit, submitting: cfSubmitting } = useCodeforcesSubmission({
         code, language, contestId, problemId, urlType, groupId,
-        setIsTestPanelVisible, setTestPanelActiveTab
+        setIsTestPanelVisible, setTestPanelActiveTab,
+        sheetId: sheetSlug,
+        onSubmissionSaved: fetchSubmissions
     });
 
     const { result, runTests, submitting: testSubmitting } = useLocalTestRunner({

@@ -42,65 +42,22 @@ export function useLocalTestRunner({
         setSubmitting(true);
         setIsTestPanelVisible(true);
 
-        try {
-            const response = await fetch('/api/judge/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sourceCode: code,
-                    language: language,
-                    testCases: testCases.map(tc => ({
-                        input: tc.input,
-                        output: tc.output || tc.expectedOutput || ''
-                    })),
-                    timeLimit,
-                    memoryLimit
-                })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                setResult({
-                    verdict: 'Error',
-                    passed: false,
-                    testsPassed: 0,
-                    totalTests: testCases.length,
-                    results: [{
-                        testCase: 1,
-                        verdict: err.error || 'Judge Error',
-                        passed: false,
-                        output: err.details || 'Failed to run tests. Please try again.'
-                    }]
-                });
-                return;
-            }
-
-            const data = await response.json();
+        // Bypassing Judge0 for Vercel Serverless environment
+        setTimeout(() => {
             setResult({
-                verdict: data.verdict,
-                passed: data.passed,
-                testsPassed: data.testsPassed,
-                totalTests: data.totalTests,
-                time: data.time,
-                results: data.results
-            });
-        } catch (err) {
-            console.error('Test execution error:', err);
-            setResult({
-                verdict: 'Network Error',
+                verdict: 'Offline',
                 passed: false,
                 testsPassed: 0,
                 totalTests: testCases.length,
                 results: [{
                     testCase: 1,
-                    verdict: 'Network Error',
+                    verdict: 'Local Testing Disabled',
                     passed: false,
-                    output: 'Failed to connect to judge. Check your internet connection.'
+                    output: 'Local test execution is disabled in the serverless environment. Please click the Submit button to solve, test, and submit directly on Codeforces!'
                 }]
             });
-        } finally {
             setSubmitting(false);
-        }
+        }, 500);
     };
 
     return {
