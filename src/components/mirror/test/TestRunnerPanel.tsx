@@ -53,6 +53,14 @@ export default function TestRunnerPanel({
     const [formInput, setFormInput] = useState('');
     const [formOutput, setFormOutput] = useState('');
     const [formError, setFormError] = useState<string | null>(null);
+    const [handleInput, setHandleInput] = useState(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                return localStorage.getItem('verdict-cf-handle') || '';
+            } catch {}
+        }
+        return '';
+    });
 
     const handleAddTestCase = () => {
         setFormError(null);
@@ -144,38 +152,107 @@ export default function TestRunnerPanel({
     // ── CF Status Tab ──
     const renderCFStatus = () => {
         if (!cfStatus || cfStatus.status === 'idle') {
-            // Check extension
-            const hasExtension = typeof document !== 'undefined' && !!document.getElementById('verdict-extension-installed');
-            if (!hasExtension) {
-                return (
-                    <div className="flex flex-col items-center justify-center h-full text-[#666] gap-4 p-4 text-center">
-                        <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20">
-                            <AlertTriangle size={28} />
+            return (
+                <div className="flex flex-col items-center justify-center h-full text-[#666] gap-3 p-4 text-center">
+                    <div className="w-12 h-12 rounded-full bg-[#252526] flex items-center justify-center">
+                        <img src="https://codeforces.org/s/0/favicon-32x32.png" alt="CF" className="w-6 h-6 opacity-40" />
+                    </div>
+                    <p className="text-sm font-medium text-white/80">Submit to Codeforces to Solve</p>
+                    <p className="text-xs text-[#888] max-w-xs leading-relaxed">
+                        Use the <strong>Submit</strong> button in the header above to open the Codeforces submit page directly.
+                    </p>
+                </div>
+            );
+        }
+
+        const isVerifyPending = cfStatus.substatus === 'verify-pending';
+
+        if (isVerifyPending) {
+            const verifying = cfStatus.progress === 50;
+            const hasError = cfStatus.status === 'error';
+
+            return (
+                <div className="h-full flex flex-col space-y-4 p-4 bg-[#252526]/30 rounded-xl border border-white/5 animate-fade-in text-left">
+                    <div className="flex items-center gap-3 text-emerald-400">
+                        <div className="p-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                            <CloudUpload size={20} />
                         </div>
                         <div>
-                            <p className="text-base font-bold text-white mb-1">Extension Required</p>
-                            <p className="text-sm text-[#888] mb-4">You need the Verdict Helper extension to submit code to Codeforces directly.</p>
+                            <h3 className="font-bold text-sm text-white">Verify Codeforces Submission</h3>
+                            <p className="text-[10px] text-[#888]">Verify and apply your AC progress locally</p>
                         </div>
-                        <a href="https://chromewebstore.google.com/detail/verdict-helper/jeiffogppnpnefphgpglagmgbcnifnhj" target="_blank"
-                            className="flex items-center gap-2 px-4 py-2 bg-[#10B981] hover:bg-[#059669] text-white font-semibold rounded-lg transition-colors text-sm">
-                            Download Extension <ExternalLink size={14} />
-                        </a>
                     </div>
-                );
-            }
-            return (
-                <div className="flex flex-col items-center justify-center h-full text-[#666] gap-3">
-                    <div className="w-12 h-12 rounded-full bg-[#252526] flex items-center justify-center">
-                        <img src="https://codeforces.org/s/0/favicon-32x32.png" alt="CF" className="w-6 h-6 opacity-50" />
+
+                    <div className="text-[11px] text-[#b8b8b8] bg-white/5 p-3 rounded-lg leading-relaxed space-y-2">
+                        <p><strong>1. Submit Code:</strong> Make sure you have submitted your solution on Codeforces (opened in the other tab).</p>
+                        <p><strong>2. Check Result:</strong> Once you get <strong>Accepted (AC)</strong> on Codeforces, enter your handle below and click verify to sync your progress here!</p>
                     </div>
-                    <p className="text-sm font-medium">Submit to Codeforces to see results</p>
-                    <p className="text-xs text-[#555]">Use the Submit button above</p>
+
+                    {hasError && cfStatus.error && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 flex items-start gap-2 leading-relaxed">
+                            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                            <span>{cfStatus.error}</span>
+                        </div>
+                    )}
+
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[9px] font-bold text-[#888] uppercase tracking-wider">Codeforces Handle</label>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={handleInput}
+                                onChange={(e) => {
+                                    setHandleInput(e.target.value);
+                                    try {
+                                        localStorage.setItem('verdict-cf-handle', e.target.value);
+                                    } catch {}
+                                }}
+                                disabled={verifying}
+                                placeholder="Enter your CF handle (e.g. tourist)"
+                                className="flex-1 bg-[#1a1a1a] border border-white/10 hover:border-white/20 focus:border-emerald-500/50 rounded-lg px-3 py-2 text-xs text-white placeholder-[#555] focus:outline-none transition-colors"
+                            />
+                            <button
+                                onClick={async () => {
+                                    if (!handleInput.trim()) return;
+                                    const verifyFn = (window as any).__verdict_verify_cf;
+                                    if (verifyFn) {
+                                        await verifyFn(handleInput.trim());
+                                    }
+                                }}
+                                disabled={verifying || !handleInput.trim()}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/20 disabled:text-[#666] text-white font-semibold rounded-lg transition-colors text-xs shrink-0 cursor-pointer"
+                            >
+                                {verifying ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" /> Verifying...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 size={12} /> Apply Solution
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {contestId && problemId && (
+                        <div className="pt-2 flex items-center justify-between border-t border-white/5">
+                            <a
+                                href={`https://codeforces.com/contest/${contestId}/submit?problemIndex=${problemId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                            >
+                                Open Codeforces Submit Page Again <ExternalLink size={10} />
+                            </a>
+                        </div>
+                    )}
                 </div>
             );
         }
 
         return (
-            <div className="h-full flex flex-col space-y-2 animate-fade-in">
+            <div className="h-full flex flex-col space-y-2 animate-fade-in text-left">
                 {/* Login/Captcha Required */}
                 {(cfStatus.needsCaptcha) && (
                     <div className="flex flex-col gap-3 p-4 rounded-xl border bg-orange-500/10 border-orange-500/20 text-orange-400">
@@ -268,11 +345,11 @@ export default function TestRunnerPanel({
                 )}
 
                 {/* Accepted */}
-                {cfStatus.status === 'done' && cfStatus.verdict === 'Accepted' && !!cfStatus.testNumber && (
+                {cfStatus.status === 'done' && cfStatus.verdict === 'Accepted' && !!cfStatus.testNumber !== undefined && (
                     <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                         <div className="flex items-center gap-2 text-green-400">
                             <CheckCircle2 size={16} />
-                            <span className="font-semibold text-sm">All {cfStatus.testNumber} tests passed!</span>
+                            <span className="font-semibold text-sm">Solved successfully on Codeforces!</span>
                         </div>
                     </div>
                 )}
@@ -298,7 +375,7 @@ export default function TestRunnerPanel({
                     <div className="flex items-center justify-between p-3 bg-[#252526] rounded-lg border border-white/5">
                         <div className="text-xs text-[#888]">Submission ID: <span className="text-white font-mono">#{cfStatus.submissionId}</span></div>
                         <a href={`https://codeforces.com/contest/${contestId}/submission/${cfStatus.submissionId}`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-xs text-[#10B981] hover:text-[#34D399] transition-colors">
+                            className="flex items-center gap-1.5 text-xs text-[#10B981] hover:text-[#34D399] transition-colors font-semibold">
                             View on Codeforces <ExternalLink size={12} />
                         </a>
                     </div>
